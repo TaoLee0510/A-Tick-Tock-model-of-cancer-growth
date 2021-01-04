@@ -1,6 +1,6 @@
 # Cancer-growth-model-with-density-dependent-migration-and-taxis.
 
-Unfinished projects. Any questions? contact me via taolee.lit@gmail.com.
+Unfinished project. Any questions? contact me via taolee.lit@gmail.com.
 
 ![image](visualization.gif)
 
