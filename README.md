@@ -2,7 +2,7 @@
 
 Unfinished projects. Any questions? contact me via taolee.lit@gmail.com.
 
-
+![image](visualization.gif)
 
 
 
