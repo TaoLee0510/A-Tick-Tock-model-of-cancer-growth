@@ -26,7 +26,7 @@ using namespace std;
 using namespace blitz;
 #pragma pack(8)
 
-static const char *short_options = "x:y:RrmabdcMSKDTup";
+static const char *short_options = "x:y:R:r:m:a:b:d:c:M:S:K:D:T:u:p:L";
 static const struct option long_options[] = {
     {"Visual_range_x", required_argument, NULL, 'x'},
     {"Visual_range_y", required_argument, NULL, 'y'},
@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
     while( (opt = getopt_long(argc, argv, short_options, long_options, NULL)) != -1){
         switch (opt){
             case '?':
-                fprintf(stdout, "Usage: %s -p <port>  [-v|--v <=verbose_level>] [-h]\n", argv[0]);
+                fprintf(stdout, "Usage: %s --Visual_range_x=<int> --Visual_range_y=<int> --R0=<double> --R1=<double> --mix_reation_initial=<double> --alpha=<float> --beta=<float> --DDM=<int> --chemotaxis=<int> --migration_rate_r_mean=<double> --migration_rate_r_mean_quia=<double> --migration_rate_K_mean=<double> --deathjudge=<double> --time_interval=<double> --utralsmall=<int> --allpng=<int> --Low_density_initial=<int>", argv[0]);
                 return 0;
             case 'x':
                 Visual_range_x = atoi(optarg);
