@@ -177,7 +177,8 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     cell_array_out=0;
     Array<int,2> A(Visual_range_x/2,Visual_range_y/2,FortranArray<2>());
     A=0;
-    int NNy=4*(int)R1*(int)R1;
+    //int NNy=4*(int)R1*(int)R1;
+    int NNy=2000*2000;
     Array<double,2> colorspace(NNy,4,FortranArray<2>());
     colorspace=0;
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
