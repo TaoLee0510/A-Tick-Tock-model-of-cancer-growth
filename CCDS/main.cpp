@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
     while( (opt = getopt_long(argc, argv, short_options, long_options, NULL)) != -1){
         switch (opt){
             case '?':
-                fprintf(stdout, "Usage: %s --Visual_range_x=<int> --Visual_range_y=<int> --R0=<double> --R1=<double> --mix_reation_initial=<double> --alpha=<float> --beta=<float> --DDM=<int> --chemotaxis=<int> --migration_rate_r_mean=<double> --migration_rate_r_mean_quia=<double> --migration_rate_K_mean=<double> --deathjudge=<double> --time_interval=<double> --utralsmall=<int> --allpng=<int> --Low_density_initial=<int>", argv[0]);
+                fprintf(stdout, "Usage: %s --Visual_range_x=<int> --Visual_range_y=<int> --R0=<double> --R1=<double> --mix_ratio_initial=<double> --alpha=<float> --beta=<float> --DDM=<int> --chemotaxis=<int> --migration_rate_r_mean=<double> --migration_rate_r_mean_quia=<double> --migration_rate_K_mean=<double> --deathjudge=<double> --time_interval=<double> --utralsmall=<int> --allpng=<int> --Low_density_initial=<int>", argv[0]);
                 return 0;
             case 'x':
                 Visual_range_x = atoi(optarg);
