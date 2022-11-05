@@ -376,6 +376,9 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
         char dirname4 [100] = {'\0'};
         sprintf(dirname4, "mkdir ./a_%.1f_b_%.1f_clonepicsall",alpha,beta);
         system(dirname4);
+        char dirname5 [100] = {'\0'};
+        sprintf(dirname5, "mkdir ./a_%.1f_b_%.1f_all",alpha,beta);
+        system(dirname5);
     }
     char filedir [100] = {'\0'};
     sprintf(filedir, "./Parameters.txt");
