@@ -139,6 +139,10 @@ void save_data(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01,
         FILE * fid7;
         fid7=fopen (filedir13,"wb");
         pngwriter image3(Visual_range_x, Visual_range_y, 0, filedir13);
+        char filedir16 [100] = {'\0'};
+        sprintf(filedir16, "./a_%.1f_b_%.1f_all/Cell_array_%.1d.txt",alpha,beta,H);
+        FILE * fid8;
+        fid8=fopen (filedir16,"w+");
         int C0 = cell_array.rows();
         for (int i=1;i<=C0;i++)
         {
@@ -181,6 +185,17 @@ void save_data(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01,
                 }
                 image3.plot(x, y, colorspace(cell_index,2), colorspace(cell_index,3), colorspace(cell_index,4));
             }
+            for(int co=1;co<=28;co++)
+            {
+                if(co<28)
+                {
+                    fprintf(fid8,"%g\t",cell_array(i,co));
+                }
+                else
+                {
+                    fprintf(fid8,"%g\n",cell_array(i,co));
+                }
+            }
         }
         int posx=Visual_range_x-(Visual_range_x * 0.15);
         int posy=Visual_range_y-(Visual_range_y * 0.1);
@@ -190,6 +205,7 @@ void save_data(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01,
         image3.plot_text(filedir15, 30, posx, posy, 0.0, filedir14, 1.0, 1.0, 1.0);
         image3.close();
         fclose(fid7);
+        fclose(fid8);
     }
 }
 #endif /* save_data_hpp */
