@@ -33,8 +33,9 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
+#include "cell_type_transform.hpp"
 using namespace blitz;
-void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall)
+void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,int &K_label,Array<int, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration)
 {
     std::random_device r;
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
@@ -136,24 +137,28 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
         float X1=growth_rate_inherent*(1-0.05);
         float X2=growth_rate_inherent*(1+0.05);
         cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
-        cell_temp(1,9)=cell_array(i,9);
-        cell_temp(1,10)=cell_array(i,10);
-        cell_temp(1,11)=cell_array(i,11);
-        cell_temp(1,12)=cell_array(i,12);
-        cell_temp(1,13)=cell_array(i,13);
-        cell_temp(1,15)=cell_array(i,15);
-        cell_temp(1,18)=0;
-        cell_temp(1,19)=cell_array(i,19);
-        cell_temp(1,21)=cell_array(i,21);
-        cell_temp(1,22)=cell_array(i,22);
-        cell_temp(1,23)=0;
-        cell_temp(1,24)=0;
-        cell_array(i,16)=0;
-        cell_temp(1,16)=0;
-        cell_temp(1,25)=cell_array(i,25);
-        cell_temp(1,26)=cell_array(i,26);
-        cell_temp(1,27)=cell_array(i,27);
-        cell_temp(1,28)=cell_array(i,28);
+        
+        cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration);
+        
+        
+//        cell_temp(1,9)=cell_array(i,9);
+//        cell_temp(1,10)=cell_array(i,10);
+//        cell_temp(1,11)=cell_array(i,11);
+//        cell_temp(1,12)=cell_array(i,12);
+//        cell_temp(1,13)=cell_array(i,13);
+//        cell_temp(1,15)=cell_array(i,15);
+//        cell_temp(1,18)=0;
+//        cell_temp(1,19)=cell_array(i,19);
+//        cell_temp(1,21)=cell_array(i,21);
+//        cell_temp(1,22)=cell_array(i,22);
+//        cell_temp(1,23)=0;
+//        cell_temp(1,24)=0;
+//        cell_array(i,16)=0;
+//        cell_temp(1,16)=0;
+//        cell_temp(1,25)=cell_array(i,25);
+//        cell_temp(1,26)=cell_array(i,26);
+//        cell_temp(1,27)=cell_array(i,27);
+//        cell_temp(1,28)=cell_array(i,28);
         int cor_temp_length=0;
         for (int s=1; s<=16; s++)
         {
@@ -1331,20 +1336,25 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
         float X1=growth_rate_inherent*(1-0.05);
         float X2=growth_rate_inherent*(1+0.05);
         cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
-        cell_temp(1,9)=cell_array(i,9);
-        cell_temp(1,10)=cell_array(i,10);
-        cell_temp(1,11)=cell_array(i,11);
-        cell_temp(1,12)=cell_array(i,12);
-        cell_temp(1,13)=cell_array(i,13);
-        cell_temp(1,15)=cell_array(i,15);
-        cell_temp(1,18)=cell_array(i,18);
-        cell_temp(1,19)=cell_array(i,19);
-        cell_temp(1,21)=cell_array(i,21);
-        cell_temp(1,22)=cell_array(i,22);
-        cell_temp(1,25)=cell_array(i,25);
-        cell_temp(1,26)=cell_array(i,26);
-        cell_temp(1,27)=cell_array(i,27);
-        cell_temp(1,28)=cell_array(i,28);
+        
+        
+        cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration);
+        
+        
+//        cell_temp(1,9)=cell_array(i,9);
+//        cell_temp(1,10)=cell_array(i,10);
+//        cell_temp(1,11)=cell_array(i,11);
+//        cell_temp(1,12)=cell_array(i,12);
+//        cell_temp(1,13)=cell_array(i,13);
+//        cell_temp(1,15)=cell_array(i,15);
+//        cell_temp(1,18)=cell_array(i,18);
+//        cell_temp(1,19)=cell_array(i,19);
+//        cell_temp(1,21)=cell_array(i,21);
+//        cell_temp(1,22)=cell_array(i,22);
+//        cell_temp(1,25)=cell_array(i,25);
+//        cell_temp(1,26)=cell_array(i,26);
+//        cell_temp(1,27)=cell_array(i,27);
+//        cell_temp(1,28)=cell_array(i,28);
         Array<int, 2> cor_temp_2(1,8,FortranArray<2>());
         cor_temp_2=0;
         int cor_temp_length=1;
