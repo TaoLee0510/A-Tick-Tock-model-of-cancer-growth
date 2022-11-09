@@ -43,7 +43,7 @@ Array<float,2> outer_initiation_array(int N0, int Visual_range_x, int Visual_ran
     double initial_K_growth_rate[N0K];
     Array<float,2> cor(2,N0+1,FortranArray<2>());
     cor=0;
-    Array<float,2> cell_array_out_1(N0,28,FortranArray<2>());
+    Array<float,2> cell_array_out_1(N0,31,FortranArray<2>());
     cell_array_out_1=0;
     
     int number_cor=1;
@@ -116,6 +116,7 @@ Array<float,2> outer_initiation_array(int N0, int Visual_range_x, int Visual_ran
             cell_array_out_1(x,14)=0;
             cell_array_out_1(x,15)=x;
             cell_array_out_1(x,22)=1;
+            cell_array_out_1(x,29)=x;
         }
         else
         {
@@ -142,6 +143,7 @@ Array<float,2> outer_initiation_array(int N0, int Visual_range_x, int Visual_ran
             cell_array_out_1(x,14)=0;
             cell_array_out_1(x,15)=x;
             cell_array_out_1(x,22)=1;
+            cell_array_out_1(x,29)=x;
             a++;
         }
     }

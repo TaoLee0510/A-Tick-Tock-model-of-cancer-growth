@@ -43,7 +43,7 @@ void sort_cell_type(Array<float, 2> &cell_array, Array<float, 2> cell_array1)
     {
         index_9[in]=p[in].index;
     }
-    cell_array1.resize(C_9, 28);
+    cell_array1.resize(C_9, 31);
     int number =1;
     for (int CNx=C_9; CNx>0; CNx--)
     {

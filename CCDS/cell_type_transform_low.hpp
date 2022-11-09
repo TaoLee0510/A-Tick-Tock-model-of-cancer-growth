@@ -1,13 +1,14 @@
 //
-//  cell_type_transform.hpp
+//  cell_type_transform_low.hpp
 //  CCDS
 //
-//  Created by Tao Lee on 11/6/22.
+//  Created by Tao Lee on 11/10/22.
 //  Copyright © 2022 Tao Lee. All rights reserved.
 //
 
-#ifndef cell_type_transform_hpp
-#define cell_type_transform_hpp
+#ifndef cell_type_transform_low_hpp
+#define cell_type_transform_low_hpp
+
 
 #include <stdio.h>
 #include <random>
@@ -35,7 +36,7 @@
 #include "density_calculation.hpp"
 
 
-void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,int &K_label,int i,Array<int, 3> sub_visual, Array<int,3> Visual_range,Array<float, 2> &cell_array, double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,int &r_label)
+void cell_type_transform_low(Array<float, 2> &cell_temp, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,int &K_label,int i,Array<int, 3> sub_visual, Array<int,3> Visual_range,Array<float, 2> &cell_array, double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration)
 {
     double Dr1=density_calculation(i, sub_visual, Visual_range, cell_array);
     double initial_K_growth_rate1;
@@ -87,6 +88,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                     cell_temp(1,26)=0;//    $26: migration lasted time
                     cell_temp(1,27)=0;//    $27: passed time of migration
                     cell_temp(1,28)=migration_rate_K2;//    $28: migration rate
+                    K_label++;
                 }
                 else
                 {
@@ -108,7 +110,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                     
                     cell_temp(1,12)=cell_array(i,12);
                     cell_temp(1,13)=cell_array(i,13);
-                    cell_temp(1,15)=r_label+1;
+                    cell_temp(1,15)=cell_array(i,15);
                     cell_temp(1,18)=0;
                     cell_temp(1,19)=cell_array(i,19);
                     cell_temp(1,21)=cell_array(i,21);
@@ -143,7 +145,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                 
                 cell_temp(1,12)=cell_array(i,12);
                 cell_temp(1,13)=cell_array(i,13);
-                cell_temp(1,15)=r_label+1;
+                cell_temp(1,15)=cell_array(i,15);
                 cell_temp(1,18)=0;
                 cell_temp(1,19)=cell_array(i,19);
                 cell_temp(1,21)=cell_array(i,21);
@@ -168,7 +170,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
             
             cell_temp(1,12)=cell_array(i,12);
             cell_temp(1,13)=cell_array(i,13);
-            cell_temp(1,15)=r_label+1;
+            cell_temp(1,15)=cell_array(i,15);
             cell_temp(1,18)=0;
             cell_temp(1,19)=cell_array(i,19);
             cell_temp(1,21)=cell_array(i,21);
@@ -224,6 +226,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                     cell_temp(1,26)=0;//    $26: migration lasted time
                     cell_temp(1,27)=0;//    $27: passed time of migration
                     cell_temp(1,28)=migration_rate_K2;//    $28: migration rate
+                    K_label++;
                 }
                 else
                 {
@@ -243,7 +246,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                     
                     cell_temp(1,12)=cell_array(i,12);
                     cell_temp(1,13)=cell_array(i,13);
-                    cell_temp(1,15)=r_label+1;
+                    cell_temp(1,15)=cell_array(i,15);
                     cell_temp(1,18)=cell_array(i,18);
                     cell_temp(1,19)=cell_array(i,19);
                     cell_temp(1,21)=cell_array(i,21);
@@ -272,7 +275,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                 
                 cell_temp(1,12)=cell_array(i,12);
                 cell_temp(1,13)=cell_array(i,13);
-                cell_temp(1,15)=r_label+1;
+                cell_temp(1,15)=cell_array(i,15);
                 cell_temp(1,18)=cell_array(i,18);
                 cell_temp(1,19)=cell_array(i,19);
                 cell_temp(1,21)=cell_array(i,21);
@@ -293,7 +296,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
             
             cell_temp(1,12)=cell_array(i,12);
             cell_temp(1,13)=cell_array(i,13);
-            cell_temp(1,15)=r_label+1;
+            cell_temp(1,15)=cell_array(i,15);
             cell_temp(1,18)=0;
             cell_temp(1,19)=cell_array(i,19);
             cell_temp(1,21)=cell_array(i,21);
@@ -311,4 +314,5 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
 }
 
 
-#endif /* cell_type_transform_hpp */
+
+#endif /* cell_type_transform_low_hpp */

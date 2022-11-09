@@ -102,6 +102,7 @@ void inner_initiation_array(int N0,int N01,int R0,int Visual_range_x, int Visual
             cell_array_inner(i,14)=1;
             cell_array_inner(i,15)=i+N0;
             cell_array_inner(i,22)=1;
+            cell_array_inner(i,29)=i+N0;
         }
         else
         {
@@ -116,6 +117,7 @@ void inner_initiation_array(int N0,int N01,int R0,int Visual_range_x, int Visual
             cell_array_inner(i,14)=1;
             cell_array_inner(i,15)=i+N0;
             cell_array_inner(i,22)=1;
+            cell_array_inner(i,29)=i+N0;
             a=a+1;
         }
     }

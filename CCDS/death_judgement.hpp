@@ -521,7 +521,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
             sum=sum+1;
         }
     }
-    cell_array_temp.resize(sum,28);
+    cell_array_temp.resize(sum,31);
     cell_array_temp=0;
     int site1=1;
     for (int site=1; site<= current_size; site++)
@@ -564,7 +564,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
             }
         }
     }
-    cell_array.resize(sum,28);
+    cell_array.resize(sum,31);
     cell_array=0;
     cell_array(all,all)=cell_array_temp(all,all);
     gsl_rng_free(r4);

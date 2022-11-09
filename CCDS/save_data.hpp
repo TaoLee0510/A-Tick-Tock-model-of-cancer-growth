@@ -95,9 +95,9 @@ void save_data(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01,
                     }
                     image1.plot(x, y, colorspace(cell_index,2), colorspace(cell_index,3), colorspace(cell_index,4));
                 }
-                for(int co=1;co<=28;co++)
+                for(int co=1;co<=31;co++)
                 {
-                    if(co<28)
+                    if(co<31)
                     {
                         fprintf(fid3,"%g\t",cell_array(i,co));
                     }
@@ -191,9 +191,9 @@ void save_data(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01,
                 }
                 image3.plot(x, y, colorspace(cell_index,2), colorspace(cell_index,3), colorspace(cell_index,4));
             }
-            for(int co=1;co<=28;co++)
+            for(int co=1;co<=31;co++)
             {
-                if(co<28)
+                if(co<31)
                 {
                     fprintf(fid8,"%g\t",cell_array(i,co));
                 }
