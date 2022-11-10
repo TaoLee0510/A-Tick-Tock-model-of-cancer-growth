@@ -14,7 +14,7 @@
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
 using namespace blitz;
-void sort_cell_type(Array<float, 2> &cell_array, Array<float, 2> cell_array1)
+void sort_cell_type(Array<float, 2> &cell_array, Array<float, 2> cell_array1,int Col)
 {
     Range all = Range::all();
     int C_9= cell_array.rows();
@@ -43,7 +43,7 @@ void sort_cell_type(Array<float, 2> &cell_array, Array<float, 2> cell_array1)
     {
         index_9[in]=p[in].index;
     }
-    cell_array1.resize(C_9, 31);
+    cell_array1.resize(C_9, Col);
     int number =1;
     for (int CNx=C_9; CNx>0; CNx--)
     {

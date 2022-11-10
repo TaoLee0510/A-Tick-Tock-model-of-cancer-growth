@@ -21,6 +21,7 @@
 #include <getopt.h>
 #include "density_dependent_growth.hpp"
 #include "Low_density_initial_growth.hpp"
+#include "free_living_growth.hpp"
 
 using namespace std;
 using namespace blitz;
@@ -215,15 +216,20 @@ int main(int argc, char *argv[])
     {
         mix_ratio_initial=1;
         Low_density_initial=1;
-    }
-    if (Low_density_initial==0)
+        free_living_growth(Visual_range_x, Visual_range_y, R0, R1, mix_ratio_initial, alpha, beta, DDM, chemotaxis, migration_rate_r_mean, migration_rate_r_mean_quia, migration_rate_K_mean, deathjudge, time_interval, utralsmall, allpng,free_living);
+        
+    }else if(free_living==0)
     {
-        R1=1;
-        Low_density_initial_growth(Visual_range_x, Visual_range_y, R0, R1, mix_ratio_initial, alpha, beta, DDM, chemotaxis, migration_rate_r_mean, migration_rate_r_mean_quia, migration_rate_K_mean, deathjudge, time_interval, utralsmall, allpng,free_living);
+        if (Low_density_initial==0)
+        {
+            R1=1;
+            Low_density_initial_growth(Visual_range_x, Visual_range_y, R0, R1, mix_ratio_initial, alpha, beta, DDM, chemotaxis, migration_rate_r_mean, migration_rate_r_mean_quia, migration_rate_K_mean, deathjudge, time_interval, utralsmall, allpng);
+        }
+        else
+        {
+            density_dependent_growth(Visual_range_x, Visual_range_y, R0, R1, mix_ratio_initial, alpha, beta, DDM, chemotaxis, migration_rate_r_mean, migration_rate_r_mean_quia, migration_rate_K_mean, deathjudge, time_interval, utralsmall, allpng);
+        }
     }
-    else
-    {
-        density_dependent_growth(Visual_range_x, Visual_range_y, R0, R1, mix_ratio_initial, alpha, beta, DDM, chemotaxis, migration_rate_r_mean, migration_rate_r_mean_quia, migration_rate_K_mean, deathjudge, time_interval, utralsmall, allpng,free_living);
-    }
+    
     return 0;
 }

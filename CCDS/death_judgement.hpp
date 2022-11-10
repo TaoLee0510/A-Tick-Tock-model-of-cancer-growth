@@ -17,7 +17,7 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 using namespace blitz;
-void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, float alpha, float beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> sub_visual, Array<int,3> &Visual_range, double deathjudge)
+void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, float alpha, float beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> sub_visual, Array<int,3> &Visual_range, double deathjudge, int Col)
 {
     std::random_device r;
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
@@ -521,7 +521,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
             sum=sum+1;
         }
     }
-    cell_array_temp.resize(sum,31);
+    cell_array_temp.resize(sum,Col);
     cell_array_temp=0;
     int site1=1;
     for (int site=1; site<= current_size; site++)
@@ -564,7 +564,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
             }
         }
     }
-    cell_array.resize(sum,31);
+    cell_array.resize(sum,Col);
     cell_array=0;
     cell_array(all,all)=cell_array_temp(all,all);
     gsl_rng_free(r4);

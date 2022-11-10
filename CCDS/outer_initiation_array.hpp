@@ -33,7 +33,7 @@
 #include "random_uniform.hpp"
 using namespace blitz;
 
-Array<float,2> outer_initiation_array(int N0, int Visual_range_x, int Visual_range_y, Array<int,2> A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K)
+Array<float,2> outer_initiation_array(int N0, int Visual_range_x, int Visual_range_y, Array<int,2> A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K,int Col)
 {
     std::random_device r;
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
@@ -43,7 +43,7 @@ Array<float,2> outer_initiation_array(int N0, int Visual_range_x, int Visual_ran
     double initial_K_growth_rate[N0K];
     Array<float,2> cor(2,N0+1,FortranArray<2>());
     cor=0;
-    Array<float,2> cell_array_out_1(N0,31,FortranArray<2>());
+    Array<float,2> cell_array_out_1(N0,Col,FortranArray<2>());
     cell_array_out_1=0;
     
     int number_cor=1;

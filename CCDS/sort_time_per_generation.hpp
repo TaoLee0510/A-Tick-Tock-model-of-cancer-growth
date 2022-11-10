@@ -14,7 +14,7 @@
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
 using namespace blitz;
-void sort_time_per_generation(Array<float, 2> &cell_array, Array<float, 2> cell_array1)
+void sort_time_per_generation(Array<float, 2> &cell_array, Array<float, 2> cell_array1,int Col)
 {
     Range all = Range::all();
     int C_17= cell_array.rows();
@@ -42,7 +42,7 @@ void sort_time_per_generation(Array<float, 2> &cell_array, Array<float, 2> cell_
     {
         index_17[in]=p[in].index;
     }
-    cell_array1.resize(C_17, 31);
+    cell_array1.resize(C_17, Col);
     for (int CNx=0; CNx<C_17; CNx++)
     {
         int ind=index_17[CNx];

@@ -1,13 +1,14 @@
 //
-//  division.hpp
-//  CCSCIM
+//  free_living_division.hpp
+//  CCDS
 //
-//  Created by Tao Lee on 5/11/18.
-//  Copyright © 2018 Tao Lee. All rights reserved.
+//  Created by Tao Lee on 11/10/22.
+//  Copyright © 2022 Tao Lee. All rights reserved.
 //
 
-#ifndef division_hpp
-#define division_hpp
+#ifndef free_living_division_hpp
+#define free_living_division_hpp
+
 
 #include <stdio.h>
 #include <random>
@@ -33,8 +34,9 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
+#include "cell_type_transform.hpp"
 using namespace blitz;
-void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall)
+void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,int &K_label,Array<int, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<float,2> &cell_trace,Array<float,2> cell_trace_temp, int &cell_index,int &generation,int &r_label,int Col)
 {
     std::random_device r;
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
@@ -59,7 +61,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
     cor_small_1=0;
     proliferation_loci.resize(2, 4);
     proliferation_loci=0;
-    cell_temp.resize(1, 28);
+    cell_temp.resize(1, Col);
     cell_temp=0;
     int x=(int)cell_array(i,1);
     int y=(int)cell_array(i,5);
@@ -130,30 +132,38 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
     cor_small_1(all,7)=D,b;
     cor_small_1(all,8)=C,b;
     int cor_temp1[16]={0};
+    
+    //int mother_cell_index=cell_index;
+
+    
     if (cell_array(i,14)==0)
     {
+        K_label=K_label+1;
+        r_label=r_label+1;
         double growth_rate_inherent=cell_array(i,10);
         float X1=growth_rate_inherent*(1-0.05);
         float X2=growth_rate_inherent*(1+0.05);
         cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
-        cell_temp(1,9)=cell_array(i,9);
-        cell_temp(1,10)=cell_array(i,10);
-        cell_temp(1,11)=cell_array(i,11);
-        cell_temp(1,12)=cell_array(i,12);
-        cell_temp(1,13)=cell_array(i,13);
-        cell_temp(1,15)=cell_array(i,15);
-        cell_temp(1,18)=0;
-        cell_temp(1,19)=cell_array(i,19);
-        cell_temp(1,21)=cell_array(i,21);
-        cell_temp(1,22)=cell_array(i,22);
-        cell_temp(1,23)=0;
-        cell_temp(1,24)=0;
-        cell_array(i,16)=0;
-        cell_temp(1,16)=0;
-        cell_temp(1,25)=cell_array(i,25);
-        cell_temp(1,26)=cell_array(i,26);
-        cell_temp(1,27)=cell_array(i,27);
-        cell_temp(1,28)=cell_array(i,28);
+        cell_array(i,13)=cell_array(i,13)+1;
+        
+        
+        cell_array(i,15)=r_label;
+        cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label);
+        
+        cell_index=cell_index+1;
+        generation=generation+1;
+        
+        cell_array(i,30)=cell_array(i,29);
+        cell_array(i,29)=cell_index;
+        
+        cell_index=cell_index+1;
+        cell_temp(1,29)=cell_index;
+        cell_temp(1,30)=cell_array(i,30);
+        
+        cell_array(i,Col)=cell_array(i,13);
+        cell_temp(1,Col)=cell_array(i,13);
+        
+
         int cor_temp_length=0;
         for (int s=1; s<=16; s++)
         {
@@ -196,7 +206,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
             cell_temp(1,20)=0;
             cell_temp(1,16)=0;
             cell_array(i,16)=0;
-            int cell_index= (int)cell_array(i,15);
+            int cell_index= (int)cell_temp(1,15);
             Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),1)=1;
             Visual_range((int)cell_temp(1,2),(int)cell_temp(1,6),1)=1;
             Visual_range((int)cell_temp(1,3),(int)cell_temp(1,7),1)=1;
@@ -406,7 +416,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                         }
@@ -425,7 +435,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                         }
@@ -444,7 +454,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                         }
@@ -463,7 +473,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                         }
@@ -542,7 +552,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                         }
@@ -561,7 +571,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                         }
@@ -580,7 +590,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                         }
@@ -599,7 +609,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                             Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                         }
@@ -687,7 +697,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                     }
@@ -706,7 +716,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                     }
@@ -725,7 +735,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                     }
@@ -744,7 +754,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                     }
@@ -823,7 +833,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                         
@@ -843,7 +853,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                     }
@@ -862,7 +872,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                     }
@@ -881,7 +891,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                         Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                     }
@@ -967,7 +977,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                                 
@@ -987,7 +997,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                             }
@@ -1006,7 +1016,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                             }
@@ -1025,7 +1035,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                             }
@@ -1097,7 +1107,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                             }
@@ -1116,7 +1126,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                             }
@@ -1135,7 +1145,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                             }
@@ -1154,7 +1164,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
+                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_temp(1,15);
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
                                 Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
                             }
@@ -1213,13 +1223,13 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                     cell_temp(1,1)=(float)cor_pro_1(1,random_pro_loci_1[0]);
                     cell_temp(1,5)=(float)cor_pro_1(2,random_pro_loci_1[0]);
                     cell_temp(1,14)=1;
-                    cell_temp(1,15)=cell_array(i,15);
+                    cell_temp(1,15)=cell_temp(1,15);
                     cell_array(i,1)=(float)cor_pro_1(1,random_pro_loci_1[1]);
                     cell_array(i,5)=(float)cor_pro_1(2,random_pro_loci_1[1]);
                     if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
                     {
                         Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),1)=1;
-                        Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),2)=(int)cell_array(i,15);
+                        Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),2)=(int)cell_temp(1,15);
                         Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),3)=cellstage;
                         Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),4)=cell_label;
                         Visual_range((int)cell_array(i,1),(int)cell_array(i,5),1)=1;
@@ -1297,13 +1307,13 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                 cell_temp(1,1)=(float)pro_loci_small(1,random_pro_loci_1[0]);
                 cell_temp(1,5)=(float)pro_loci_small(2,random_pro_loci_1[0]);
                 cell_temp(1,14)=1;
-                cell_temp(1,15)=cell_array(i,15);
+                cell_temp(1,15)=cell_temp(1,15);
                 cell_array(i,1)=(float)pro_loci_small(1,random_pro_loci_1[1]);
                 cell_array(i,5)=(float)pro_loci_small(2,random_pro_loci_1[1]);
                 if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
                 {
                     Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),1)=1;
-                    Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),2)=(int)cell_array(i,15);
+                    Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),2)=(int)cell_temp(1,15);
                     Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),3)=cellstage;
                     Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),4)=cell_label;
                     Visual_range((int)cell_array(i,1),(int)cell_array(i,5),1)=1;
@@ -1331,20 +1341,21 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
         float X1=growth_rate_inherent*(1-0.05);
         float X2=growth_rate_inherent*(1+0.05);
         cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
-        cell_temp(1,9)=cell_array(i,9);
-        cell_temp(1,10)=cell_array(i,10);
-        cell_temp(1,11)=cell_array(i,11);
-        cell_temp(1,12)=cell_array(i,12);
-        cell_temp(1,13)=cell_array(i,13);
-        cell_temp(1,15)=cell_array(i,15);
-        cell_temp(1,18)=cell_array(i,18);
-        cell_temp(1,19)=cell_array(i,19);
-        cell_temp(1,21)=cell_array(i,21);
-        cell_temp(1,22)=cell_array(i,22);
-        cell_temp(1,25)=cell_array(i,25);
-        cell_temp(1,26)=cell_array(i,26);
-        cell_temp(1,27)=cell_array(i,27);
-        cell_temp(1,28)=cell_array(i,28);
+        
+        r_label=r_label+1;
+        K_label=K_label+1;
+        cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label);
+        
+        cell_index=cell_index+1;
+        generation=generation+1;
+        cell_array(i,30)=cell_array(i,29);
+        cell_array(i,29)=cell_index;
+        
+        cell_index=cell_index+1;
+        cell_temp(1,29)=cell_index;
+        cell_temp(1,30)=cell_array(i,30);
+        
+
         Array<int, 2> cor_temp_2(1,8,FortranArray<2>());
         cor_temp_2=0;
         int cor_temp_length=1;
@@ -1383,7 +1394,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
             int loci=cor_temp_3[cor_temp[0]];
             cell_temp(1,1)=cor_small_1(1,loci);
             cell_temp(1,5)=cor_small_1(2,loci);
-            int cell_index=cell_array(i,15);
+            int cell_index=cell_temp(1,15);
             Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),1)=1;
             Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),2)=cell_index;
             Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),3)=cellstage;
@@ -1393,6 +1404,12 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
             cell_temp(1,20)=0;
             cell_temp(1,16)=0;
             cell_array(i,16)=0;
+            
+            cell_array(i,15)=r_label;
+            cell_array(i,13)=cell_array(i,13)+1;
+            
+            cell_temp(1,Col)=cell_array(i,13);
+            cell_array(i,Col)=cell_array(i,13);
         }
         else
         {
@@ -1406,16 +1423,20 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
             {
                 if (utralsmall==1)
                 {
-                cell_temp(1,1)=cell_array(i,1);
-                cell_temp(1,5)=cell_array(i,5);
-                cell_array(i,14)=2;
-                cell_temp(1,14)=2;
-                Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),3)=2;
-                Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),4)=cell_label;
-                cell_array(i,20)=0;
-                cell_temp(1,20)=0;
-                cell_temp(1,16)=0;
-                cell_array(i,16)=0;
+                    cell_temp(1,1)=cell_array(i,1);
+                    cell_temp(1,5)=cell_array(i,5);
+                    cell_array(i,14)=2;
+                    cell_temp(1,14)=2;
+                    Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),3)=2;
+                    Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),4)=cell_label;
+                    cell_array(i,20)=0;
+                    cell_temp(1,20)=0;
+                    cell_temp(1,16)=0;
+                    cell_array(i,16)=0;
+                    cell_array(i,13)=cell_array(i,13)+1;
+                    cell_temp(1,Col)=cell_array(i,13);
+                    cell_array(i,Col)=cell_array(i,13);
+                    
                 }
             }
         }
@@ -1475,8 +1496,53 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
     }
     if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
     {
+       
+        cell_trace_temp.resize(2,1000);
+        cell_trace_temp(1,Range(2,4))=cell_array(i,Range(29,Col));
+        cell_trace_temp(2,Range(2,4))=cell_temp(1,Range(29,Col));
+        cell_trace_temp(1,1)=cell_temp(1,15);
+        cell_trace_temp(2,1)=cell_temp(1,15);
+        
+        int current_size_trace=cell_trace.rows();
+        int GN=cell_trace_temp(1,4);
+        for (int rows=1;rows<=current_size_trace;rows++)
+        {
+            if(cell_trace_temp(1,3) == cell_trace(rows,2))
+            {
+                cell_trace_temp(1,Range(5,1000))=cell_trace(rows,Range(5,1000));
+                cell_trace_temp(2,Range(5,1000))=cell_trace(rows,Range(5,1000));
+            }
+        }
+        
+        cell_trace_temp(1,GN+5)=1;
+        cell_trace_temp(2,GN+5)=2;
+        
+        
+        Array<float,2> cell_trace_TP(1,1000,FortranArray<2>());
+        cell_trace_TP=0;
+        cell_trace_TP.resize(current_size_trace+2,1000);
+        cell_trace_TP=0;
+        
+        for (int rows=1;rows<=current_size_trace+1;rows++)
+        {
+            if(rows<=current_size_trace)
+            {
+                cell_trace_TP(rows,all)=cell_trace(rows,all);
+            }
+            else
+            {
+                cell_trace_TP(rows,all)=cell_trace_temp(1,all);
+                cell_trace_TP(rows+1,all)=cell_trace_temp(2,all);
+            }
+        }
+        cell_trace.resize(current_size_trace+2,1000);
+        cell_trace=0;
+        cell_trace(all,all)=cell_trace_TP(all,all);
+        
+        ///
+        
         int current_size=cell_array.rows();
-        cell_array_temp.resize(current_size+1,28);
+        cell_array_temp.resize(current_size+1,Col);
         cell_array_temp=0;
         for (int rows=1;rows<=current_size+1;rows++)
         {
@@ -1489,9 +1555,13 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                 cell_array_temp(rows,all)=cell_temp(1,all);
             }
         }
-        cell_array.resize(current_size+1,28);
+        cell_array.resize(current_size+1,Col);
         cell_array=0;
         cell_array(all,all)=cell_array_temp(all,all);
+        
+        
+        
     }
 }
-#endif /* division_hpp */
+
+#endif /* free_living_division_hpp */
