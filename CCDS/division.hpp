@@ -34,7 +34,7 @@
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
 using namespace blitz;
-void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall)
+void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall,int Col)
 {
     std::random_device r;
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
@@ -59,7 +59,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
     cor_small_1=0;
     proliferation_loci.resize(2, 4);
     proliferation_loci=0;
-    cell_temp.resize(1, 28);
+    cell_temp.resize(1, Col);
     cell_temp=0;
     int x=(int)cell_array(i,1);
     int y=(int)cell_array(i,5);
@@ -1486,7 +1486,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
     if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
     {
         int current_size=cell_array.rows();
-        cell_array_temp.resize(current_size+1,28);
+        cell_array_temp.resize(current_size+1,Col);
         cell_array_temp=0;
         for (int rows=1;rows<=current_size+1;rows++)
         {
@@ -1499,7 +1499,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                 cell_array_temp(rows,all)=cell_temp(1,all);
             }
         }
-        cell_array.resize(current_size+1,28);
+        cell_array.resize(current_size+1,Col);
         cell_array=0;
         cell_array(all,all)=cell_array_temp(all,all);
     }

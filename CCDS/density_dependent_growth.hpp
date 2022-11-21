@@ -554,7 +554,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                     }
                     else
                     {
-                        division(i, max_growth_rate_r, max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp,cell_label,deltah,utralsmall);
+                        division(i, max_growth_rate_r, max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp,cell_label,deltah,utralsmall, Col);
                     }
                 }
                 else

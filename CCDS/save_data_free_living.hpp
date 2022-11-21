@@ -32,15 +32,6 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
         fid4=fopen (filedir4,"wb");
         pngwriter image(Visual_range_x, Visual_range_y, 0, filedir4);
         /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////
-//        char filedir10 [100] = {'\0'};
-//        sprintf(filedir10, "./a_%.1f_b_%.1f_clonepics/%.1d.png",alpha,beta,T);
-//        char filedir11 [100] = {'\0'};
-//        sprintf(filedir11, "%.04d h",T);
-//        char filedir12 [100] = {'\0'};
-//        sprintf(filedir12, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
-//        FILE * fid6;
-//        fid6=fopen (filedir10,"wb");
-//        pngwriter image1(Visual_range_x, Visual_range_y, 0, filedir10);
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
         char filedir3 [100] = {'\0'};
         sprintf(filedir3, "./a_%.1f_b_%.1f/Cell_array_a_%.1f_b_%.1f_h_%.1d.txt",alpha,beta,alpha,beta,T);
@@ -53,7 +44,6 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
             int y= cell_array(i,5);
             int cell_type=cell_array(i,9);
             int cell_stage=cell_array(i,14);
-//            int cell_index=cell_array(i,15);
             
             if(cell_stage==0)
             {
@@ -71,10 +61,6 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
                     image.plot(x+1, y, 1.0, 0.0, 0.0);
                     image.plot(x, y+1, 1.0, 0.0, 0.0);
                 }
-//                image1.plot(x, y, colorspace(cell_index,2), colorspace(cell_index,3), colorspace(cell_index,4));
-//                image1.plot(x+1, y+1, colorspace(cell_index,2), colorspace(cell_index,3), colorspace(cell_index,4));
-//                image1.plot(x+1, y, colorspace(cell_index,2), colorspace(cell_index,3), colorspace(cell_index,4));
-//                image1.plot(x, y+1, colorspace(cell_index,2), colorspace(cell_index,3), colorspace(cell_index,4));
             }
             else
             {
@@ -86,7 +72,6 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
                 {
                     image.plot(x, y, 1.0, 0.0, 0.0);
                 }
-//                image1.plot(x, y, colorspace(cell_index,2), colorspace(cell_index,3), colorspace(cell_index,4));
             }
             for(int co=1;co<=Col;co++)
             {
@@ -105,9 +90,6 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
         image.plot_text(filedir6, 30, posx, posy, 0.0, filedir5, 1.0, 1.0, 1.0);
         image.close();
         fclose(fid4);
-//        image1.plot_text(filedir12, 30, posx, posy, 0.0, filedir11, 1.0, 1.0, 1.0);
-//        image1.close();
-//        fclose(fid6);
         fclose(fid3);
         T++;
     }
@@ -126,16 +108,6 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
         fid5=fopen (filedir7,"wb");
         pngwriter image2(Visual_range_x, Visual_range_y, 0, filedir7);
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//        char filedir13 [100] = {'\0'};
-//        sprintf(filedir13, "./a_%.1f_b_%.1f_clonepicsall/%.1d.png",alpha,beta,H);
-//        char filedir14 [100] = {'\0'};
-//        sprintf(filedir14, "%.08d s",(int)TT);;
-//        char filedir15 [100] = {'\0'};
-//        sprintf(filedir15, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
-//        FILE * fid7;
-//        fid7=fopen (filedir13,"wb");
-//        pngwriter image3(Visual_range_x, Visual_range_y, 0, filedir13);
-        
         char filedir16 [100] = {'\0'};
         sprintf(filedir16, "./a_%.1f_b_%.1f_all/Cell_array_%.1d.txt",alpha,beta,H);
         FILE * fid8;
@@ -148,7 +120,6 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
             int y= cell_array(i,5);
             int cell_type=cell_array(i,9);
             int cell_stage=cell_array(i,14);
-//            int cell_index=cell_array(i,15);
             
             if(cell_stage==0)
             {
@@ -166,10 +137,6 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
                     image2.plot(x+1, y, 1.0, 0.0, 0.0);
                     image2.plot(x, y+1, 1.0, 0.0, 0.0);
                 }
-//                image3.plot(x, y, colorspace(cell_index,2), colorspace(cell_index,3), colorspace(cell_index,4));
-//                image3.plot(x+1, y+1, colorspace(cell_index,2), colorspace(cell_index,3), colorspace(cell_index,4));
-//                image3.plot(x+1, y, colorspace(cell_index,2), colorspace(cell_index,3), colorspace(cell_index,4));
-//                image3.plot(x, y+1, colorspace(cell_index,2), colorspace(cell_index,3), colorspace(cell_index,4));
             }
             else
             {
@@ -181,7 +148,6 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
                 {
                     image2.plot(x, y, 1.0, 0.0, 0.0);
                 }
-//                image3.plot(x, y, colorspace(cell_index,2), colorspace(cell_index,3), colorspace(cell_index,4));
             }
             for(int co=1;co<=Col;co++)
             {
@@ -200,9 +166,6 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
         image2.plot_text(filedir9, 30, posx, posy, 0.0, filedir8, 1.0, 1.0, 1.0);
         image2.close();
         fclose(fid5);
-//        image3.plot_text(filedir15, 30, posx, posy, 0.0, filedir14, 1.0, 1.0, 1.0);
-//        image3.close();
-//        fclose(fid7);
         fclose(fid8);
     }
 }

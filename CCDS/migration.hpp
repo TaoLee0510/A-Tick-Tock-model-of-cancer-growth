@@ -5,6 +5,28 @@
 //  Created by Tao Lee on 5/11/18.
 //  Copyright © 2018 Tao Lee. All rights reserved.
 //
+//
+//
+//
+//80% probability to keep the migration direction as the last directioin.
+//10% probability of each side-direction.
+//50% probability of each side-side-direction.
+
+//example:
+//
+// direction 1 is the last migration direction.
+//
+// 1 2 3
+// 8 * 4
+// 7 6 5
+//
+// if 1,2,8 are all aviable to migrate. 80% to 1, 10 to 2 and 10% to 8.
+// if 2 and 8 are all aviable to migrate. 50% to 2 and 50% to 8.
+// if 1 and 2 OR 1 and 8 are all aviable to migrate. 80% to 1, and 20% to 2 OR 8.
+// if 1,2,8 are all NOT aviable to migrate, but 7 and 3 are all aviable to migrate. 50% to 7 and 50% to 3.
+// if if 1,2,8,7,3 are all NOT aviable to migrate, migration stoped.
+
+
 
 #ifndef migration_hpp
 #define migration_hpp
@@ -445,8 +467,22 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={8,1,2};
-                        int n=3;
+                        //                        int order_loci[2]={1,0};
+                        //                        int n=2;
+                        //                        gsl_ran_shuffle(r6, order_loci, 2, sizeof (int));
+                        //                        if(order_loci[0]==1)
+                        //                        {
+                        //                            order=order_loci[0];
+                        //                        }
+                        //                        else if (order_loci[0]==0)
+                        //                        {
+                        //                            int order_loci_sub[2]={8,2};
+                        //                            int n=2;
+                        //                            gsl_ran_shuffle(r6, order_loci_sub, n, sizeof (int));
+                        //                            order=order_loci_sub[0];
+                        //                        }
+                        int order_loci[10]={8,1,2,1,1,1,1,1,1,1};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -459,15 +495,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={1,2};
-                        int n=2;
+                        int order_loci[10]={1,2,2,1,1,1,1,1,1,1};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={8,1};
-                        int n=2;
+                        int order_loci[10]={1,8,8,1,1,1,1,1,1,1};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -536,8 +572,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={7,8,1};
-                        int n=3;
+                        int order_loci[10]={7,8,1,8,8,8,8,8,8,8};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -550,15 +586,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={7,8};
-                        int n=2;
+                        int order_loci[10]={7,8,7,8,8,8,8,8,8,8};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={8,1};
-                        int n=2;
+                        int order_loci[10]={1,8,1,8,8,8,8,8,8,8};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -627,8 +663,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={1,2,3};
-                        int n=3;
+                        int order_loci[10]={1,2,3,2,2,2,2,2,2,2};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -641,15 +677,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={1,2};
-                        int n=2;
+                        int order_loci[10]={1,2,1,2,2,2,2,2,2,2};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={2,3};
-                        int n=2;
+                        int order_loci[10]={3,2,3,2,2,2,2,2,2,2};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -718,8 +754,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={2,3,4};
-                        int n=3;
+                        int order_loci[10]={2,3,4,3,3,3,3,3,3,3};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -732,15 +768,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={3,3};
-                        int n=2;
+                        int order_loci[10]={2,3,2,3,3,3,3,3,3,3};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={3,4};
-                        int n=2;
+                        int order_loci[10]={4,3,4,3,3,3,3,3,3,3};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -810,8 +846,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={3,4,5};
-                        int n=3;
+                        int order_loci[10]={3,4,5,4,4,4,4,4,4,4};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -824,15 +860,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={3,4};
-                        int n=2;
+                        int order_loci[10]={3,4,3,4,4,4,4,4,4,4};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={4,5};
-                        int n=2;
+                        int order_loci[10]={5,4,5,4,4,4,4,4,4,4};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -902,8 +938,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={4,5,6};
-                        int n=3;
+                        int order_loci[10]={4,5,6,5,5,5,5,5,5,5};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -916,15 +952,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={4,5};
-                        int n=2;
+                        int order_loci[10]={4,5,4,5,5,5,5,5,5,5};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={5,6};
-                        int n=2;
+                        int order_loci[10]={6,5,6,5,5,5,5,5,5,5};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -994,8 +1030,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={5,6,7};
-                        int n=3;
+                        int order_loci[10]={5,6,7,6,6,6,6,6,6,6};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -1008,15 +1044,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={5,6};
-                        int n=2;
+                        int order_loci[10]={5,6,5,6,6,6,6,6,6,6};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={6,7};
-                        int n=2;
+                        int order_loci[10]={7,6,7,6,6,6,6,6,6,6};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -1085,8 +1121,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={6,7,8};
-                        int n=3;
+                        int order_loci[10]={6,7,8,7,7,7,7,7,7,7};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -1099,15 +1135,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={6,7};
-                        int n=2;
+                        int order_loci[10]={6,7,6,7,7,7,7,7,7,7};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={7,8};
-                        int n=2;
+                        int order_loci[10]={8,7,8,7,7,7,7,7,7,7};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -1706,8 +1742,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={8,1,2};
-                        int n=3;
+                        int order_loci[10]={8,1,2,1,1,1,1,1,1,1};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -1720,15 +1756,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={1,2};
-                        int n=2;
+                        int order_loci[10]={1,2,2,1,1,1,1,1,1,1};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={8,1};
-                        int n=2;
+                        int order_loci[10]={1,8,8,1,1,1,1,1,1,1};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -1797,8 +1833,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={7,8,1};
-                        int n=3;
+                        int order_loci[10]={7,8,1,8,8,8,8,8,8,8};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -1811,15 +1847,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={7,8};
-                        int n=2;
+                        int order_loci[10]={7,8,7,8,8,8,8,8,8,8};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={8,1};
-                        int n=2;
+                        int order_loci[10]={1,8,1,8,8,8,8,8,8,8};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -1888,8 +1924,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={1,2,3};
-                        int n=3;
+                        int order_loci[10]={1,2,3,2,2,2,2,2,2,2};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -1902,15 +1938,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={1,2};
-                        int n=2;
+                        int order_loci[10]={1,2,1,2,2,2,2,2,2,2};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={2,3};
-                        int n=2;
+                        int order_loci[10]={3,2,3,2,2,2,2,2,2,2};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -1930,7 +1966,7 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     {
                         if(pro_loci_right_riht==1 && pro_loci_left_left==1)
                         {
-                            int order_loci[2]={4,8};
+                            int order_loci[2]={8,4};
                             int n=2;
                             gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                             order=order_loci[0];
@@ -1979,8 +2015,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={2,3,4};
-                        int n=3;
+                        int order_loci[10]={2,3,4,3,3,3,3,3,3,3};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -1993,15 +2029,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={2,3};
-                        int n=2;
+                        int order_loci[10]={2,3,2,3,3,3,3,3,3,3};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={3,4};
-                        int n=2;
+                        int order_loci[10]={4,3,4,3,3,3,3,3,3,3};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -2019,6 +2055,7 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==0 && pro_loci_right==0 && pro_loci_mid==0)
                     {
+                        
                         if(pro_loci_right_riht==1 && pro_loci_left_left==1)
                         {
                             int order_loci[2]={1,5};
@@ -2070,8 +2107,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={3,4,5};
-                        int n=3;
+                        int order_loci[10]={3,4,5,4,4,4,4,4,4,4};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -2084,15 +2121,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={3,4};
-                        int n=2;
+                        int order_loci[10]={3,4,3,4,4,4,4,4,4,4};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={4,5};
-                        int n=2;
+                        int order_loci[10]={5,4,5,4,4,4,4,4,4,4};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -2150,6 +2187,7 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                         {
                             pro_loci_mid++;
                         }
+                        
                         else if (direction1[x]==3)
                         {
                             pro_loci_right_riht++;
@@ -2161,8 +2199,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={4,5,6};
-                        int n=3;
+                        int order_loci[10]={4,5,6,5,5,5,5,5,5,5};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -2175,15 +2213,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={4,5};
-                        int n=2;
+                        int order_loci[10]={4,5,4,5,5,5,5,5,5,5};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={5,6};
-                        int n=2;
+                        int order_loci[10]={6,5,6,5,5,5,5,5,5,5};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -2201,6 +2239,7 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==0 && pro_loci_right==0 && pro_loci_mid==0)
                     {
+                        
                         if(pro_loci_right_riht==1 && pro_loci_left_left==1)
                         {
                             int order_loci[2]={3,7};
@@ -2227,7 +2266,6 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     int pro_loci_mid=0;
                     int pro_loci_right_riht=0;
                     int pro_loci_left_left=0;
-                    
                     for (int x=0; x<new_loci; x++)
                     {
                         if (direction1[x]==5)
@@ -2250,12 +2288,11 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                         {
                             pro_loci_left_left++;
                         }
-                        
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={5,6,7};
-                        int n=3;
+                        int order_loci[10]={5,6,7,6,6,6,6,6,6,6};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -2268,15 +2305,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={5,6};
-                        int n=2;
+                        int order_loci[10]={5,6,5,6,6,6,6,6,6,6};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={6,7};
-                        int n=2;
+                        int order_loci[10]={7,6,7,6,6,6,6,6,6,6};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -2294,7 +2331,6 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==0 && pro_loci_right==0 && pro_loci_mid==0)
                     {
-                        
                         if(pro_loci_right_riht==1 && pro_loci_left_left==1)
                         {
                             int order_loci[2]={4,8};
@@ -2346,8 +2382,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==1)
                     {
-                        int order_loci[3]={6,7,8};
-                        int n=3;
+                        int order_loci[10]={6,7,8,7,7,7,7,7,7,7};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -2360,15 +2396,15 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     }
                     else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                     {
-                        int order_loci[2]={6,7};
-                        int n=2;
+                        int order_loci[10]={6,7,6,7,7,7,7,7,7,7};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
                     else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                     {
-                        int order_loci[2]={7,8};
-                        int n=2;
+                        int order_loci[10]={8,7,8,7,7,7,7,7,7,7};
+                        int n=10;
                         gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                         order=order_loci[0];
                     }
@@ -2388,7 +2424,7 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                     {
                         if(pro_loci_right_riht==1 && pro_loci_left_left==1)
                         {
-                            int order_loci[2]={5,1};
+                            int order_loci[2]={1,5};
                             int n=2;
                             gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
                             order=order_loci[0];
