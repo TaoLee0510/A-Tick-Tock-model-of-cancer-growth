@@ -38,14 +38,16 @@ double density_calculation(int i, Array<int, 3> sub_visual, Array<int,3> Visual_
 {
     Range all = Range::all();
     int ar=70;
+//    int ar=30;
     int xar=(ar/2)-1;
     int yar=ar/2;
     int cell_small=ar*ar;
+    int cell_number_limit=ar*ar;
     int cell_big=cell_small*0.25;
     sub_visual.resize(ar,ar,4);
     sub_visual=0;
-    sub_visual(all,all,all)=Visual_range(Range(cell_array(i,1)-xar,cell_array(i,1)+yar),Range(cell_array(i,5)-xar,cell_array(i,5)+yar),all);
-    int cell_count[6000];
+    sub_visual(all,all,4)=Visual_range(Range(cell_array(i,1)-xar,cell_array(i,1)+yar),Range(cell_array(i,5)-xar,cell_array(i,5)+yar),4);
+    int cell_count[cell_number_limit];////********
     int cc=0;
     for (int cx=0; cx<ar; cx++)
     {
@@ -55,7 +57,7 @@ double density_calculation(int i, Array<int, 3> sub_visual, Array<int,3> Visual_
             cc++;
         }
     }
-    vector<int> mycellcount (cell_count, cell_count+cell_small);
+    vector<int> mycellcount (cell_count, cell_count+cell_number_limit);
     sort(mycellcount.begin(),mycellcount.end());
     mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
     long cells_number=0;
@@ -76,7 +78,10 @@ double density_calculation(int i, Array<int, 3> sub_visual, Array<int,3> Visual_
         }
     }
     long cell_number_final = cells_number + cell_count_small;
+    
     double density;
+//    double density=cell_number_final/(double)cell_number_limit;
+    
     if (cell_array(i,14)==0)
     {
         density=cell_number_final/(double)cell_big;
