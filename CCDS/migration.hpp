@@ -402,7 +402,7 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                         }
                         if (locinumber>0)
                         {
-                            shuffle(new_loci_for_migration,new_loci_for_migration+locinumber,RNG);
+                            gsl_ran_shuffle(r6, new_loci_for_migration, locinumber, sizeof (int));
                             order=new_loci_for_migration[0];
                         }
                         delete[] new_direction_for_migration;

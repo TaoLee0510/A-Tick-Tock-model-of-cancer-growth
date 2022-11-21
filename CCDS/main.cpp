@@ -5,6 +5,16 @@
 //  Created by Tao Lee on 5/21/18.
 //  Copyright © 2018 Tao Lee. All rights reserved.
 //
+//
+// delta:R1-R0
+// ar=70
+// density=0.35
+// delta=ar-sqrt((((8*density)-1)*ar^2)/3)
+//
+// ar=70
+// delta=12
+// density=(ar^2+3*(ar-delta)*(ar-delta))/(8*ar^2)
+
 
 #include <iostream>
 #include <omp.h>
@@ -280,7 +290,8 @@ int main(int argc, char *argv[])
         Low_density_initial=1;
         free_living_growth(Visual_range_x, Visual_range_y, R0, R1, mix_ratio_initial, alpha, beta, DDM, chemotaxis, migration_rate_r_mean, migration_rate_r_mean_quia, migration_rate_K_mean, deathjudge, time_interval, utralsmall, allpng,Single_cell, K_formation_rate,bunderD,beta_distribution_alpha, beta_distribution_expected, beta_distribution_alpha_mig_time, beta_distribution_expected_mig_time);
         
-    }else if(Single_cell==0)
+    }
+    else if(Single_cell==0)
     {
         if (Low_density_initial==0)
         {
