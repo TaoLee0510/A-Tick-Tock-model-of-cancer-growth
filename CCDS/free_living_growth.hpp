@@ -56,6 +56,7 @@
 #include "deltah_recalculation.hpp"
 #include "sortRow.hpp"
 
+
 void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, float alpha, float beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,int Single_cell,double K_formation_rate,double bunderD, double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time)
 {
     time_t raw_initial_time;
@@ -405,8 +406,31 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         struct tm * timeinfo;
         time ( &rawtime );
         timeinfo = localtime ( &rawtime );
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        cout << "h = " << h << "  ||  Current time : " << asctime (timeinfo) << "  ||  Initial time : " <<asctime (initial_time) << "  ||   Cost time(Hours) : "<< difftime(rawtime,raw_initial_time)/3600 <<endl;
+        
+        double input_seconds=difftime(rawtime,raw_initial_time);
+        double seconds,minutes,hours,days;
+        int seconds02,minutes02, hours02,days02;
+        days = input_seconds / 60 / 60 / 24;
+        days02=(int)days;
+        hours = input_seconds / 60 / 60;
+        if (hours >= 24) {
+            hours02 = hours - 24 * (double)days02;
+        }
+        else {
+            hours02 = hours;
+        }
+        minutes = input_seconds / 60;
+        if (minutes >= 60) {
+
+            minutes02 = minutes - 60 * (double)hours02;
+        }
+        else {
+            minutes02 = minutes;
+        }
+        seconds = (24*60*60*days02)+(60 * 60 * hours02) + (60 * minutes02);
+        seconds02 = input_seconds - seconds;
+
+        cout << "h = " << h << "  ||  Current time: " << asctime (timeinfo) << "  ||  Initial time: " <<asctime (initial_time) << "  ||  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 <<endl;
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
         sortRow(cell_array, cell_array1,Col,9);///sort cell type
