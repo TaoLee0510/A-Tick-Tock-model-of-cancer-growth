@@ -58,6 +58,10 @@
 
 void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, float alpha, float beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,int Single_cell,double K_formation_rate,double bunderD, double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time)
 {
+    time_t raw_initial_time;
+    struct tm * initial_time;
+    time ( &raw_initial_time );
+    initial_time = localtime ( &raw_initial_time );
     ///////////////////////////////////////////////////////// parameters definition//////////////////////////////////////////////////////////////////////////////////////
     double r_limit=0;
     double K_limit=0;
@@ -402,7 +406,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         time ( &rawtime );
         timeinfo = localtime ( &rawtime );
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        cout << "h = " << h << "     time : " << asctime (timeinfo) << endl;
+        cout << "h = " << h << "  ||  Current time : " << asctime (timeinfo) << "  ||  Initial time : " <<asctime (initial_time) << "  ||   Cost time(Hours) : "<< difftime(rawtime,raw_initial_time)/3600 <<endl;
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
         sortRow(cell_array, cell_array1,Col,9);///sort cell type
