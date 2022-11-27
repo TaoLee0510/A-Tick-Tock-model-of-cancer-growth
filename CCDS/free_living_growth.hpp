@@ -306,6 +306,9 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     char dirname1 [100] = {'\0'};
     sprintf(dirname1, "mkdir ./a_%.1f_b_%.1f_pics",alpha,beta);
     system(dirname1);
+    char dirname2 [100] = {'\0'};
+    sprintf(dirname2, "mkdir ./a_%.1f_b_%.1f_CellTrace",alpha,beta);
+    system(dirname2);
 
     if (allpng==1)
     {
@@ -379,26 +382,6 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         r10 = gsl_rng_alloc(T10);
         if (h>time_interval)
         {
-            char filedir1 [100] = {'\0'};
-            sprintf(filedir1, "./Cell_Trace.txt");
-            FILE * fid8;
-            fid8=fopen (filedir1,"w+");
-            int C0 = cell_trace.rows();
-            for (int i=1;i<=C0;i++)
-            {
-                for(int co=1;co<=1000;co++)
-                {
-                    if(co<1000)
-                    {
-                        fprintf(fid8,"%g\t",cell_trace(i,co));
-                    }
-                    else
-                    {
-                        fprintf(fid8,"%g\n",cell_trace(i,co));
-                    }
-                }
-            }
-            fclose(fid8);
             break;
         }
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -432,7 +415,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         sortRow(cell_array, cell_array1,Col,9);///sort cell type
         stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall);
         sortRow(cell_array,cell_array1,Col,16);///sort time division
-        save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col);
+        save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
         int C1=cell_array.rows();
         for (int i=C1; i>=1; i--)
         {
