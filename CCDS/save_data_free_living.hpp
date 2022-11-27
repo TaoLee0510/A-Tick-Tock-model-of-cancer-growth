@@ -16,7 +16,7 @@
 #include <cmath>
 
 using namespace blitz;
-void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01, int MMR, int H, int &T, float alpha, float beta, Array<float,2> cell_array, int migration_judgement,double deltah, Array<double,2> colorspace, int DDM, int allpng,int Col)
+void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01, int MMR, int H, int &T, float alpha, float beta, Array<float,2> cell_array, int migration_judgement,double deltah, Array<double,2> colorspace, int DDM, int allpng,int Col, Array<float,2> cell_trace)
 {
     if (H%MMR==0)
     {
@@ -91,6 +91,28 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
         image.close();
         fclose(fid4);
         fclose(fid3);
+        
+        char filedir1 [100] = {'\0'};
+        sprintf(filedir1, "./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,T);
+        FILE * fid8;
+        fid8=fopen (filedir1,"w+");
+        int C01 = cell_trace.rows();
+        for (int i=1;i<=C01;i++)
+        {
+            for(int co=1;co<=1000;co++)
+            {
+                if(co<1000)
+                {
+                    fprintf(fid8,"%g\t",cell_trace(i,co));
+                }
+                else
+                {
+                    fprintf(fid8,"%g\n",cell_trace(i,co));
+                }
+            }
+        }
+        fclose(fid8);
+
         T++;
     }
     if (allpng==1)
