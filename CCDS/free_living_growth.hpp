@@ -315,9 +315,9 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         char dirname2 [100] = {'\0'};
         sprintf(dirname2, "mkdir ./a_%.1f_b_%.1f_picsall",alpha,beta);
         system(dirname2);
-        char dirname5 [100] = {'\0'};
-        sprintf(dirname5, "mkdir ./a_%.1f_b_%.1f_all",alpha,beta);
-        system(dirname5);
+//        char dirname5 [100] = {'\0'};
+//        sprintf(dirname5, "mkdir ./a_%.1f_b_%.1f_all",alpha,beta);
+//        system(dirname5);
     }
     char filedir [100] = {'\0'};
     sprintf(filedir, "./Parameters.txt");

@@ -117,78 +117,83 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
     }
     if (allpng==1)
     {
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////
-        double TT=deltah*(double)3600*(double)H;
-        char filedir7 [100] = {'\0'};
-        sprintf(filedir7, "./a_%.1f_b_%.1f_picsall/%.1d.png",alpha,beta,H);
-        char filedir8 [100] = {'\0'};
-        sprintf(filedir8, "%.08d s",(int)TT);
-        char filedir9 [100] = {'\0'};
-        sprintf(filedir9, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
-        FILE * fid5;
-        fid5=fopen (filedir7,"wb");
-        pngwriter image2(Visual_range_x, Visual_range_y, 0, filedir7);
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        char filedir16 [100] = {'\0'};
-        sprintf(filedir16, "./a_%.1f_b_%.1f_all/Cell_array_%.1d.txt",alpha,beta,H);
-        FILE * fid8;
-        fid8=fopen (filedir16,"w+");
-        
-        int C0 = cell_array.rows();
-        for (int i=1;i<=C0;i++)
+        int DELTA=10;
+        if (H%DELTA==0)
         {
-            int x= cell_array(i,1);
-            int y= cell_array(i,5);
-            int cell_type=cell_array(i,9);
-            int cell_stage=cell_array(i,14);
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////
+            double TT=deltah*(double)3600*(double)H;
+            int HH=H/DELTA;
+            char filedir7 [100] = {'\0'};
+            sprintf(filedir7, "./a_%.1f_b_%.1f_picsall/%.1d.png",alpha,beta,HH);
+            char filedir8 [100] = {'\0'};
+            sprintf(filedir8, "%.08d s",(int)TT);
+            char filedir9 [100] = {'\0'};
+            sprintf(filedir9, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+            FILE * fid5;
+            fid5=fopen (filedir7,"wb");
+            pngwriter image2(Visual_range_x, Visual_range_y, 0, filedir7);
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //        char filedir16 [100] = {'\0'};
+    //        sprintf(filedir16, "./a_%.1f_b_%.1f_all/Cell_array_%.1d.txt",alpha,beta,H);
+    //        FILE * fid8;
+    //        fid8=fopen (filedir16,"w+");
             
-            if(cell_stage==0)
+            int C0 = cell_array.rows();
+            for (int i=1;i<=C0;i++)
             {
-                if(cell_type==1)
+                int x= cell_array(i,1);
+                int y= cell_array(i,5);
+                int cell_type=cell_array(i,9);
+                int cell_stage=cell_array(i,14);
+                
+                if(cell_stage==0)
                 {
-                    image2.plot(x, y, 0.0, 1.0, 0.0);
-                    image2.plot(x+1, y+1, 0.0, 1.0, 0.0);
-                    image2.plot(x+1, y, 0.0, 1.0, 0.0);
-                    image2.plot(x, y+1, 0.0, 1.0, 0.0);
+                    if(cell_type==1)
+                    {
+                        image2.plot(x, y, 0.0, 1.0, 0.0);
+                        image2.plot(x+1, y+1, 0.0, 1.0, 0.0);
+                        image2.plot(x+1, y, 0.0, 1.0, 0.0);
+                        image2.plot(x, y+1, 0.0, 1.0, 0.0);
+                    }
+                    else
+                    {
+                        image2.plot(x, y, 1.0, 0.0, 0.0);
+                        image2.plot(x+1, y+1, 1.0, 0.0, 0.0);
+                        image2.plot(x+1, y, 1.0, 0.0, 0.0);
+                        image2.plot(x, y+1, 1.0, 0.0, 0.0);
+                    }
                 }
                 else
                 {
-                    image2.plot(x, y, 1.0, 0.0, 0.0);
-                    image2.plot(x+1, y+1, 1.0, 0.0, 0.0);
-                    image2.plot(x+1, y, 1.0, 0.0, 0.0);
-                    image2.plot(x, y+1, 1.0, 0.0, 0.0);
+                    if(cell_type==1)
+                    {
+                        image2.plot(x, y, 0.0, 1.0, 0.0);
+                    }
+                    else
+                    {
+                        image2.plot(x, y, 1.0, 0.0, 0.0);
+                    }
                 }
+    //            for(int co=1;co<=Col;co++)
+    //            {
+    //                if(co<Col)
+    //                {
+    //                    fprintf(fid8,"%g\t",cell_array(i,co));
+    //                }
+    //                else
+    //                {
+    //                    fprintf(fid8,"%g\n",cell_array(i,co));
+    //                }
+    //            }
             }
-            else
-            {
-                if(cell_type==1)
-                {
-                    image2.plot(x, y, 0.0, 1.0, 0.0);
-                }
-                else
-                {
-                    image2.plot(x, y, 1.0, 0.0, 0.0);
-                }
-            }
-            for(int co=1;co<=Col;co++)
-            {
-                if(co<Col)
-                {
-                    fprintf(fid8,"%g\t",cell_array(i,co));
-                }
-                else
-                {
-                    fprintf(fid8,"%g\n",cell_array(i,co));
-                }
-            }
+            int posx=Visual_range_x-(Visual_range_x * 0.15);
+            int posy=Visual_range_y-(Visual_range_y * 0.1);
+            image2.plot_text(filedir9, 30, posx, posy, 0.0, filedir8, 1.0, 1.0, 1.0);
+            image2.close();
+            fclose(fid5);
+    //        fclose(fid8);
         }
-        int posx=Visual_range_x-(Visual_range_x * 0.15);
-        int posy=Visual_range_y-(Visual_range_y * 0.1);
-        image2.plot_text(filedir9, 30, posx, posy, 0.0, filedir8, 1.0, 1.0, 1.0);
-        image2.close();
-        fclose(fid5);
-        fclose(fid8);
     }
 }
 
