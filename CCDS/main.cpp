@@ -33,12 +33,14 @@
 #include "density_dependent_growth.hpp"
 #include "Low_density_initial_growth.hpp"
 #include "free_living_growth.hpp"
+#define BZ_THREADSAFE
+#include <omp.h>
 
 using namespace std;
 using namespace blitz;
 #pragma pack(8)
 
-static const char *short_options = "x:y:R:r:m:a:b:d:c:M:S:K:q:t:p:g:D:T:u:z:L:F:k";
+static const char *short_options = "x:y:R:r:m:a:b:d:c:M:S:K:q:t:p:g:D:T:u:z:L:F:k:O";
 static const struct option long_options[] = {
     {"Visual_range_x", required_argument, NULL, 'x'},
     {"Visual_range_y", required_argument, NULL, 'y'},
@@ -64,6 +66,7 @@ static const struct option long_options[] = {
     {"Low_density_initial", optional_argument, NULL, 'L'},
     {"Single_cell", optional_argument, NULL, 'F'},
     {"K_formation_rate", optional_argument, NULL, 'k'},
+    {"threads", optional_argument, NULL, 'O'},
     {NULL, 0, NULL, 0}
 };
 
@@ -94,10 +97,11 @@ int main(int argc, char *argv[])
     int Single_cell=1;
     int opt = 0;
     double K_formation_rate=0.05;
+    int threads=1;
     while( (opt = getopt_long(argc, argv, short_options, long_options, NULL)) != -1){
         switch (opt){
             case '?':
-                fprintf(stdout, "Usage: %s --Visual_range_x=<int> --Visual_range_y=<int> --R0=<double> --R1=<double> --mix_ratio_initial=<double> --alpha=<float> --beta=<float> --DDM=<int> --chemotaxis=<int> --bunderD=<double> --migration_rate_r_mean=<double> --migration_rate_r_mean_quia=<double> --migration_rate_K_mean=<double> --beta_distribution_alpha=<double> --beta_distribution_expected=<double> --beta_distribution_alpha_mig_time=<double> --beta_distribution_expected_mig_time=<double> --deathjudge=<double> --time_interval=<double> --utralsmall=<int> --allpng=<int> --Low_density_initial=<int>, --Single_cell=<int> --K_formation_rate=<double>", argv[0]);
+                fprintf(stdout, "Usage: %s --Visual_range_x=<int> --Visual_range_y=<int> --R0=<double> --R1=<double> --mix_ratio_initial=<double> --alpha=<float> --beta=<float> --DDM=<int> --chemotaxis=<int> --bunderD=<double> --migration_rate_r_mean=<double> --migration_rate_r_mean_quia=<double> --migration_rate_K_mean=<double> --beta_distribution_alpha=<double> --beta_distribution_expected=<double> --beta_distribution_alpha_mig_time=<double> --beta_distribution_expected_mig_time=<double> --deathjudge=<double> --time_interval=<double> --utralsmall=<int> --allpng=<int> --Low_density_initial=<int>, --Single_cell=<int> --K_formation_rate=<double> --threads=<int>", argv[0]);
                 return 0;
             case 'x':
                 Visual_range_x = atoi(optarg);
@@ -282,13 +286,21 @@ int main(int argc, char *argv[])
                     K_formation_rate = atof(optarg);
                 }
                 break;
+            case 'O':
+                if(optarg == NULL){
+                    threads = 1;
+                }
+                else {
+                    threads = atoi(optarg);
+                }
+                break;
         }
     }
     if(Single_cell==1)
     {
         mix_ratio_initial=1;
         Low_density_initial=1;
-        free_living_growth(Visual_range_x, Visual_range_y, R0, R1, mix_ratio_initial, alpha, beta, DDM, chemotaxis, migration_rate_r_mean, migration_rate_r_mean_quia, migration_rate_K_mean, deathjudge, time_interval, utralsmall, allpng,Single_cell, K_formation_rate,bunderD,beta_distribution_alpha, beta_distribution_expected, beta_distribution_alpha_mig_time, beta_distribution_expected_mig_time);
+        free_living_growth(Visual_range_x, Visual_range_y, R0, R1, mix_ratio_initial, alpha, beta, DDM, chemotaxis, migration_rate_r_mean, migration_rate_r_mean_quia, migration_rate_K_mean, deathjudge, time_interval, utralsmall, allpng,Single_cell, K_formation_rate,bunderD,beta_distribution_alpha, beta_distribution_expected, beta_distribution_alpha_mig_time, beta_distribution_expected_mig_time,threads);
         
     }
     else if(Single_cell==0)
@@ -296,11 +308,11 @@ int main(int argc, char *argv[])
         if (Low_density_initial==0)
         {
             R1=1;
-            Low_density_initial_growth(Visual_range_x, Visual_range_y, R0, R1, mix_ratio_initial, alpha, beta, DDM, chemotaxis, migration_rate_r_mean, migration_rate_r_mean_quia, migration_rate_K_mean, deathjudge, time_interval, utralsmall, allpng,bunderD,beta_distribution_alpha, beta_distribution_expected, beta_distribution_alpha_mig_time, beta_distribution_expected_mig_time);
+            Low_density_initial_growth(Visual_range_x, Visual_range_y, R0, R1, mix_ratio_initial, alpha, beta, DDM, chemotaxis, migration_rate_r_mean, migration_rate_r_mean_quia, migration_rate_K_mean, deathjudge, time_interval, utralsmall, allpng,bunderD,beta_distribution_alpha, beta_distribution_expected, beta_distribution_alpha_mig_time, beta_distribution_expected_mig_time,threads);
         }
         else
         {
-            density_dependent_growth(Visual_range_x, Visual_range_y, R0, R1, mix_ratio_initial, alpha, beta, DDM, chemotaxis, migration_rate_r_mean, migration_rate_r_mean_quia, migration_rate_K_mean, deathjudge, time_interval, utralsmall, allpng,bunderD,beta_distribution_alpha, beta_distribution_expected, beta_distribution_alpha_mig_time, beta_distribution_expected_mig_time);
+            density_dependent_growth(Visual_range_x, Visual_range_y, R0, R1, mix_ratio_initial, alpha, beta, DDM, chemotaxis, migration_rate_r_mean, migration_rate_r_mean_quia, migration_rate_K_mean, deathjudge, time_interval, utralsmall, allpng,bunderD,beta_distribution_alpha, beta_distribution_expected, beta_distribution_alpha_mig_time, beta_distribution_expected_mig_time,threads);
         }
     }
     

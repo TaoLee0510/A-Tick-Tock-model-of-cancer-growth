@@ -52,8 +52,10 @@
 #include "density_calculation.hpp"
 #include "deltah_recalculation.hpp"
 #include "sortRow.hpp"
+#include <omp.h>
+#define BZ_THREADSAFE
 
-void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, float alpha, float beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,double bunderD,double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time)
+void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, float alpha, float beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,double bunderD,double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time, int threads)
 {
     time_t raw_initial_time;
     struct tm * initial_time;
@@ -426,7 +428,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     cell_array(all,all)=cell_array0(all,all);
     migrate_activation(cell_array, bunderD, sub_visual, Visual_range,migration_time_range, migration_rate_r_mean_quia,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time,DDM);
     density_growth_rate_calculation_1(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK,death_time_range_r,death_time_range_K,cell_array, sub_visual, Visual_range);
-    sortRow(cell_array,cell_array1,Col,17);
+    sortRow(cell_array,cell_array1,Col,17,threads);
     double h=0;
     int T=0;
     double migration_judgement=0;
@@ -469,10 +471,10 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
         fflush(stdout);
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
-        sortRow(cell_array, cell_array1,Col,9);
+        sortRow(cell_array, cell_array1,Col,9,threads);
         stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall);
         deltah_recalculation(deltah, cell_array, MMR, DDM);
-        sortRow(cell_array,cell_array1,Col,16);
+        sortRow(cell_array,cell_array1,Col,16,threads);
         save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng);
         int C1=cell_array.rows();
         for (int i=C1; i>=1; i--)

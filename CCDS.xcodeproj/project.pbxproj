@@ -319,7 +319,10 @@
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				OTHER_CFLAGS = "";
 				"OTHER_CFLAGS[arch=*]" = "";
-				OTHER_CPLUSPLUSFLAGS = "";
+				OTHER_CPLUSPLUSFLAGS = (
+					"-Xclang",
+					"-fopenmp",
+				);
 				"OTHER_CPLUSPLUSFLAGS[arch=*]" = "";
 				OTHER_LDFLAGS = (
 					"-lgsl",
@@ -329,6 +332,8 @@
 					"-lpngwriter",
 					"-lz",
 					"-DNO_FREETYPE",
+					"-lomp",
+					"-DBZ_THREADSAFE",
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				cc = "";
@@ -358,7 +363,10 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				OTHER_CFLAGS = "";
-				OTHER_CPLUSPLUSFLAGS = "";
+				OTHER_CPLUSPLUSFLAGS = (
+					"-Xclang",
+					"-fopenmp",
+				);
 				OTHER_LDFLAGS = (
 					"-lgsl",
 					"-lgslcblas",
@@ -367,6 +375,8 @@
 					"-lpngwriter",
 					"-lz",
 					"-DNO_FREETYPE",
+					"-lomp",
+					"-DBZ_THREADSAFE",
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				cc = "";
