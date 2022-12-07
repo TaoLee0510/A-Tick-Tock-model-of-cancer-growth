@@ -81,17 +81,8 @@ void CellMigration(int &DDM, int i,gsl_rng * r10, double &deltah,Array<float, 2>
                                 {
                                     cell_array(i,25)=1;
                                     cell_array(i,28)=cell_array(i,12);
-                                    //                                            double mig=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*migration_time_range;
+
                                     cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*(cell_array(i,17)-cell_array(i,16));
-                                    //                                            double mig_low=migration_rate_r_mean_quia*10;
-                                    //                                            if (mig<=mig_low)
-                                    //                                            {
-                                    //                                                cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*mig_low;
-                                    //                                            }
-                                    //                                            else
-                                    //                                            {
-                                    //                                                cell_array(i,26)=mig;
-                                    //                                            }
                                 }
                                 cell_array(i,21)=1/cell_array(i,28);
                                 break;
@@ -170,10 +161,6 @@ void CellMigration(int &DDM, int i,gsl_rng * r10, double &deltah,Array<float, 2>
                 }
                 cell_array(i,16)=cell_array(i,16)+deltah;
             }
-//                        else
-//                        {
-//                            free_living_division(i, max_growth_rate_r, max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp,cell_label,deltah,utralsmall,beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration,migration_rate_K_mean, uniup_K,unilow_K,sigmahatK,muhatK,K_label,sub_visual,beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp,cell_index,generation,r_label,Col, K_formation_rate);
-//                        }
         }
         else
         {
