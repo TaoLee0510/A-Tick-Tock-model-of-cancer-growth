@@ -31,6 +31,8 @@
 #include <gsl/gsl_sort.h>
 #include <gsl/gsl_sort_vector.h>
 #include <gsl/gsl_matrix.h>
+#define BZ_THREADSAFE
+#define BZ_THREADSAFE_USE_OPENMP
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"

@@ -32,6 +32,8 @@
 #include <gsl/gsl_sort.h>
 #include <gsl/gsl_sort_vector.h>
 #include <gsl/gsl_matrix.h>
+#define BZ_THREADSAFE
+#define BZ_THREADSAFE_USE_OPENMP
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "random_uniform.hpp"
@@ -54,7 +56,7 @@
 #include "deltah_recalculation.hpp"
 #include "sortRow.hpp"
 #include <omp.h>
-#define BZ_THREADSAFE
+
 
 void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, float alpha, float beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,double bunderD,double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time,int threads)
 {

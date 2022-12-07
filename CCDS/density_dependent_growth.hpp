@@ -31,6 +31,8 @@
 #include <gsl/gsl_sort.h>
 #include <gsl/gsl_sort_vector.h>
 #include <gsl/gsl_matrix.h>
+#define BZ_THREADSAFE
+#define BZ_THREADSAFE_USE_OPENMP
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "random_uniform.hpp"
@@ -52,8 +54,12 @@
 #include "density_calculation.hpp"
 #include "deltah_recalculation.hpp"
 #include "sortRow.hpp"
-//#include <omp.h>
-//#define BZ_THREADSAFE
+#include <omp.h>
+#include "CellMigration.hpp"
+#include "CellDivisionSingleCell.hpp"
+#include "CellDivision.hpp"
+#include "CellMigrationDivisionSingleCell.hpp"
+#include "CellMigrationDivision.hpp"
 
 void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, float alpha, float beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,double bunderD,double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time, int threads)
 {
@@ -434,8 +440,8 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     double migration_judgement=0;
     for (int  H=0; H<1000000000; H++)
     {
-        clock_t start00 = clock();
-        
+//        clock_t start00 = clock();
+        double start00=omp_get_wtime();
         const gsl_rng_type *T10;
         gsl_rng *r10;
         gsl_rng_env_setup();
@@ -513,187 +519,51 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
         
         
         
-        clock_t start04 = clock();
+//        clock_t start04 = clock();
         
-        for (int i=C1; i>=1; i--)
+        double start04=omp_get_wtime();
+        switch (threads)
         {
-            if (cell_array(i,1)>=100 && cell_array(i,5) >=100 && cell_array(i,1)<=Visual_range_x+100 && cell_array(i,5)<=Visual_range_y+100)
+            case 1:
             {
-                if (cell_array(i,11)>deathjudge)
+                for (int i=C1; i>=1; i--)
                 {
-                    if (cell_array(i,16)<cell_array(i,17))
+                    CellMigrationDivision(DDM,  i,r10,  deltah, cell_array, Visual_range,  cor_big,area_square,sub_area_square,  cor_small,  area_square_s, sub_area_square_s, migration_judgement, deathjudge,  beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD, sub_visual, Visual_range_x, Visual_range_y, beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration,  max_growth_rate_r,  max_growth_rate_K,  cell_array_temp, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp, cell_label, utralsmall, Col);
+                }
+                break;
+            }
+            default:
+            {
+                omp_set_num_threads(threads);
+        #pragma omp parallel for schedule(static)
+                {
+                    for (int i=C1; i>=1; i--)
                     {
-                        double expected_division_time=24/cell_array(i,11);
-                        double undividing_time=0.9*expected_division_time;
-                        if (cell_array(i,16)<=undividing_time)
-                        {
-                            if (cell_array(i,25)==0)
-                            {
-                                switch (DDM)
-                                {
-                                    case 1:
-                                    {
-                                        double Dr=density_calculation(i, sub_visual, Visual_range, cell_array);
-                                        if (Dr>=bunderD)
-                                        {
-                                            cell_array(i,25)=1;
-                                            //                                        double inherent_migration_speed=cell_array(i,12);
-                                            //                                        cell_array(i,28)=inherent_migration_speed;
-                                            cell_array(i,28)=cell_array(i,12);
-//                                            double mig=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*migration_time_range;
-                                            cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*(cell_array(i,17)-cell_array(i,16));
-//                                            double mig_low=migration_rate_r_mean_quia*10;
-//                                            if (mig<=mig_low)
-//                                            {
-//                                                cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*mig_low;
-//                                            }
-//                                            else
-//                                            {
-//                                                cell_array(i,26)=mig;
-//                                            }
-                                        }
-                                        cell_array(i,21)=1/cell_array(i,28);
-                                        break;
-                                    }
-                                    case 0:
-                                    {
-                                        cell_array(i,21)=1/cell_array(i,28);
-                                        break;
-                                    }
-                                }
-                                if (cell_array(i,20)>=cell_array(i,21))
-                                {
-                                    random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                                }
-                                else
-                                {
-                                    cell_array(i,20)=cell_array(i,20)+deltah;
-                                }
-                            }
-                            else
-                            {
-                                if (cell_array(i,27)>=cell_array(i,26))
-                                {
-                                    cell_array(i,25)=0;
-                                    cell_array(i,26)=0;
-                                    cell_array(i,27)=0;
-                                    cell_array(i,28)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
-                                    cell_array(i,21)=1/cell_array(i,28);
-                                    if (cell_array(i,20)>=cell_array(i,21))
-                                    {
-                                        switch (chemotaxis)
-                                        {
-                                            case 0:
-                                            {
-                                                random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                                                break;
-                                            }
-                                            case 1:
-                                            {
-                                                migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                                            }
-                                        }
-                                    }
-                                    else
-                                    {
-                                        cell_array(i,20)=cell_array(i,20)+deltah;
-                                    }
-                                }
-                                else
-                                {
-                                    if (cell_array(i,20)>=cell_array(i,21))
-                                    {
-                                        switch (chemotaxis)
-                                        {
-                                            case 0:
-                                            {
-                                                random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                                                break;
-                                            }
-                                            case 1:
-                                            {
-                                                migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                                                break;
-                                            }
-                                        }
-                                    }
-                                    else
-                                    {
-                                        cell_array(i,20)=cell_array(i,20)+deltah;
-                                        cell_array(i,27)=cell_array(i,27)+deltah;
-                                        cell_array(i,28)=cell_array(i,12);
-                                    }
-                                }
-                            }
-                            
-                            
-                        }
-                        cell_array(i,16)=cell_array(i,16)+deltah;
-                    }
-                    else
-                    {
-                        division(i, max_growth_rate_r, max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp,cell_label,deltah,utralsmall, Col);
+                        CellMigration(DDM, i,r10, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, Visual_range_x,Visual_range_y,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration);
+                        
                     }
                 }
-                else
-                {
-                    double D_time_1=1.5*(24/cell_array(i,10));
-                    double D_time_2=0.9*cell_array(i,18);
-                    double D_time = 0;
-                    if (D_time_1<=D_time_2)
+        //#pragma omp parallel for schedule(static)
+        //        {
+                    for (int i=C1; i>=1; i--)
                     {
-                        D_time = D_time_1;
+                        CellDivision( i,  max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1,  proliferation_loci, cell_temp, cell_label,  deltah, utralsmall, Col, deathjudge, Visual_range_x, Visual_range_y);
                     }
-                    else
-                    {
-                        D_time = D_time_2;
-                    }
-                    if (cell_array(i,19)<=D_time)
-                    {
-                        if (cell_array(i,20)>=cell_array(i,21))
-                        {
-                            switch (chemotaxis)
-                            {
-                                case 0:
-                                {
-                                    random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                                    break;
-                                }
-                                case 1:
-                                {
-                                    if(cell_array(i,25)==0)
-                                    {
-                                        random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                                    }
-                                    else
-                                    {
-                                        migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            cell_array(i,20)=cell_array(i,20)+deltah;
-                        }
-                    }
-                    else
-                    {
-                        cell_array(i,20)=cell_array(i,20)+deltah;
-                    }
-                }
+        //        }
             }
         }
-        clock_t end04  = clock();
-        double programTimes04 = ((double) end04 -(double)start04) / CLOCKS_PER_SEC;
-//        cout << "main_pro  :  "<<programTimes04 << endl;
+        
+        
+        double end04=omp_get_wtime();
+        
+        double programTimes04 = end04 - start04;
+
         
         
         h=h+deltah;
         gsl_rng_free(r10);
         
-        double programTimes00 = ((double) end04 -(double)start00) / CLOCKS_PER_SEC;
+        double programTimes00 = end04 -start00;
         
         cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 <<"\n  =>  death_judgement  :  "<<programTimes01 << "\n  =>  stage convert  :  "<<programTimes021 << "\n  =>  sortRow_1  :  "<<programTimes02<< "\n  =>  sortRow_2  :  "<<programTimes03 << "\n  =>  main pro  :  "<<programTimes04<< "\n  =>  h cost  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< threads <<"\n****************************************" <<endl;
     }

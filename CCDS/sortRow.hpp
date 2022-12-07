@@ -11,11 +11,12 @@
 
 
 #include <stdio.h>
+#define BZ_THREADSAFE
+#define BZ_THREADSAFE_USE_OPENMP
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include <omp.h>
-#define BZ_THREADSAFE
-#define BZ_THREADSAFE_USE_OPENMP
+
 
 struct DA
 {

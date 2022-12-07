@@ -45,6 +45,11 @@
 		046CC78E2260EF8B009F1C14 /* density_dependent_growth.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = density_dependent_growth.hpp; sourceTree = "<group>"; };
 		046CC7912261001B009F1C14 /* Low_density_initial_growth.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Low_density_initial_growth.hpp; sourceTree = "<group>"; };
 		04AEA12721EA56AB00BE3706 /* deltah_recalculation.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = deltah_recalculation.hpp; sourceTree = "<group>"; };
+		E64361E72940D88A00AC39F2 /* CellMigration.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CellMigration.hpp; sourceTree = "<group>"; };
+		E64361ED2940D8B700AC39F2 /* CellDivision.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CellDivision.hpp; sourceTree = "<group>"; };
+		E64361F02940D8D100AC39F2 /* CellDivisionSingleCell.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CellDivisionSingleCell.hpp; sourceTree = "<group>"; };
+		E64361F32940D8E300AC39F2 /* CellMigrationDivisionSingleCell.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CellMigrationDivisionSingleCell.hpp; sourceTree = "<group>"; };
+		E64361F62940DEA900AC39F2 /* CellMigrationDivision.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CellMigrationDivision.hpp; sourceTree = "<group>"; };
 		E6538329291D362800C2B0F6 /* free_living_growth.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = free_living_growth.hpp; sourceTree = "<group>"; };
 		E653832C291D387E00C2B0F6 /* free_living_division.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = free_living_division.hpp; sourceTree = "<group>"; };
 		E6538332291D39D700C2B0F6 /* save_data_free_living.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = save_data_free_living.hpp; sourceTree = "<group>"; };
@@ -112,6 +117,11 @@
 				0434498520B2619F003532BA /* division.hpp */,
 				E653832C291D387E00C2B0F6 /* free_living_division.hpp */,
 				E67D960529178FD500117705 /* cell_type_transform.hpp */,
+				E64361E72940D88A00AC39F2 /* CellMigration.hpp */,
+				E64361F32940D8E300AC39F2 /* CellMigrationDivisionSingleCell.hpp */,
+				E64361F02940D8D100AC39F2 /* CellDivisionSingleCell.hpp */,
+				E64361ED2940D8B700AC39F2 /* CellDivision.hpp */,
+				E64361F62940DEA900AC39F2 /* CellMigrationDivision.hpp */,
 			);
 			path = CCDS;
 			sourceTree = "<group>";
