@@ -162,10 +162,10 @@ void CellMigrationDivision(int &DDM, int i,gsl_rng * r10, double &deltah,Array<f
                 }
                 cell_array(i,16)=cell_array(i,16)+deltah;
             }
-                        else
-                        {
-                            division(i, max_growth_rate_r, max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp,cell_label,deltah,utralsmall, Col);
-                        }
+            else
+            {
+                division(i, max_growth_rate_r, max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp,cell_label,deltah,utralsmall, Col);
+            }
         }
         else
         {

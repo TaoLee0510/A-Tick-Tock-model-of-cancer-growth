@@ -1490,21 +1490,14 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
         int current_size=cell_array.rows();
         cell_array_temp.resize(current_size+1,Col);
         cell_array_temp=0;
-//        for (int rows=1;rows<=current_size+1;rows++)
-//        {
-//            if(rows<=current_size)
-//            {
-//                cell_array_temp(rows,all)=cell_array(rows,all);
-//            }
-//            else
-//            {
-//                cell_array_temp(rows,all)=cell_temp(1,all);
-//            }
-//        }
+        
         cell_array_temp(Range(1,current_size),all)=cell_array(Range(1,current_size),all);
+        cell_array_temp(current_size+1,all)=cell_temp(1,all);
+        
         cell_array.resize(current_size+1,Col);
         cell_array=0;
         cell_array(all,all)=cell_array_temp(all,all);
+        
     }
 }
 #endif /* division_hpp */
