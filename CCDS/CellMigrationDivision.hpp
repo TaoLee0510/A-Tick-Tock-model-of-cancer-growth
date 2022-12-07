@@ -81,20 +81,8 @@ void CellMigrationDivision(int &DDM, int i,gsl_rng * r10, double &deltah,Array<f
                                 if (Dr>=bunderD)
                                 {
                                     cell_array(i,25)=1;
-                                    //                                        double inherent_migration_speed=cell_array(i,12);
-                                    //                                        cell_array(i,28)=inherent_migration_speed;
                                     cell_array(i,28)=cell_array(i,12);
-                                    //                                            double mig=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*migration_time_range;
                                     cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*(cell_array(i,17)-cell_array(i,16));
-                                    //                                            double mig_low=migration_rate_r_mean_quia*10;
-                                    //                                            if (mig<=mig_low)
-                                    //                                            {
-                                    //                                                cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*mig_low;
-                                    //                                            }
-                                    //                                            else
-                                    //                                            {
-                                    //                                                cell_array(i,26)=mig;
-                                    //                                            }
                                 }
                                 cell_array(i,21)=1/cell_array(i,28);
                                 break;

@@ -440,7 +440,6 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     double migration_judgement=0;
     for (int  H=0; H<1000000000; H++)
     {
-//        clock_t start00 = clock();
         double start00=omp_get_wtime();
         const gsl_rng_type *T10;
         gsl_rng *r10;
@@ -475,52 +474,14 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
         
         double completeness=(h/time_interval)*100;
         
-//        cout << "Completeness: "<< completeness << "%" << "\n  ||  h = " << h <<"\n  ||  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 <<endl;
-//        fflush(stdout);
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ///
-        clock_t start01 = clock();
-        
         death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
-        
-        clock_t end01  = clock();
-        double programTimes01 = ((double) end01 -start01) / CLOCKS_PER_SEC;
-//        cout << "death_judgement  :  "<<programTimes01 << endl;
-        
-        clock_t start02 = clock();
-        
         sortRow(cell_array, cell_array1,Col,9,threads);
-        
-        clock_t end02  = clock();
-        double programTimes02 = ((double) end02 -start02) / CLOCKS_PER_SEC;
-//        cout << "sortRow_1  :  "<<programTimes02 << endl;
-        
-        clock_t start021 = clock();
-        
         stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall);
-        
-        clock_t end021  = clock();
-        double programTimes021 = ((double) end021 -start021) / CLOCKS_PER_SEC;
-        
-        
         deltah_recalculation(deltah, cell_array, MMR, DDM);
-        
-        
-        clock_t start03 = clock();
-        
         sortRow(cell_array,cell_array1,Col,16,threads);
-        
-        clock_t end03  = clock();
-        double programTimes03 = ((double) end03 -start03) / CLOCKS_PER_SEC;
-//        cout << "sortRow_2  :  "<<programTimes03 << endl;
-        
         save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng);
         int C1=cell_array.rows();
-        
-        
-        
-//        clock_t start04 = clock();
-        
         double start04=omp_get_wtime();
         switch (threads)
         {
@@ -543,29 +504,22 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                         
                     }
                 }
-        //#pragma omp parallel for schedule(static)
-        //        {
                     for (int i=C1; i>=1; i--)
                     {
                         CellDivision( i,  max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1,  proliferation_loci, cell_temp, cell_label,  deltah, utralsmall, Col, deathjudge, Visual_range_x, Visual_range_y);
                     }
-        //        }
+                break;
             }
         }
         
-        
         double end04=omp_get_wtime();
-        
         double programTimes04 = end04 - start04;
-
-        
-        
         h=h+deltah;
         gsl_rng_free(r10);
         
         double programTimes00 = end04 -start00;
         
-        cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 <<"\n  =>  death_judgement  :  "<<programTimes01 << "\n  =>  stage convert  :  "<<programTimes021 << "\n  =>  sortRow_1  :  "<<programTimes02<< "\n  =>  sortRow_2  :  "<<programTimes03 << "\n  =>  main pro  :  "<<programTimes04<< "\n  =>  h cost  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< threads <<"\n****************************************" <<endl;
+        cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time per main loop   :  "<<programTimes04<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< threads <<"\n****************************************" <<endl;
     }
 }
 #endif /* density_dependent_growth_hpp */
