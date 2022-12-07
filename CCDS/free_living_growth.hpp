@@ -55,8 +55,8 @@
 #include "density_calculation.hpp"
 #include "deltah_recalculation.hpp"
 #include "sortRow.hpp"
-#include <omp.h>
-#define BZ_THREADSAFE
+//#include <omp.h>
+//#define BZ_THREADSAFE
 
 
 void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, float alpha, float beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,int Single_cell,double K_formation_rate,double bunderD, double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time,int threads)
@@ -281,7 +281,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
             migration_rate_K[x-1]=gsl_ran_beta(r00,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
         }
     }
-
+    
     /////////////////////////Initiation////////////////////////////////
     cell_array_out.resize(N0,Col);
     cell_array_out=0;
@@ -311,15 +311,15 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     char dirname2 [100] = {'\0'};
     sprintf(dirname2, "mkdir ./a_%.1f_b_%.1f_CellTrace",alpha,beta);
     system(dirname2);
-
+    
     if (allpng==1)
     {
         char dirname2 [100] = {'\0'};
         sprintf(dirname2, "mkdir ./a_%.1f_b_%.1f_picsall",alpha,beta);
         system(dirname2);
-//        char dirname5 [100] = {'\0'};
-//        sprintf(dirname5, "mkdir ./a_%.1f_b_%.1f_all",alpha,beta);
-//        system(dirname5);
+        //        char dirname5 [100] = {'\0'};
+        //        sprintf(dirname5, "mkdir ./a_%.1f_b_%.1f_all",alpha,beta);
+        //        system(dirname5);
     }
     char filedir [100] = {'\0'};
     sprintf(filedir, "./Parameters.txt");
@@ -376,6 +376,8 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     double migration_judgement=0;
     for (int  H=0; H<1000000000; H++)
     {
+        clock_t start00 = clock();
+        
         const gsl_rng_type *T10;
         gsl_rng *r10;
         gsl_rng_env_setup();
@@ -400,25 +402,57 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         
         hours = input_seconds / 60 / 60;
         hours02 = hours - 24 * (double)days02;
-
+        
         minutes = input_seconds / 60;
         minutes02 = minutes - (60 * (double)hours02)- (24*60* (double)days02);
-
+        
         seconds = (24*60*60*days02)+(60 * 60 * hours02) + (60 * minutes02);
         seconds02 = input_seconds - seconds;
         
         double completeness=(h/time_interval)*100;
         
-        cout << "Completeness: "<< completeness << "%" << "\n  ||  h = " << h <<"\n  ||  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 <<endl;
-        fflush(stdout);
-
+//        cout << "Completeness: "<< completeness << "%" << "\n  ||  h = " << h <<"\n  ||  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 <<endl;
+//        fflush(stdout);
+        
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        clock_t start01 = clock();
+        
         death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
+        
+        clock_t end01  = clock();
+        double programTimes01 = ((double) end01 -start01) / CLOCKS_PER_SEC;
+//        cout << "death_judgement  :  "<<programTimes01 << endl;
+        
+        clock_t start02 = clock();
+        
         sortRow(cell_array, cell_array1,Col,9,threads);///sort cell type
+        
+        clock_t end02  = clock();
+        double programTimes02 = ((double) end02 -start02) / CLOCKS_PER_SEC;
+//        cout << "sortRow_1  :  "<<programTimes02 << endl;
+        
+        
+        clock_t start021 = clock();
+        
         stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall);
+        
+        clock_t end021  = clock();
+        double programTimes021 = ((double) end021 -start021) / CLOCKS_PER_SEC;
+        
+        
+        clock_t start03 = clock();
+        
         sortRow(cell_array,cell_array1,Col,16,threads);///sort time division
+        ///
+        clock_t end03  = clock();
+        double programTimes03 = ((double) end03 -start03) / CLOCKS_PER_SEC;
+//        cout << "sortRow_2  :  "<<programTimes03 << endl;
+        
         save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
         int C1=cell_array.rows();
+        
+        
+        clock_t start04 = clock();
         for (int i=C1; i>=1; i--)
         {
             if (cell_array(i,1)>=100 && cell_array(i,5) >=100 && cell_array(i,1)<=Visual_range_x+100 && cell_array(i,5)<=Visual_range_y+100)
@@ -427,36 +461,40 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 {
                     if (cell_array(i,16)<cell_array(i,17))
                     {
-                        double expected_division_time=24/cell_array(i,11);
-                        double undividing_time=0.9*expected_division_time;
+                        double undividing_time=21.6/cell_array(i,11);
                         if (cell_array(i,16)<=undividing_time)
                         {
                             if (cell_array(i,25)==0)
                             {
-                                if (DDM==1)
+                                switch (DDM)
                                 {
-                                    double Dr=density_calculation(i, sub_visual, Visual_range, cell_array);
-                                    if (Dr>=bunderD)
+                                    case 1:
                                     {
-                                        cell_array(i,25)=1;
-                                        double inherent_migration_speed=cell_array(i,12);
-                                        cell_array(i,28)=inherent_migration_speed;
-                                        double mig=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*migration_time_range;
-                                        double mig_low=migration_rate_r_mean_quia*10;
-                                        if (mig<=mig_low)
+                                        double Dr=density_calculation(i, sub_visual, Visual_range, cell_array);
+                                        if (Dr>=bunderD)
                                         {
-                                            cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*mig_low;
+                                            cell_array(i,25)=1;
+                                            cell_array(i,28)=cell_array(i,12);
+//                                            double mig=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*migration_time_range;
+                                            cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*(cell_array(i,17)-cell_array(i,16));
+//                                            double mig_low=migration_rate_r_mean_quia*10;
+//                                            if (mig<=mig_low)
+//                                            {
+//                                                cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*mig_low;
+//                                            }
+//                                            else
+//                                            {
+//                                                cell_array(i,26)=mig;
+//                                            }
                                         }
-                                        else
-                                        {
-                                            cell_array(i,26)=mig;
-                                        }
+                                        cell_array(i,21)=1/cell_array(i,28);
+                                        break;
                                     }
-                                    cell_array(i,21)=1/cell_array(i,28);
-                                }
-                                else
-                                {
-                                    cell_array(i,21)=1/cell_array(i,28);
+                                    case 0:
+                                    {
+                                        cell_array(i,21)=1/cell_array(i,28);
+                                        break;
+                                    }
                                 }
                                 if (cell_array(i,20)>=cell_array(i,21))
                                 {
@@ -478,13 +516,18 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                                     cell_array(i,21)=1/cell_array(i,28);
                                     if (cell_array(i,20)>=cell_array(i,21))
                                     {
-                                        if (chemotaxis==0)
+                                        switch (chemotaxis)
                                         {
-                                            random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                                        }
-                                        else
-                                        {
-                                            migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                            case 0:
+                                            {
+                                                random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                                break;
+                                            }
+                                            case 1:
+                                            {
+                                                migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                                break;
+                                            }
                                         }
                                     }
                                     else
@@ -496,13 +539,18 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                                 {
                                     if (cell_array(i,20)>=cell_array(i,21))
                                     {
-                                        if (chemotaxis==0)
+                                        switch (chemotaxis)
                                         {
-                                            random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                                        }
-                                        else
-                                        {
-                                            migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                            case 0:
+                                            {
+                                                random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                                break;
+                                            }
+                                            case 1:
+                                            {
+                                                migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                                break;
+                                            }
                                         }
                                     }
                                     else//cell_array(i,20)<cell_array(i,21)
@@ -538,19 +586,24 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                     {
                         if (cell_array(i,20)>=cell_array(i,21))
                         {
-                            if (chemotaxis==0)
+                            switch (chemotaxis)
                             {
-                                random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                            }
-                            else
-                            {
-                                if(cell_array(i,25)==0)
+                                case 0:
                                 {
                                     random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                    break;
                                 }
-                                else
+                                case 1:
                                 {
-                                    migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                    if(cell_array(i,25)==0)
+                                    {
+                                        random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                    }
+                                    else
+                                    {
+                                        migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                    }
+                                    break;
                                 }
                             }
                         }
@@ -566,8 +619,24 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 }
             }
         }
+        clock_t end04  = clock();
+        double programTimes04 = ((double) end04 -(double)start04) / CLOCKS_PER_SEC;
+//        cout << "main_pro  :  "<<programTimes04 << endl;
+        
+
+        
         h=h+deltah;
         gsl_rng_free(r10);
+        
+        double programTimes00 = ((double) end04 -(double)start00) / CLOCKS_PER_SEC;
+        
+        
+        
+        cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 <<"\n  =>  death_judgement  :  "<<programTimes01 << "\n  =>  stage convert  :  "<<programTimes021 << "\n  =>  sortRow_1  :  "<<programTimes02<< "\n  =>  sortRow_2  :  "<<programTimes03 << "\n  =>  main pro  :  "<<programTimes04<< "\n  =>  h cost  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< threads <<"\n****************************************" <<endl;
+        
+        fflush(stdout);
+        
+        
     }
 }
 #endif /* free_living_growth_hpp */
