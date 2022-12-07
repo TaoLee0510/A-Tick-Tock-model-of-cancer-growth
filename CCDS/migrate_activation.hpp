@@ -63,18 +63,18 @@ void migrate_activation(Array<float, 2> &cell_array, double bunderD, Array<int, 
                     double inherent_migration_speed=(double)cell_array(i,12);
                     cell_array(i,28)=inherent_migration_speed;
 //                    cell_array(i,26)=gsl_ran_geometric(r10,probability_of_time);
-                    double mig=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*migration_time_range;
-//                    double mig=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*cell_array(i,11);
-                    double mig_low=migration_rate_r_mean_quia*10;
-//                    double mig_threshold=migration_time_range*3/4;
-                    if (mig<=mig_low)
-                    {
-                        cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*mig_low;
-                    }
-                    else
-                    {
-                        cell_array(i,26)=mig;
-                    }
+//                    double mig=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*migration_time_range;
+                    cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*(cell_array(i,17)-cell_array(i,16));
+//                    double mig_low=migration_rate_r_mean_quia*10;
+////                    double mig_threshold=migration_time_range*3/4;
+//                    if (mig<=mig_low)
+//                    {
+//                        cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*mig_low;
+//                    }
+//                    else
+//                    {
+//                        cell_array(i,26)=mig;
+//                    }
                     break;
                 }
                 case 1:

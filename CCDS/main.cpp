@@ -72,32 +72,32 @@ static const struct option long_options[] = {
 
 int main(int argc, char *argv[])
 {
-    int Visual_range_x=1000;
-    int Visual_range_y=1000;
+    int Visual_range_x=2000;
+    int Visual_range_y=2000;
     double R0=60;
-    double R1=1;
+    double R1=50;
     double mix_ratio_initial=0.5;
     float alpha=2.2;
     float beta=0;
     int DDM=1;
     int chemotaxis=1;
-    double bunderD=0.7;
-    double migration_rate_r_mean=5;
+    double bunderD=0.9;
+    double migration_rate_r_mean=200;
     double migration_rate_r_mean_quia=0.5;
     double migration_rate_K_mean=0.25;
-    double beta_distribution_alpha=0.03;////
-    double beta_distribution_expected=0.3;//////0.2
+    double beta_distribution_alpha=0.01;////
+    double beta_distribution_expected=0.15;//////0.2
     double beta_distribution_alpha_mig_time=0.005;
-    double beta_distribution_expected_mig_time=0.2;
+    double beta_distribution_expected_mig_time=0.3;
     double deathjudge=0.005;
-    double time_interval=1000;
+    double time_interval=220;
     int utralsmall=0; //1 yes, 0 no
     int allpng=0;
-    int Low_density_initial=0;
-    int Single_cell=1;
+    int Low_density_initial=1;
+    int Single_cell=0;
     int opt = 0;
     double K_formation_rate=0.05;
-    int threads=1;
+    int threads=10;
     while( (opt = getopt_long(argc, argv, short_options, long_options, NULL)) != -1){
         switch (opt){
             case '?':
@@ -197,7 +197,7 @@ int main(int argc, char *argv[])
                     migration_rate_K_mean = atof(optarg);
                 }
                 break;
-  
+
             case 'q':
                 if(optarg == NULL){
                     beta_distribution_alpha = 0.03;
