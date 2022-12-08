@@ -162,7 +162,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     Visual_range(all,all,all)=0;
     Array<float,2> cell_array(1,Col,FortranArray<2>());
     cell_array=0;
-
+    
     Array<float,2> cell_array1(1,Col,FortranArray<2>());
     cell_array1=0;
     Array<float,2> cell_array_temp(1,Col,FortranArray<2>());
@@ -434,13 +434,14 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         sortRow(cell_array, cell_array1,Col,9,threads);///sort cell type
         stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall);
         sortRow(cell_array,cell_array1,Col,16,threads);///sort time division
-        save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
+        //        save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
         int C1=cell_array.rows();
         double start04=omp_get_wtime();
         switch (threads)
         {
             case 1:
             {
+                save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
                 for (int i=C1; i>=1; i--)
                 {
                     CellMigrationDivisionSingleCell(DDM, i,r10, deltah,cell_array, Visual_range, cor_big,  area_square,  sub_area_square,  cor_small, area_square_s, sub_area_square_s, migration_judgement, max_growth_rate_r,  max_growth_rate_K, cell_array_temp,  cor_big_1, cor_big_1_change_shape,  cor_small_1, proliferation_loci,  cell_temp, cell_label , utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K,  unilow_K, sigmahatK, muhatK, K_label,sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration, cell_trace, cell_trace_temp,  cell_index, generation, r_label, Col, K_formation_rate, deathjudge,  beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD, Visual_range_x, Visual_range_y);
@@ -450,17 +451,29 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
             default:
             {
                 omp_set_num_threads(threads);
-#pragma omp parallel for schedule(dynamic)
-                {
+               #pragma omp parallel for schedule(dynamic)
+                { 
                     for (int i=C1; i>=1; i--)
                     {
+                       #pragma omp flush(cell_array,Visual_range)
                         CellMigration(DDM, i,r10, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, Visual_range_x,Visual_range_y,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration);
                         
                     }
                 }
-                for (int i=C1; i>=1; i--)
+                
+                #pragma omp parallel
                 {
-                    CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape,cor_small_1, proliferation_loci,cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, generation, r_label, Col, K_formation_rate, deathjudge, Visual_range_x, Visual_range_y);
+                    #pragma omp sections
+                    {
+                        #pragma omp section
+                        save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
+                        #pragma omp section
+                        for (int i=C1; i>=1; i--)
+                        {
+                            CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape,cor_small_1, proliferation_loci,cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, generation, r_label, Col, K_formation_rate, deathjudge, Visual_range_x, Visual_range_y);
+                        }
+                    }
+                    
                 }
                 break;
             }
