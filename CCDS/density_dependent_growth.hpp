@@ -496,7 +496,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
             default:
             {
                 omp_set_num_threads(threads);
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(dynamic)
                 {
                     for (int i=C1; i>=1; i--)
                     {
