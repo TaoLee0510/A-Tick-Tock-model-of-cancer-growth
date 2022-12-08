@@ -5,6 +5,39 @@
 //  Created by Tao Lee on 11/10/22.
 //  Copyright © 2022 Tao Lee. All rights reserved.
 //
+//
+//
+//
+//
+//    cell_array discription:
+//    $9: cell_array type
+//    $10: inherent growth rate
+//    $11: density growth rate
+//    $12: inherent migration rate
+//    $13: mass absorb rate
+//    $14: cell_array stage
+//    $15: cell_array index
+//    $16: pass time to next division
+//    $17: time for a generation
+//    $18: death time
+//    $19: time passed to death
+//    $20: pass time to next migrate
+//    $21: ones migrate time
+//    $22: cell_array viability
+//    $23: last migration direction
+//    $24: migration lable: 1=follow  0=initial
+//    $25: migration judgement lables:  0: non_migration  1: migration
+//    $26: migration lasted time
+//    $27: passed time of migration
+//    $28: migration rate
+//    $29: cell label;CI (add 1 when division occured; r-cell: 1-4999999999; K-cell: 500000000-9999999999)
+//    $30: parants label; PI
+//    $31: generation times/division times
+
+
+
+
+
 
 #ifndef free_living_growth_hpp
 #define free_living_growth_hpp
@@ -129,30 +162,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     Visual_range(all,all,all)=0;
     Array<float,2> cell_array(1,Col,FortranArray<2>());
     cell_array=0;
-    //    $9: cell_array type
-    //    $10: inherent growth rate
-    //    $11: density growth rate
-    //    $12: inherent migration rate
-    //    $13: mass absorb rate
-    //    $14: cell_array stage
-    //    $15: cell_array index
-    //    $16: pass time to next division
-    //    $17: time for a generation
-    //    $18: death time
-    //    $19: time passed to death
-    //    $20: pass time to next migrate
-    //    $21: ones migrate time
-    //    $22: cell_array viability
-    //    $23: last migration direction
-    //    $24: migration lable: 1=follow  0=initial
-    //    $25: migration judgement lables:  0: non_migration  1: migration
-    //    $26: migration lasted time
-    //    $27: passed time of migration
-    //    $28: migration rate
-    //    $29: cell label;CI (add 1 when division occured; r-cell: 1-4999999999; K-cell: 500000000-9999999999)
-    //    $30: parants label; PI
-    //    $31: generation times/division times
-    
+
     Array<float,2> cell_array1(1,Col,FortranArray<2>());
     cell_array1=0;
     Array<float,2> cell_array_temp(1,Col,FortranArray<2>());
@@ -440,7 +450,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
             default:
             {
                 omp_set_num_threads(threads);
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(dynamic)
                 {
                     for (int i=C1; i>=1; i--)
                     {
