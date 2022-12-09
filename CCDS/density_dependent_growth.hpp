@@ -480,59 +480,89 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
         sortRow(cell_array, cell_array1,Col,9,threads);
         stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall);
 //        deltah_recalculation(deltah, cell_array, MMR, DDM);
-        sortRow(cell_array,cell_array1,Col,16,threads);
+//        sortRow(cell_array,cell_array1,Col,16,threads);
 //        save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng);
         int C1=cell_array.rows();
-        if (H%MMR==0)
+        
+        if(DynamicThreads==1)
         {
-            int CNumber=ceil(C1/10000);
-            if(DynamicThreads==1)
+            int CNumber=ceil(C1/5000);
+            switch (CNumber)
             {
-                switch (CNumber)
+                case 0:
                 {
-                    case 0:
-                    {
-                        threads=(int)(MaxThread*0.3);
-                        break;
-                    }
-                    case 1:
-                    {
-                        threads=(int)(MaxThread*0.4);
-                        break;
-                    }
-                    case 2:
-                    {
-                        threads=(int)(MaxThread*0.5);
-                        break;
-                    }
-                    case 3:
-                    {
-                        threads=(int)(MaxThread*0.6);
-                        break;
-                    }
-                    case 4:
-                    {
-                        threads=(int)(MaxThread*0.7);
-                        break;
-                    }
-                    case 5:
-                    {
-                        threads=(int)(MaxThread*0.8);
-                        break;
-                    }
-                    default:
-                    {
-                        threads=(int)(MaxThread*0.9);
-                        break;
-                    }
+                    threads=(int)(MaxThread*0.3);
+                    break;
+                }
+                case 1:
+                {
+                    threads=(int)(MaxThread*0.35);
+                    break;
+                }
+                case 2:
+                {
+                    threads=(int)(MaxThread*0.4);
+                    break;
+                }
+                case 3:
+                {
+                    threads=(int)(MaxThread*0.45);
+                    break;
+                }
+                case 4:
+                {
+                    threads=(int)(MaxThread*0.5);
+                    break;
+                }
+                case 5:
+                {
+                    threads=(int)(MaxThread*0.55);
+                    break;
+                }
+                case 6:
+                {
+                    threads=(int)(MaxThread*0.6);
+                    break;
+                }
+                case 7:
+                {
+                    threads=(int)(MaxThread*0.65);
+                    break;
+                }
+                case 8:
+                {
+                    threads=(int)(MaxThread*0.7);
+                    break;
+                }
+                case 9:
+                {
+                    threads=(int)(MaxThread*0.75);
+                    break;
+                }
+                case 10:
+                {
+                    threads=(int)(MaxThread*0.8);
+                    break;
+                }
+                case 11:
+                {
+                    threads=(int)(MaxThread*0.85);
+                    break;
+                }
+                default:
+                {
+                    threads=(int)(MaxThread*0.9);
+                    break;
                 }
             }
         }
+
         double start04=omp_get_wtime();
         switch (threads)
         {
             case 1:
             {
+                sortRow(cell_array,cell_array1,Col,16,threads);///sort time division
                 save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng);
                 for (int i=C1; i>=1; i--)
                 {
@@ -552,6 +582,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                         
                     }
                 }
+                sortRow(cell_array,cell_array1,Col,16,threads);///sort time division
                 #pragma omp parallel
                 {
                     #pragma omp sections
