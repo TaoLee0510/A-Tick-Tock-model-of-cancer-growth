@@ -391,6 +391,10 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     int T=0;
     double migration_judgement=0;
     int MaxThread=omp_get_max_threads();
+    if(MaxThread>=threads)
+    {
+        MaxThread=threads;
+    }
     for (int  H=0; H<1000000000; H++)
     {
         double start00=omp_get_wtime();
@@ -444,67 +448,37 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
             {
                 case 0:
                 {
-                    threads=(int)(MaxThread*0.3);
+                    threads=(int)(MaxThread*0.5);
                     break;
                 }
                 case 1:
                 {
-                    threads=(int)(MaxThread*0.35);
+                    threads=(int)(MaxThread*0.6);
                     break;
                 }
                 case 2:
                 {
-                    threads=(int)(MaxThread*0.4);
+                    threads=(int)(MaxThread*0.7);
                     break;
                 }
                 case 3:
                 {
-                    threads=(int)(MaxThread*0.45);
+                    threads=(int)(MaxThread*0.8);
                     break;
                 }
                 case 4:
                 {
-                    threads=(int)(MaxThread*0.5);
+                    threads=(int)(MaxThread*0.9);
                     break;
                 }
                 case 5:
                 {
-                    threads=(int)(MaxThread*0.55);
-                    break;
-                }
-                case 6:
-                {
-                    threads=(int)(MaxThread*0.6);
-                    break;
-                }
-                case 7:
-                {
-                    threads=(int)(MaxThread*0.65);
-                    break;
-                }
-                case 8:
-                {
-                    threads=(int)(MaxThread*0.7);
-                    break;
-                }
-                case 9:
-                {
-                    threads=(int)(MaxThread*0.75);
-                    break;
-                }
-                case 10:
-                {
-                    threads=(int)(MaxThread*0.8);
-                    break;
-                }
-                case 11:
-                {
-                    threads=(int)(MaxThread*0.85);
+                    threads=MaxThread;
                     break;
                 }
                 default:
                 {
-                    threads=(int)(MaxThread*0.9);
+                    threads=MaxThread;
                     break;
                 }
             }
