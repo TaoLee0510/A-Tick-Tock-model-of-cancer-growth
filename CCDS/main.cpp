@@ -306,10 +306,10 @@ int main(int argc, char *argv[])
                 break;
         }
     }
-    if(DynamicThreads==1)
-    {
-        threads=1;
-    }
+//    if(DynamicThreads==1)
+//    {
+//        threads=1;
+//    }
     if(Single_cell==1)
     {
         mix_ratio_initial=1;
