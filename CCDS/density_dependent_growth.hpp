@@ -439,9 +439,16 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     int T=0;
     double migration_judgement=0;
     int MaxThread=omp_get_max_threads();
-    if(MaxThread>=threads)
+    int nthreads;
+    if(MaxThread<threads)
     {
-        MaxThread=MaxThread;
+        cout <<"Warning: custom threads larger than the system maximal threads, reset it as system maximal threads!" <<endl;
+        threads=MaxThread;
+        nthreads=threads;
+    }
+    else
+    {
+        nthreads=threads;
     }
     for (int  H=0; H<1000000000; H++)
     {
@@ -480,63 +487,64 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
         double completeness=(h/time_interval)*100;
         
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        int C2=cell_array.rows();
+        if(DynamicThreads==1)
+        {
+            int CNumber=ceil(C2/5000);
+            switch (CNumber)
+            {
+                case 0:
+                {
+                    nthreads=(int)(threads*0.5);
+                    break;
+                }
+                case 1:
+                {
+                    nthreads=(int)(threads*0.6);
+                    break;
+                }
+                case 2:
+                {
+                    nthreads=(int)(threads*0.7);
+                    break;
+                }
+                case 3:
+                {
+                    nthreads=(int)(threads*0.8);
+                    break;
+                }
+                case 4:
+                {
+                    nthreads=(int)(threads*0.9);
+                    break;
+                }
+                case 5:
+                {
+                    nthreads=threads;
+                    break;
+                }
+                default:
+                {
+                    nthreads=threads;
+                    break;
+                }
+            }
+        }
         death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
-        sortRow(cell_array, cell_array1,Col,9,threads);
+        sortRow(cell_array, cell_array1,Col,9,nthreads);
         stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall);
 //        deltah_recalculation(deltah, cell_array, MMR, DDM);
 //        sortRow(cell_array,cell_array1,Col,16,threads);
 //        save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng);
         int C1=cell_array.rows();
         
-        if(DynamicThreads==1)
-        {
-            int CNumber=ceil(C1/5000);
-            switch (CNumber)
-            {
-                case 0:
-                {
-                    threads=(int)(MaxThread*0.5);
-                    break;
-                }
-                case 1:
-                {
-                    threads=(int)(MaxThread*0.6);
-                    break;
-                }
-                case 2:
-                {
-                    threads=(int)(MaxThread*0.7);
-                    break;
-                }
-                case 3:
-                {
-                    threads=(int)(MaxThread*0.8);
-                    break;
-                }
-                case 4:
-                {
-                    threads=(int)(MaxThread*0.9);
-                    break;
-                }
-                case 5:
-                {
-                    threads=MaxThread;
-                    break;
-                }
-                default:
-                {
-                    threads=MaxThread;
-                    break;
-                }
-            }
-        }
 
         double start04=omp_get_wtime();
-        switch (threads)
+        switch (nthreads)
         {
             case 1:
             {
-                sortRow(cell_array,cell_array1,Col,16,threads);///sort time division
+                sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
                 save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng);
                 for (int i=C1; i>=1; i--)
                 {
@@ -546,8 +554,8 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
             }
             default:
             {
-                omp_set_num_threads(threads);
-                #pragma omp parallel for schedule(dynamic)
+//                omp_set_num_threads(nthreads);
+                #pragma omp parallel for schedule(dynamic) num_threads(nthreads)
                 {
                     for (int i=C1; i>=1; i--)
                     {
@@ -556,7 +564,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                         
                     }
                 }
-                sortRow(cell_array,cell_array1,Col,16,threads);///sort time division
+                sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
                 #pragma omp parallel
                 {
                     #pragma omp sections
@@ -581,7 +589,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
         
         double programTimes00 = end04 -start00;
         
-        cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time per main loop   :  "<<programTimes04<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< threads <<"\n****************************************" <<endl;
+        cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time per main loop   :  "<<programTimes04<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
     }
 }
 #endif /* density_dependent_growth_hpp */
