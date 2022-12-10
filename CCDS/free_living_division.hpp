@@ -1514,6 +1514,7 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
             {
                 cell_trace_temp(1,Range(5,1000))=cell_trace(rows,Range(5,1000));
                 cell_trace_temp(2,Range(5,1000))=cell_trace(rows,Range(5,1000));
+                break;
             }
         }
         
