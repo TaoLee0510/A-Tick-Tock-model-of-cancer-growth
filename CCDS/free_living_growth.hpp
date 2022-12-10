@@ -490,21 +490,33 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         //        save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
         int C1=cell_array.rows();
 
-        double start04=omp_get_wtime();
+        double start04=0;
+        double end04=0;
+        double start05=0;
+        double end05=0;
+        double start06=0;
+        double end06=0;
+        double end07=0;
+        double start08=0;
+        double end08=0;
+        
         switch (nthreads)
         {
             case 1:
             {
+                start08=omp_get_wtime();
                 sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
                 save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
                 for (int i=C1; i>=1; i--)
                 {
                     CellMigrationDivisionSingleCell(DDM, i,r10, deltah,cell_array, Visual_range, cor_big,  area_square,  sub_area_square,  cor_small, area_square_s, sub_area_square_s, migration_judgement, max_growth_rate_r,  max_growth_rate_K, cell_array_temp,  cor_big_1, cor_big_1_change_shape,  cor_small_1, proliferation_loci,  cell_temp, cell_label , utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K,  unilow_K, sigmahatK, muhatK, K_label,sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration, cell_trace, cell_trace_temp,  cell_index, generation, r_label, Col, K_formation_rate, deathjudge,  beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD, Visual_range_x, Visual_range_y);
                 }
+                end08=omp_get_wtime();
                 break;
             }
             default:
             {
+                start04=omp_get_wtime();
 //                omp_set_num_threads(nthreads);
                 #pragma omp parallel for schedule(dynamic) num_threads(nthreads)
                 {
@@ -515,36 +527,60 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                         
                     }
                 }
+                end04=omp_get_wtime();
+                
                 sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
                 #pragma omp parallel
                 {
                     #pragma omp sections
                     {
+                        
                         #pragma omp section
-                        save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
-                        #pragma omp section
-                        for (int i=C1; i>=1; i--)
                         {
-                            CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape,cor_small_1, proliferation_loci,cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, generation, r_label, Col, K_formation_rate, deathjudge, Visual_range_x, Visual_range_y);
+                            start05=omp_get_wtime();
+                            save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
+                            end05=omp_get_wtime();
+                        }
+
+                        #pragma omp section
+                        {
+                            start06=omp_get_wtime();
+                            for (int i=C1; i>=1; i--)
+                            {
+                                CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape,cor_small_1, proliferation_loci,cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, generation, r_label, Col, K_formation_rate, deathjudge, Visual_range_x, Visual_range_y);
+                            }
+                            end06=omp_get_wtime();
                         }
                     }
-                    
                 }
                 break;
             }
         }
-        
-        double end04=omp_get_wtime();
-        
+        end07=omp_get_wtime();
         double programTimes04 = end04 - start04;
+        double programTimes05 = end05 - start05;
+        double programTimes06 = end06 - start06;
         
         h=h+deltah;
         gsl_rng_free(r10);
         
-        double programTimes00 = end04 -start00;
-        
-        
-        cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time per main loop   :  "<<programTimes04<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
+        double programTimes00 = end07 -start00;
+        double programTimes07 = end08 -start08;
+        double programTimes08 = end08 -start00;
+
+        switch (nthreads)
+        {
+            case 1:
+            {
+                cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time per main loop   :  "<<programTimes07<< "\n  =>  time per delta h  :  "<<programTimes08<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
+                break;
+            }
+            default:
+            {
+                cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time per Migration loop   :  "<<programTimes04<< "\n  =>  time save data   :  "<<programTimes05<< "\n  =>  time per Division loop   :  "<<programTimes06<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
+                break;
+            }
+        }
         
         fflush(stdout);
         
