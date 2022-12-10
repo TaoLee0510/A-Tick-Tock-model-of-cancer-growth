@@ -213,9 +213,9 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
             Visual_range((int)cell_temp(1,3),(int)cell_temp(1,7),3)=(int)cell_array(i,14);
             Visual_range((int)cell_temp(1,4),(int)cell_temp(1,8),3)=(int)cell_array(i,14);
             Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),4)=cell_label;
-            Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),4)=cell_label;
-            Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),4)=cell_label;
-            Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),4)=cell_label;
+            Visual_range((int)cell_temp(1,2),(int)cell_temp(1,6),4)=cell_label;
+            Visual_range((int)cell_temp(1,3),(int)cell_temp(1,7),4)=cell_label;
+            Visual_range((int)cell_temp(1,4),(int)cell_temp(1,8),4)=cell_label;
         }
         else
         {
@@ -1488,15 +1488,19 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
     if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
     {
         int current_size=cell_array.rows();
-        cell_array_temp.resize(current_size+1,Col);
-        cell_array_temp=0;
-        
-        cell_array_temp(Range(1,current_size),all)=cell_array(Range(1,current_size),all);
-        cell_array_temp(current_size+1,all)=cell_temp(1,all);
-        
-        cell_array.resize(current_size+1,Col);
-        cell_array=0;
-        cell_array(all,all)=cell_array_temp(all,all);
+//        cell_array_temp.resize(current_size+1,Col);
+//        cell_array_temp=0;
+//
+//        cell_array_temp(Range(1,current_size),all)=cell_array(Range(1,current_size),all);
+//        cell_array_temp(current_size+1,all)=cell_temp(1,all);
+//
+//        cell_array.resize(current_size+1,Col);
+//        cell_array=0;
+//        cell_array(all,all)=cell_array_temp(all,all);
+//
+//
+        cell_array.resizeAndPreserve(current_size+1,Col);
+        cell_array(current_size+1,all)=cell_temp(1,all);
         
     }
 }

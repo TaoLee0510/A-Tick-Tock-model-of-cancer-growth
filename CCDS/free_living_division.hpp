@@ -37,6 +37,7 @@
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
 #include "cell_type_transform.hpp"
+using namespace std;
 using namespace blitz;
 void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,int &K_label,Array<int, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<float,2> &cell_trace,Array<float,2> cell_trace_temp, int &cell_index,int &generation,int &r_label,int Col,double K_formation_rate)
 {
@@ -222,9 +223,9 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
             Visual_range((int)cell_temp(1,3),(int)cell_temp(1,7),3)=(int)cell_array(i,14);
             Visual_range((int)cell_temp(1,4),(int)cell_temp(1,8),3)=(int)cell_array(i,14);
             Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),4)=cell_label;
-            Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),4)=cell_label;
-            Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),4)=cell_label;
-            Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),4)=cell_label;
+            Visual_range((int)cell_temp(1,2),(int)cell_temp(1,6),4)=cell_label;
+            Visual_range((int)cell_temp(1,3),(int)cell_temp(1,7),4)=cell_label;
+            Visual_range((int)cell_temp(1,4),(int)cell_temp(1,8),4)=cell_label;
         }
         else
         {
@@ -1507,7 +1508,7 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
         
         int current_size_trace=cell_trace.rows();
         int GN=cell_trace_temp(1,4);
-        for (int rows=1;rows<=current_size_trace;rows++)
+        for (int rows=current_size_trace;rows>=1;rows--)
         {
             if(cell_trace_temp(1,3) == cell_trace(rows,2))
             {
@@ -1519,11 +1520,10 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
         cell_trace_temp(1,GN+5)=1;
         cell_trace_temp(2,GN+5)=2;
         
-        
-        Array<float,2> cell_trace_TP(1,1000,FortranArray<2>());
-        cell_trace_TP=0;
-        cell_trace_TP.resize(current_size_trace+2,1000);
-        cell_trace_TP=0;
+//        Array<float,2> cell_trace_TP(1,1000,FortranArray<2>());
+//        cell_trace_TP=0;
+//        cell_trace_TP.resize(current_size_trace+2,1000);
+//        cell_trace_TP=0;
         
 //        for (int rows=1;rows<=current_size_trace+1;rows++)
 //        {
@@ -1538,20 +1538,26 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
 //            }
 //        }
 //
-        cell_trace_TP(Range(1,current_size_trace),all)=cell_trace(Range(1,current_size_trace),all);
-        cell_trace_TP(current_size_trace+1,all)=cell_trace_temp(1,all);
-        cell_trace_TP(current_size_trace+2,all)=cell_trace_temp(2,all);
+//        cell_trace_TP(Range(1,current_size_trace),all)=cell_trace(Range(1,current_size_trace),all);
+//        cell_trace_TP(current_size_trace+1,all)=cell_trace_temp(1,all);
+//        cell_trace_TP(current_size_trace+2,all)=cell_trace_temp(2,all);
+//
+//
+//        cell_trace.resize(current_size_trace+2,1000);
+//        cell_trace=0;
+//        cell_trace(all,all)=cell_trace_TP(all,all);
+//
         
-        
-        cell_trace.resize(current_size_trace+2,1000);
-        cell_trace=0;
-        cell_trace(all,all)=cell_trace_TP(all,all);
+        /////
+        cell_trace.resizeAndPreserve(current_size_trace+2,1000);
+        cell_trace(current_size_trace+1,all)=cell_trace_temp(1,all);
+        cell_trace(current_size_trace+2,all)=cell_trace_temp(2,all);
         
         ///
         
         int current_size=cell_array.rows();
-        cell_array_temp.resize(current_size+1,Col);
-        cell_array_temp=0;
+//        cell_array_temp.resize(current_size+1,Col);
+//        cell_array_temp=0;
 //        for (int rows=1;rows<=current_size+1;rows++)
 //        {
 //            if(rows<=current_size)
@@ -1564,12 +1570,15 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
 //            }
 //        }
         
-        cell_array_temp(Range(1,current_size),all)=cell_array(Range(1,current_size),all);
-        cell_array_temp(current_size+1,all)=cell_temp(1,all);
+//        cell_array_temp(Range(1,current_size),all)=cell_array(Range(1,current_size),all);
+//        cell_array_temp(current_size+1,all)=cell_temp(1,all);
+//
+//        cell_array.resize(current_size+1,Col);
+//        cell_array=0;
+//        cell_array(all,all)=cell_array_temp(all,all);
         
-        cell_array.resize(current_size+1,Col);
-        cell_array=0;
-        cell_array(all,all)=cell_array_temp(all,all);
+        cell_array.resizeAndPreserve(current_size+1,Col);
+        cell_array(current_size+1,all)=cell_temp(1,all);
         
     }
 }

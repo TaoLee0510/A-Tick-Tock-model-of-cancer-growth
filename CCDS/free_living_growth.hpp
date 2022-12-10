@@ -95,6 +95,10 @@
 #include "CellDivisionSingleCell.hpp"
 #include "CellDivision.hpp"
 #include "CellMigrationDivisionSingleCell.hpp"
+#include "SavePNGSingleCell.hpp"
+#include "SaveCellArraySingleCell.hpp"
+#include "SaveCellTraceArray.hpp"
+#include "SaveAllPNG.hpp"
 
 
 
@@ -499,6 +503,12 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         double end07=0;
         double start08=0;
         double end08=0;
+        double start09=0;
+        double end09=0;
+        double start10=0;
+        double end10=0;
+        double start11=0;
+        double end11=0;
         
         switch (nthreads)
         {
@@ -534,14 +544,41 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 {
                     #pragma omp sections
                     {
-                        
                         #pragma omp section
                         {
                             start05=omp_get_wtime();
-                            save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
+                            if (H%MMR==0)
+                            {
+                                SaveCellTraceArray(T, alpha, beta, cell_trace);
+                            }
                             end05=omp_get_wtime();
                         }
-
+                        #pragma omp section
+                        {
+                            start09=omp_get_wtime();
+                            if (H%MMR==0)
+                            {
+                                SavePNGSingleCell(Visual_range_x, Visual_range_y, T, alpha, beta, cell_array);
+                            }
+                            end09=omp_get_wtime();
+                        }
+                        #pragma omp section
+                        {
+                            start10=omp_get_wtime();
+                            if (H%MMR==0)
+                            {
+                                SaveCellArraySingleCell(T, alpha, beta, cell_array , Col);
+                            }
+                            end10=omp_get_wtime();
+                        }
+                        #pragma omp section
+                        if (allpng==1)
+                        {
+                            start11=omp_get_wtime();
+                            SaveAllPNG( Visual_range_x,  Visual_range_y, cell_array,  H,  T,  alpha,  beta, deltah);
+                            end11=omp_get_wtime();
+                        }
+  
                         #pragma omp section
                         {
                             start06=omp_get_wtime();
@@ -556,6 +593,11 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 break;
             }
         }
+        if (H%MMR==0)
+        {
+            T++;
+        }
+        
         end07=omp_get_wtime();
         double programTimes04 = end04 - start04;
         double programTimes05 = end05 - start05;
@@ -568,6 +610,10 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         double programTimes07 = end08 -start08;
         double programTimes08 = end08 -start00;
 
+        double programTimes09 = end09 -start09;
+        double programTimes10 = end10 -start10;
+        double programTimes11 = end11 -start11;
+        
         switch (nthreads)
         {
             case 1:
@@ -577,7 +623,20 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
             }
             default:
             {
-                cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time per Migration loop   :  "<<programTimes04<< "\n  =>  time save data   :  "<<programTimes05<< "\n  =>  time per Division loop   :  "<<programTimes06<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
+                switch (allpng)
+                {
+                    case 1:
+                    {
+                        cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time save CellTraceArray   :  "<<programTimes05 << "\n  =>  time save PNG   :  "<<programTimes09 << "\n  =>  time save allPNG   :  "<<programTimes11 << "\n  =>  time save CellArray   :  "<<programTimes10<< "\n  =>  time per Migration loop   :  "<<programTimes04<< "\n  =>  time per Division loop   :  "<<programTimes06<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
+                        break;
+                    }
+                        
+                    default:
+                    {
+                        cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time save CellTraceArray   :  "<<programTimes05 << "\n  =>  time save PNG   :  "<<programTimes09 << "\n  =>  time save CellArray   :  "<<programTimes10<< "\n  =>  time per Migration loop   :  "<<programTimes04 << "\n  =>  time per Division loop   :  "<<programTimes06<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
+                        break;
+                    }
+                }
                 break;
             }
         }

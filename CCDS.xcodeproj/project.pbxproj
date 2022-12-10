@@ -45,6 +45,10 @@
 		046CC78E2260EF8B009F1C14 /* density_dependent_growth.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = density_dependent_growth.hpp; sourceTree = "<group>"; };
 		046CC7912261001B009F1C14 /* Low_density_initial_growth.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Low_density_initial_growth.hpp; sourceTree = "<group>"; };
 		04AEA12721EA56AB00BE3706 /* deltah_recalculation.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = deltah_recalculation.hpp; sourceTree = "<group>"; };
+		E63BCE962944F0EE00A44073 /* SavePNGSingleCell.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SavePNGSingleCell.hpp; sourceTree = "<group>"; };
+		E63BCE992944F11700A44073 /* SaveCellArraySingleCell.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveCellArraySingleCell.hpp; sourceTree = "<group>"; };
+		E63BCE9C2944F13A00A44073 /* SaveAllPNG.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveAllPNG.hpp; sourceTree = "<group>"; };
+		E63BCE9F2944F15B00A44073 /* SaveCellTraceArray.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveCellTraceArray.hpp; sourceTree = "<group>"; };
 		E64361E72940D88A00AC39F2 /* CellMigration.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CellMigration.hpp; sourceTree = "<group>"; };
 		E64361ED2940D8B700AC39F2 /* CellDivision.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CellDivision.hpp; sourceTree = "<group>"; };
 		E64361F02940D8D100AC39F2 /* CellDivisionSingleCell.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CellDivisionSingleCell.hpp; sourceTree = "<group>"; };
@@ -111,6 +115,10 @@
 				0434498220B2619F003532BA /* stage_convert.hpp */,
 				0434498620B2619F003532BA /* save_data.hpp */,
 				E6538332291D39D700C2B0F6 /* save_data_free_living.hpp */,
+				E63BCE962944F0EE00A44073 /* SavePNGSingleCell.hpp */,
+				E63BCE992944F11700A44073 /* SaveCellArraySingleCell.hpp */,
+				E63BCE9F2944F15B00A44073 /* SaveCellTraceArray.hpp */,
+				E63BCE9C2944F13A00A44073 /* SaveAllPNG.hpp */,
 				0434498F20B261A0003532BA /* random_migration.hpp */,
 				0434498820B2619F003532BA /* density_calculation.hpp */,
 				0434499420B261A0003532BA /* migration.hpp */,
