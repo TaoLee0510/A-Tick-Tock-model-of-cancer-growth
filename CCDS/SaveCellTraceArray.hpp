@@ -26,9 +26,9 @@ void SaveCellTraceArray(int &T, float alpha, float beta, Array<float,2> cell_tra
     int C01 = cell_trace.rows();
     for (int i=1;i<=C01;i++)
     {
-        for(int co=1;co<=1000;co++)
+        for(int co=1;co<=150;co++)
         {
-            if(co<1000)
+            if(co<150)
             {
                 fprintf(fid8,"%g\t",cell_trace(i,co));
             }
