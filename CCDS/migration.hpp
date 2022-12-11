@@ -59,9 +59,9 @@
 using namespace blitz;
 void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> &Visual_range, Array<int,2> cor_big, Array<int, 2> area_square, Array<int, 2> sub_area_square, Array<int, 2> cor_small, Array<int, 2> area_square_s, Array<int, 2>  sub_area_square_s,double &migration_judgement)
 {
-    std::random_device r;
-    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
-    std::mt19937 RNG(seed);
+//    std::random_device r;
+//    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
+//    std::mt19937 RNG(seed);
     Range all = Range::all();
     const gsl_rng_type *T6;
     gsl_rng *r6;

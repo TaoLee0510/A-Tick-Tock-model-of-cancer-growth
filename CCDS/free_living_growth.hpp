@@ -102,6 +102,7 @@
 #include "AliveCellCount.hpp"
 #include "DeathCellEliminate.hpp"
 #include "DeathJudgementMultiThreads.hpp"
+#include "DeletPreviousCellTraceArray.hpp"
 
 
 void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, float alpha, float beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,int Single_cell,double K_formation_rate,double bunderD, double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time,int threads,int DynamicThreads)
@@ -215,10 +216,10 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     A=0;
     
     
-    Array<float,2> cell_trace(1,1000,FortranArray<2>());
+    Array<float,2> cell_trace(1,150,FortranArray<2>());
     cell_trace=0;
     
-    Array<float,2> cell_trace_temp(1,1000,FortranArray<2>());
+    Array<float,2> cell_trace_temp(1,150,FortranArray<2>());
     cell_trace_temp=0;
     
     int NNy=Visual_range_x*Visual_range_y;
@@ -580,6 +581,13 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                                 SaveCellTraceArray(T, alpha, beta, cell_trace);
                             }
                             end05=omp_get_wtime();
+                        }
+                        #pragma omp section
+                        {
+                            if (H%MMR==0)
+                            {
+                                DeletPreviousCellTraceArray(T, alpha, beta);
+                            }
                         }
                         #pragma omp section
                         {
