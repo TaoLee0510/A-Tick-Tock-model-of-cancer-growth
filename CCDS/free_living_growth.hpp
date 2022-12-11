@@ -491,26 +491,29 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         }
         double start12=0;
         double end12=0;
-        switch (nthreads)
-        {
-                
-            case 1:
-            {
-                start12=omp_get_wtime();
-                death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
-                end12=omp_get_wtime();
-                break;
-            }
-            default :
-            {
-                start12=omp_get_wtime();
-                DeathJudgementMultiThreads(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads);
-                int alive_cell_number=AliveCellCount(cell_array,nthreads);
-                DeathCellEliminate(Visual_range, cell_array, cell_array_temp, cell_array1, alive_cell_number, Col, nthreads);
-                end12=omp_get_wtime();
-                break;
-            }
-        }
+//        switch (nthreads)
+//        {
+//
+//            case 1:
+//            {
+//                start12=omp_get_wtime();
+//                death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
+//                end12=omp_get_wtime();
+//                break;
+//            }
+//            default :
+//            {
+//                start12=omp_get_wtime();
+//                DeathJudgementMultiThreads(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads);
+//                int alive_cell_number=AliveCellCount(cell_array,nthreads);
+//                DeathCellEliminate(Visual_range, cell_array, cell_array_temp, cell_array1, alive_cell_number, Col, nthreads);
+//                end12=omp_get_wtime();
+//                break;
+//            }
+//        }
+        start12=omp_get_wtime();
+        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
+        end12=omp_get_wtime();
         
         sortRow(cell_array, cell_array1,Col,9,nthreads);///sort cell type
         stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall);
