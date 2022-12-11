@@ -584,13 +584,6 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                         }
                         #pragma omp section
                         {
-                            if (H%MMR==0)
-                            {
-                                DeletPreviousCellTraceArray(T, alpha, beta);
-                            }
-                        }
-                        #pragma omp section
-                        {
                             start09=omp_get_wtime();
                             if (H%MMR==0)
                             {

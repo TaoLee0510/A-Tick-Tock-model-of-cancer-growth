@@ -41,9 +41,9 @@ using namespace std;
 using namespace blitz;
 void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,int &K_label,Array<int, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<float,2> &cell_trace,Array<float,2> cell_trace_temp, int &cell_index,int &generation,int &r_label,int Col,double K_formation_rate)
 {
-    //    std::random_device r;
-    //    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
-    //    std::mt19937 RNG(seed);
+        std::random_device r;
+        std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
+        std::mt19937 RNG(seed);
     Range all = Range::all();
     const gsl_rng_type *T7;
     gsl_rng *r7;
@@ -192,8 +192,8 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
         if (loci_number>0)
         {
             cell_label=cell_label+1;
-            //            shuffle(cor_big_temp_1,cor_big_temp_1+size_big,RNG);
-            gsl_ran_shuffle(r7, cor_big_temp_1, size_big, sizeof (int));
+                        shuffle(cor_big_temp_1,cor_big_temp_1+size_big,RNG);
+//            gsl_ran_shuffle(r7, cor_big_temp_1, size_big, sizeof (int));
             int loci=cor_big_temp_1[0];
             cell_temp(1,1)=cor_big_1(1,loci);
             cell_temp(1,2)=cor_big_1(1,loci);
@@ -337,8 +337,8 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
                 if (pro_loci_number1 > 1 && pro_loci_number2 >1)
                 {
                     int random_pro_loci[2]={1,2};
-                    //                    shuffle(random_pro_loci,random_pro_loci+2,RNG);
-                    gsl_ran_shuffle(r7, random_pro_loci, 2, sizeof (int));
+                                        shuffle(random_pro_loci,random_pro_loci+2,RNG);
+//                    gsl_ran_shuffle(r7, random_pro_loci, 2, sizeof (int));
                     
                     int LociNumber=random_pro_loci[0];
                     switch (LociNumber)
@@ -351,8 +351,8 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
                             {
                                 random_pro_loci1[aa]=pro_loci1_new[aa];
                             }
-                            //                        shuffle(random_pro_loci1,random_pro_loci1+sizep1,RNG);
-                            gsl_ran_shuffle(r7, random_pro_loci1, sizep1, sizeof (int));
+                                                    shuffle(random_pro_loci1,random_pro_loci1+sizep1,RNG);
+//                            gsl_ran_shuffle(r7, random_pro_loci1, sizep1, sizeof (int));
                             int proloci1=random_pro_loci1[0];
                             int proloci2=random_pro_loci1[1];
                             switch (proloci1)
@@ -511,8 +511,8 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
                             {
                                 random_pro_loci2[aa]=pro_loci2_new[aa];
                             }
-                            //                        shuffle(random_pro_loci2,random_pro_loci2+sizep2,RNG);
-                            gsl_ran_shuffle(r7, random_pro_loci2, sizep2, sizeof (int));
+                                                    shuffle(random_pro_loci2,random_pro_loci2+sizep2,RNG);
+//                            gsl_ran_shuffle(r7, random_pro_loci2, sizep2, sizeof (int));
                             int proloci1=random_pro_loci2[0];
                             int proloci2=random_pro_loci2[1];
                             switch (proloci1)
@@ -665,8 +665,8 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
                     {
                         random_pro_loci1[aa]=pro_loci1_new[aa];
                     }
-                    //                    shuffle(random_pro_loci1,random_pro_loci1+sizep1,RNG);
-                    gsl_ran_shuffle(r7, random_pro_loci1, sizep1, sizeof (int));
+                                        shuffle(random_pro_loci1,random_pro_loci1+sizep1,RNG);
+//                    gsl_ran_shuffle(r7, random_pro_loci1, sizep1, sizeof (int));
                     int proloci1=random_pro_loci1[0];
                     int proloci2=random_pro_loci1[1];
                     
@@ -826,8 +826,8 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
                     {
                         random_pro_loci2[aa]=pro_loci2_new[aa];
                     }
-                    //                    shuffle(random_pro_loci2,random_pro_loci2+sizep2,RNG);
-                    gsl_ran_shuffle(r7, random_pro_loci2, sizep2, sizeof (int));
+                                        shuffle(random_pro_loci2,random_pro_loci2+sizep2,RNG);
+//                    gsl_ran_shuffle(r7, random_pro_loci2, sizep2, sizeof (int));
                     int proloci1=random_pro_loci2[0];
                     int proloci2=random_pro_loci2[1];
                     
@@ -976,8 +976,8 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
                     if (abs(pro_loci_number2-pro_loci_number1)>=2 && pro_loci_number2-pro_loci_number1!=7)
                     {
                         int random_pro_loci[2]={1,2};
-                        //                        shuffle(random_pro_loci,random_pro_loci+2,RNG);
-                        gsl_ran_shuffle(r7, random_pro_loci, 2, sizeof (int));
+                                                shuffle(random_pro_loci,random_pro_loci+2,RNG);
+//                        gsl_ran_shuffle(r7, random_pro_loci, 2, sizeof (int));
                         int LociNumber=random_pro_loci[0];
                         switch (LociNumber)
                         {
@@ -1329,8 +1329,8 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
                     {
                         random_pro_loci_1[cor_pro_1_1_nozero_locus]=cor_pro_1_1_nozero_locus+1;
                     }
-                    //                    shuffle(random_pro_loci_1,random_pro_loci_1+cor_pro_1_length,RNG);
-                    gsl_ran_shuffle(r7, random_pro_loci_1, cor_pro_1_length, sizeof (int));
+                                        shuffle(random_pro_loci_1,random_pro_loci_1+cor_pro_1_length,RNG);
+//                    gsl_ran_shuffle(r7, random_pro_loci_1, cor_pro_1_length, sizeof (int));
                     Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
                     cell_temp(1,1)=(float)cor_pro_1(1,random_pro_loci_1[0]);
                     cell_temp(1,5)=(float)cor_pro_1(2,random_pro_loci_1[0]);
@@ -1414,8 +1414,8 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
                 {
                     random_pro_loci_1[pro_loci_small_nozero_locus]=pro_loci_small_nozero_locus+1;
                 }
-                //                shuffle(random_pro_loci_1,random_pro_loci_1+pro_loci_small_length,RNG);
-                gsl_ran_shuffle(r7, random_pro_loci_1, pro_loci_small_length, sizeof (int));
+                                shuffle(random_pro_loci_1,random_pro_loci_1+pro_loci_small_length,RNG);
+//                gsl_ran_shuffle(r7, random_pro_loci_1, pro_loci_small_length, sizeof (int));
                 Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
                 cell_temp(1,1)=(float)pro_loci_small(1,random_pro_loci_1[0]);
                 cell_temp(1,5)=(float)pro_loci_small(2,random_pro_loci_1[0]);
@@ -1503,8 +1503,8 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
         {
             cell_label=cell_label+1;
             int cellstage=Visual_range(x,y,3);
-            //            shuffle(cor_temp, cor_temp+loci_number,RNG);
-            gsl_ran_shuffle(r7, cor_temp, loci_number, sizeof (int));
+                        shuffle(cor_temp, cor_temp+loci_number,RNG);
+//            gsl_ran_shuffle(r7, cor_temp, loci_number, sizeof (int));
             int loci=cor_temp_3[cor_temp[0]];
             cell_temp(1,1)=cor_small_1(1,loci);
             cell_temp(1,5)=cor_small_1(2,loci);
