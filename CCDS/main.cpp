@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
     int Single_cell=0;
     int opt = 0;
     double K_formation_rate=0.05;
-    int threads=10;
+    int threads=1;
     int DynamicThreads = 0;
     while( (opt = getopt_long(argc, argv, short_options, long_options, NULL)) != -1){
         switch (opt){
