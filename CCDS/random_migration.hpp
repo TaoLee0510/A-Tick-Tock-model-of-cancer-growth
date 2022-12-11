@@ -38,9 +38,9 @@
 using namespace blitz;
 void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<int, 3> &Visual_range, Array<int,2> cor_big, Array<int, 2> area_square, Array<int, 2> sub_area_square, Array<int, 2> cor_small, Array<int, 2> area_square_s, Array<int, 2>  sub_area_square_s,double &migration_judgement)
 {
-    std::random_device r;
-    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
-    std::mt19937 RNG(seed);
+//    std::random_device r;
+//    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
+//    std::mt19937 RNG(seed);
     Range all = Range::all();
     const gsl_rng_type *T5;
     gsl_rng *r5;
@@ -117,7 +117,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
             }
             else
             {
-                shuffle(direction1, direction1+new_loci,RNG);
+//                shuffle(direction1, direction1+new_loci,RNG);
+                gsl_ran_shuffle(r5, direction1, new_loci, sizeof (int));
                 order=direction1[0];
             }
             
@@ -329,7 +330,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
             }
             else if (length_dir>0)
             {
-                shuffle(direction1, direction1+new_loci,RNG);
+//                shuffle(direction1, direction1+new_loci,RNG);
+                gsl_ran_shuffle(r5, direction1, new_loci, sizeof (int));
                 order=direction1[0];
             }
             if (order==1)
