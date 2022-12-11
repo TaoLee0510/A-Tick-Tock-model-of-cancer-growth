@@ -1521,63 +1521,14 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
         cell_trace_temp(1,GN+5)=1;
         cell_trace_temp(2,GN+5)=2;
         
-//        Array<float,2> cell_trace_TP(1,1000,FortranArray<2>());
-//        cell_trace_TP=0;
-//        cell_trace_TP.resize(current_size_trace+2,1000);
-//        cell_trace_TP=0;
-        
-//        for (int rows=1;rows<=current_size_trace+1;rows++)
-//        {
-//            if(rows<=current_size_trace)
-//            {
-//                cell_trace_TP(rows,all)=cell_trace(rows,all);
-//            }
-//            else
-//            {
-//                cell_trace_TP(rows,all)=cell_trace_temp(1,all);
-//                cell_trace_TP(rows+1,all)=cell_trace_temp(2,all);
-//            }
-//        }
-//
-//        cell_trace_TP(Range(1,current_size_trace),all)=cell_trace(Range(1,current_size_trace),all);
-//        cell_trace_TP(current_size_trace+1,all)=cell_trace_temp(1,all);
-//        cell_trace_TP(current_size_trace+2,all)=cell_trace_temp(2,all);
-//
-//
-//        cell_trace.resize(current_size_trace+2,1000);
-//        cell_trace=0;
-//        cell_trace(all,all)=cell_trace_TP(all,all);
-//
-        
-        /////
         cell_trace.resizeAndPreserve(current_size_trace+2,1000);
         cell_trace(current_size_trace+1,all)=cell_trace_temp(1,all);
         cell_trace(current_size_trace+2,all)=cell_trace_temp(2,all);
         
-        ///
+
         
         int current_size=cell_array.rows();
-//        cell_array_temp.resize(current_size+1,Col);
-//        cell_array_temp=0;
-//        for (int rows=1;rows<=current_size+1;rows++)
-//        {
-//            if(rows<=current_size)
-//            {
-//                cell_array_temp(rows,all)=cell_array(rows,all);
-//            }
-//            else
-//            {
-//                cell_array_temp(rows,all)=cell_temp(1,all);
-//            }
-//        }
-        
-//        cell_array_temp(Range(1,current_size),all)=cell_array(Range(1,current_size),all);
-//        cell_array_temp(current_size+1,all)=cell_temp(1,all);
-//
-//        cell_array.resize(current_size+1,Col);
-//        cell_array=0;
-//        cell_array(all,all)=cell_array_temp(all,all);
-        
+
         cell_array.resizeAndPreserve(current_size+1,Col);
         cell_array(current_size+1,all)=cell_temp(1,all);
         

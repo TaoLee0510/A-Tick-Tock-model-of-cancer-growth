@@ -33,6 +33,7 @@
 //    $29: cell label;CI (add 1 when division occured; r-cell: 1-4999999999; K-cell: 500000000-9999999999)
 //    $30: parants label; PI
 //    $31: generation times/division times
+//    $32: division marker 1:division,0:non-division
 
 
 
@@ -41,7 +42,6 @@
 
 #ifndef free_living_growth_hpp
 #define free_living_growth_hpp
-
 
 #include <stdio.h>
 #include <omp.h>
@@ -99,7 +99,9 @@
 #include "SaveCellArraySingleCell.hpp"
 #include "SaveCellTraceArray.hpp"
 #include "SaveAllPNG.hpp"
-
+#include "AliveCellCount.hpp"
+#include "DeathCellEliminate.hpp"
+#include "DeathJudgementMultiThreads.hpp"
 
 
 void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, float alpha, float beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,int Single_cell,double K_formation_rate,double bunderD, double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time,int threads,int DynamicThreads)
@@ -487,7 +489,29 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 }
             }
         }
-        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
+        double start12=0;
+        double end12=0;
+        switch (nthreads)
+        {
+                
+            case 1:
+            {
+                start12=omp_get_wtime();
+                death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
+                end12=omp_get_wtime();
+                break;
+            }
+            default :
+            {
+                start12=omp_get_wtime();
+                DeathJudgementMultiThreads(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads);
+                int alive_cell_number=AliveCellCount(cell_array,nthreads);
+                DeathCellEliminate(Visual_range, cell_array, cell_array_temp, cell_array1, alive_cell_number, Col, nthreads);
+                end12=omp_get_wtime();
+                break;
+            }
+        }
+        
         sortRow(cell_array, cell_array1,Col,9,nthreads);///sort cell type
         stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall);
 //        sortRow(cell_array,cell_array1,Col,16,threads);///sort time division
@@ -527,8 +551,8 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
             default:
             {
                 start04=omp_get_wtime();
-//                omp_set_num_threads(nthreads);
-                #pragma omp parallel for schedule(dynamic) num_threads(nthreads)
+                omp_set_num_threads(nthreads);
+                #pragma omp parallel for schedule(dynamic)
                 {
                     for (int i=C1; i>=1; i--)
                     {
@@ -540,6 +564,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 end04=omp_get_wtime();
                 
                 sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
+                
                 #pragma omp parallel
                 {
                     #pragma omp sections
@@ -613,6 +638,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         double programTimes09 = end09 -start09;
         double programTimes10 = end10 -start10;
         double programTimes11 = end11 -start11;
+        double programTimes12 = end12 -start12;
         
         switch (nthreads)
         {
@@ -627,13 +653,13 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 {
                     case 1:
                     {
-                        cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time save CellTraceArray   :  "<<programTimes05 << "\n  =>  time save PNG   :  "<<programTimes09 << "\n  =>  time save allPNG   :  "<<programTimes11 << "\n  =>  time save CellArray   :  "<<programTimes10<< "\n  =>  time per Migration loop   :  "<<programTimes04<< "\n  =>  time per Division loop   :  "<<programTimes06<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
+                        cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time save CellTraceArray   :  "<<programTimes05 << "\n  =>  time save PNG   :  "<<programTimes09 << "\n  =>  time save allPNG   :  "<<programTimes11 << "\n  =>  time save CellArray   :  "<<programTimes10<< "\n  =>  time Dead Cell eliminateion   :  "<<programTimes12 << "\n  =>  time per Migration loop   :  "<<programTimes04 << "\n  =>  time per Division loop   :  "<<programTimes06<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
                         break;
                     }
                         
                     default:
                     {
-                        cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time save CellTraceArray   :  "<<programTimes05 << "\n  =>  time save PNG   :  "<<programTimes09 << "\n  =>  time save CellArray   :  "<<programTimes10<< "\n  =>  time per Migration loop   :  "<<programTimes04 << "\n  =>  time per Division loop   :  "<<programTimes06<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
+                        cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time save CellTraceArray   :  "<<programTimes05 << "\n  =>  time save PNG   :  "<<programTimes09 << "\n  =>  time save CellArray   :  "<<programTimes10<< "\n  =>  time Dead Cell eliminateion   :  "<<programTimes12 << "\n  =>  time per Migration loop   :  "<<programTimes04 << "\n  =>  time per Division loop   :  "<<programTimes06<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
                         break;
                     }
                 }

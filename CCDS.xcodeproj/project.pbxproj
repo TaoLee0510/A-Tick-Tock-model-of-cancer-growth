@@ -49,6 +49,10 @@
 		E63BCE992944F11700A44073 /* SaveCellArraySingleCell.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveCellArraySingleCell.hpp; sourceTree = "<group>"; };
 		E63BCE9C2944F13A00A44073 /* SaveAllPNG.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveAllPNG.hpp; sourceTree = "<group>"; };
 		E63BCE9F2944F15B00A44073 /* SaveCellTraceArray.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveCellTraceArray.hpp; sourceTree = "<group>"; };
+		E63BCEA22945AC8B00A44073 /* AliveCellCount.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = AliveCellCount.hpp; sourceTree = "<group>"; };
+		E63BCEA52945ACAA00A44073 /* DeathCellEliminate.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = DeathCellEliminate.hpp; sourceTree = "<group>"; };
+		E63BCEA82945C66100A44073 /* sortRowReverse.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = sortRowReverse.hpp; sourceTree = "<group>"; };
+		E63BCEAB2945C9AD00A44073 /* DeathJudgementMultiThreads.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = DeathJudgementMultiThreads.hpp; sourceTree = "<group>"; };
 		E64361E72940D88A00AC39F2 /* CellMigration.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CellMigration.hpp; sourceTree = "<group>"; };
 		E64361ED2940D8B700AC39F2 /* CellDivision.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CellDivision.hpp; sourceTree = "<group>"; };
 		E64361F02940D8D100AC39F2 /* CellDivisionSingleCell.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CellDivisionSingleCell.hpp; sourceTree = "<group>"; };
@@ -111,7 +115,11 @@
 				0434498920B2619F003532BA /* migrate_activation.hpp */,
 				0434498720B2619F003532BA /* density_growth_rate_calculation_1.hpp */,
 				0434499020B261A0003532BA /* death_judgement.hpp */,
+				E63BCEAB2945C9AD00A44073 /* DeathJudgementMultiThreads.hpp */,
+				E63BCEA22945AC8B00A44073 /* AliveCellCount.hpp */,
+				E63BCEA52945ACAA00A44073 /* DeathCellEliminate.hpp */,
 				E6684D65292406AD0056D880 /* sortRow.hpp */,
+				E63BCEA82945C66100A44073 /* sortRowReverse.hpp */,
 				0434498220B2619F003532BA /* stage_convert.hpp */,
 				0434498620B2619F003532BA /* save_data.hpp */,
 				E6538332291D39D700C2B0F6 /* save_data_free_living.hpp */,
