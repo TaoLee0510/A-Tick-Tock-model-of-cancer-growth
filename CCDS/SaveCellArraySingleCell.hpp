@@ -38,5 +38,10 @@ void SaveCellArraySingleCell(int &T, float alpha, float beta, Array<float,2> cel
         }
     }
     fclose(fid3);
+    
+    char dirname2 [100] = {'\0'};
+    int tt=T-1;
+    sprintf(dirname2, "rm ./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,tt);
+    system(dirname2);
 }
 #endif /* SaveCellArraySingleCell_hpp */
