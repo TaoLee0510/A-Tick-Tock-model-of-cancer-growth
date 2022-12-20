@@ -39,7 +39,7 @@
 #include "cell_type_transform.hpp"
 using namespace std;
 using namespace blitz;
-void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,int &K_label,Array<int, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<float,2> &cell_trace,Array<float,2> cell_trace_temp, int &cell_index,int &generation,int &r_label,int Col,double K_formation_rate)
+void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,int &K_label,Array<int, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<int,2> &cell_trace,Array<int,2> cell_trace_temp, int &cell_index,int &generation,int &r_label,int Col,double K_formation_rate)
 {
         std::random_device r;
         std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
@@ -141,7 +141,7 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
     
     if (cell_array(i,14)==0)
     {
-        //        K_label=K_label+1;
+        K_label=K_label+1;
         r_label=r_label+1;
         double growth_rate_inherent=cell_array(i,10);
         float X1=growth_rate_inherent*(1-0.05);
@@ -149,8 +149,16 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
         cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
         cell_array(i,13)=cell_array(i,13)+1;
         
+        if(cell_array(i,9)==1)
+        {
+            cell_array(i,15)=r_label;
+        }
+        else if (cell_array(i,9)==1)
+        {
+            cell_array(i,15)=K_label;
+        }
+
         
-        cell_array(i,15)=r_label;
         cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label,K_formation_rate);
         
         cell_index=cell_index+1;
@@ -1456,7 +1464,15 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
         cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
         
         r_label=r_label+1;
-        //        K_label=K_label+1;
+        K_label=K_label+1;
+        if(cell_array(i,9)==1)
+        {
+            cell_array(i,15)=r_label;
+        }
+        else if (cell_array(i,9)==1)
+        {
+            cell_array(i,15)=K_label;
+        }
         cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label, K_formation_rate);
         
         cell_index=cell_index+1;

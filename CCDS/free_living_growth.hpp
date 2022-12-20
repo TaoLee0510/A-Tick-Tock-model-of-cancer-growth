@@ -216,10 +216,10 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     A=0;
     
     
-    Array<float,2> cell_trace(1,150,FortranArray<2>());
+    Array<int,2> cell_trace(1,150,FortranArray<2>());
     cell_trace=0;
     
-    Array<float,2> cell_trace_temp(1,150,FortranArray<2>());
+    Array<int,2> cell_trace_temp(1,150,FortranArray<2>());
     cell_trace_temp=0;
     
     int NNy=Visual_range_x*Visual_range_y;
@@ -538,6 +538,49 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         double start11=0;
         double end11=0;
         
+        #pragma omp parallel
+        {
+            #pragma omp sections
+            {
+                #pragma omp section
+                {
+                    start05=omp_get_wtime();
+                    if (H%MMR==0)
+                    {
+                        SaveCellTraceArray(T, alpha, beta, cell_trace);
+                    }
+                    end05=omp_get_wtime();
+                }
+                #pragma omp section
+                {
+                    start09=omp_get_wtime();
+                    if (H%MMR==0)
+                    {
+                        SavePNGSingleCell(Visual_range_x, Visual_range_y, T, alpha, beta, cell_array);
+                    }
+                    end09=omp_get_wtime();
+                }
+                #pragma omp section
+                {
+                    start10=omp_get_wtime();
+                    if (H%MMR==0)
+                    {
+                        SaveCellArraySingleCell(T, alpha, beta, cell_array , Col);
+                    }
+                    end10=omp_get_wtime();
+                }
+                #pragma omp section
+                if (allpng==1)
+                {
+                    start11=omp_get_wtime();
+                    SaveAllPNG( Visual_range_x,  Visual_range_y, cell_array,  H,  T,  alpha,  beta, deltah);
+                    end11=omp_get_wtime();
+                }
+                
+            }
+        }
+        
+
         switch (nthreads)
         {
             case 1:
@@ -569,56 +612,14 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 
                 sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
                 
-                #pragma omp parallel
+               
+                
+                start06=omp_get_wtime();
+                for (int i=C1; i>=1; i--)
                 {
-                    #pragma omp sections
-                    {
-                        #pragma omp section
-                        {
-                            start05=omp_get_wtime();
-                            if (H%MMR==0)
-                            {
-                                SaveCellTraceArray(T, alpha, beta, cell_trace);
-                            }
-                            end05=omp_get_wtime();
-                        }
-                        #pragma omp section
-                        {
-                            start09=omp_get_wtime();
-                            if (H%MMR==0)
-                            {
-                                SavePNGSingleCell(Visual_range_x, Visual_range_y, T, alpha, beta, cell_array);
-                            }
-                            end09=omp_get_wtime();
-                        }
-                        #pragma omp section
-                        {
-                            start10=omp_get_wtime();
-                            if (H%MMR==0)
-                            {
-                                SaveCellArraySingleCell(T, alpha, beta, cell_array , Col);
-                            }
-                            end10=omp_get_wtime();
-                        }
-                        #pragma omp section
-                        if (allpng==1)
-                        {
-                            start11=omp_get_wtime();
-                            SaveAllPNG( Visual_range_x,  Visual_range_y, cell_array,  H,  T,  alpha,  beta, deltah);
-                            end11=omp_get_wtime();
-                        }
-  
-                        #pragma omp section
-                        {
-                            start06=omp_get_wtime();
-                            for (int i=C1; i>=1; i--)
-                            {
-                                CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape,cor_small_1, proliferation_loci,cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, generation, r_label, Col, K_formation_rate, deathjudge, Visual_range_x, Visual_range_y);
-                            }
-                            end06=omp_get_wtime();
-                        }
-                    }
+                    CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape,cor_small_1, proliferation_loci,cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, generation, r_label, Col, K_formation_rate, deathjudge, Visual_range_x, Visual_range_y);
                 }
+                end06=omp_get_wtime();
                 break;
             }
         }
