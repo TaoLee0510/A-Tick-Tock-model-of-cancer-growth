@@ -99,10 +99,8 @@
 #include "SaveCellArraySingleCell.hpp"
 #include "SaveCellTraceArray.hpp"
 #include "SaveAllPNG.hpp"
-#include "AliveCellCount.hpp"
-#include "DeathCellEliminate.hpp"
-#include "DeathJudgementMultiThreads.hpp"
-#include "DeletPreviousCellTraceArray.hpp"
+
+
 
 
 void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, float alpha, float beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,int Single_cell,double K_formation_rate,double bunderD, double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time,int threads,int DynamicThreads)
@@ -492,34 +490,12 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         }
         double start12=0;
         double end12=0;
-//        switch (nthreads)
-//        {
-//
-//            case 1:
-//            {
-//                start12=omp_get_wtime();
-//                death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
-//                end12=omp_get_wtime();
-//                break;
-//            }
-//            default :
-//            {
-//                start12=omp_get_wtime();
-//                DeathJudgementMultiThreads(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads);
-//                int alive_cell_number=AliveCellCount(cell_array,nthreads);
-//                DeathCellEliminate(Visual_range, cell_array, cell_array_temp, cell_array1, alive_cell_number, Col, nthreads);
-//                end12=omp_get_wtime();
-//                break;
-//            }
-//        }
         start12=omp_get_wtime();
         death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
         end12=omp_get_wtime();
         
         sortRow(cell_array, cell_array1,Col,9,nthreads);///sort cell type
         stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall);
-//        sortRow(cell_array,cell_array1,Col,16,threads);///sort time division
-        //        save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
         int C1=cell_array.rows();
 
         double start04=0;
@@ -597,22 +573,20 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
             }
             default:
             {
+                sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
+                
                 start04=omp_get_wtime();
                 omp_set_num_threads(nthreads);
                 #pragma omp parallel for schedule(dynamic)
                 {
                     for (int i=C1; i>=1; i--)
                     {
-                        #pragma omp flush(cell_array,Visual_range)
+//                        #pragma omp flush(cell_array,Visual_range)
                         CellMigration(DDM, i,r10, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, Visual_range_x,Visual_range_y,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration);
                         
                     }
                 }
                 end04=omp_get_wtime();
-                
-                sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
-                
-               
                 
                 start06=omp_get_wtime();
                 for (int i=C1; i>=1; i--)

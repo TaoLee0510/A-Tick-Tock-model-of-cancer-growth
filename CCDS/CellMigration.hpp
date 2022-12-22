@@ -70,93 +70,107 @@ void CellMigration(int &DDM, int i,gsl_rng * r10, double &deltah,Array<float, 2>
                 double undividing_time=21.6/cell_array(i,11);
                 if (cell_array(i,16)<=undividing_time)
                 {
-                    if (cell_array(i,25)==0)
+                    int migration_label=(int)cell_array(i,25);
+                    switch (migration_label)
                     {
-                        switch (DDM)
+                        case 0:
                         {
-                            case 1:
+                            switch (DDM)
                             {
-                                double Dr=density_calculation(i, sub_visual, Visual_range, cell_array);
-                                if (Dr>=bunderD)
+                                case 1:
                                 {
-                                    cell_array(i,25)=1;
-                                    cell_array(i,28)=cell_array(i,12);
+                                    double Dr=density_calculation(i, sub_visual, Visual_range, cell_array);
+                                    if (Dr>=bunderD)
+                                    {
+                                        cell_array(i,25)=1;
+                                        cell_array(i,28)=cell_array(i,12);
 
-                                    cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*(cell_array(i,17)-cell_array(i,16));
+                                        cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*(cell_array(i,17)-cell_array(i,16));
+                                    }
+                                    cell_array(i,21)=1/cell_array(i,28);
+                                    break;
                                 }
-                                cell_array(i,21)=1/cell_array(i,28);
-                                break;
+                                case 0:
+                                {
+                                    cell_array(i,21)=1/cell_array(i,28);
+                                    break;
+                                }
                             }
-                            case 0:
-                            {
-                                cell_array(i,21)=1/cell_array(i,28);
-                                break;
-                            }
-                        }
-                        if (cell_array(i,20)>=cell_array(i,21))
-                        {
-                            random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                        }
-                        else
-                        {
-                            cell_array(i,20)=cell_array(i,20)+deltah;
-                        }
-                    }
-                    else//cell_array(i,25)==1
-                    {
-                        if (cell_array(i,27)>=cell_array(i,26))
-                        {
-                            cell_array(i,25)=0;
-                            cell_array(i,26)=0;
-                            cell_array(i,27)=0;
-                            cell_array(i,28)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
-                            cell_array(i,21)=1/cell_array(i,28);
                             if (cell_array(i,20)>=cell_array(i,21))
                             {
-                                switch (chemotaxis)
-                                {
-                                    case 0:
-                                    {
-                                        random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                                        break;
-                                    }
-                                    case 1:
-                                    {
-                                        migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                                        break;
-                                    }
-                                }
+                                random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
                             }
                             else
                             {
                                 cell_array(i,20)=cell_array(i,20)+deltah;
                             }
+                            break;
                         }
-                        else //cell_array(i,27)<cell_array(i,26)
+                        case 1:
                         {
-                            if (cell_array(i,20)>=cell_array(i,21))
+                            if (cell_array(i,27)>=cell_array(i,26))
                             {
-                                switch (chemotaxis)
+                                cell_array(i,25)=0;
+                                cell_array(i,26)=0;
+                                cell_array(i,27)=0;
+                                cell_array(i,28)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
+                                cell_array(i,21)=1/cell_array(i,28);
+                                if (cell_array(i,20)>=cell_array(i,21))
                                 {
-                                    case 0:
+                                    switch (chemotaxis)
                                     {
-                                        random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                                        break;
-                                    }
-                                    case 1:
-                                    {
-                                        migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
-                                        break;
+                                        case 0:
+                                        {
+                                            random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                            break;
+                                        }
+                                        case 1:
+                                        {
+                                            migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                            break;
+                                        }
                                     }
                                 }
+                                else
+                                {
+                                    cell_array(i,20)=cell_array(i,20)+deltah;
+                                }
                             }
-                            else//cell_array(i,20)<cell_array(i,21)
+                            else //cell_array(i,27)<cell_array(i,26)
                             {
-                                cell_array(i,20)=cell_array(i,20)+deltah;
-                                cell_array(i,27)=cell_array(i,27)+deltah;
-                                cell_array(i,28)=cell_array(i,12);
+                                if (cell_array(i,20)>=cell_array(i,21))
+                                {
+                                    switch (chemotaxis)
+                                    {
+                                        case 0:
+                                        {
+                                            random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                            break;
+                                        }
+                                        case 1:
+                                        {
+                                            migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                            break;
+                                        }
+                                    }
+                                }
+                                else//cell_array(i,20)<cell_array(i,21)
+                                {
+                                    cell_array(i,20)=cell_array(i,20)+deltah;
+                                    cell_array(i,27)=cell_array(i,27)+deltah;
+                                    cell_array(i,28)=cell_array(i,12);
+                                }
                             }
+
+                            break;
                         }
+                    }
+                    if (cell_array(i,25)==0)
+                    {
+                        
+                    }
+                    else//cell_array(i,25)==1
+                    {
                     }
                 }
                 cell_array(i,16)=cell_array(i,16)+deltah;
