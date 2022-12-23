@@ -165,13 +165,6 @@ void CellMigration(int &DDM, int i,gsl_rng * r10, double &deltah,Array<float, 2>
                             break;
                         }
                     }
-                    if (cell_array(i,25)==0)
-                    {
-                        
-                    }
-                    else//cell_array(i,25)==1
-                    {
-                    }
                 }
                 cell_array(i,16)=cell_array(i,16)+deltah;
             }
