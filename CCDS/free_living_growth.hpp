@@ -519,9 +519,9 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         double end10=0;
         double start11=0;
         double end11=0;
-        
         double start13=0;
         double end13=0;
+        
         #pragma omp parallel
         {
             #pragma omp sections
@@ -562,7 +562,6 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 } 
             }
         }
-        
 
         switch (nthreads)
         {
@@ -617,22 +616,15 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         double programTimes04 = end04 - start04;
         double programTimes05 = end05 - start05;
         double programTimes06 = end06 - start06;
-        
-        h=h+deltah;
-        gsl_rng_free(r10);
-        
         double programTimes00 = end07 -start00;
         double programTimes07 = end08 -start08;
         double programTimes08 = end08 -start00;
-
         double programTimes09 = end09 -start09;
         double programTimes10 = end10 -start10;
         double programTimes11 = end11 -start11;
         double programTimes12 = end12 -start12;
-        
         double programTimes13 = end13 -start13;
         double programTimes14 = end14 -start14;
-        
         switch (nthreads)
         {
             case 1:
@@ -671,7 +663,6 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                         cout << "**********************************************************"<< endl;
                         break;
                     }
-                        
                     default:
                     {
                         cout << "Completeness: "<< completeness << "%" << endl;
@@ -695,6 +686,8 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 break;
             }
         }
+        h=h+deltah;
+        gsl_rng_free(r10);
     }
 }
 #endif /* free_living_growth_hpp */
