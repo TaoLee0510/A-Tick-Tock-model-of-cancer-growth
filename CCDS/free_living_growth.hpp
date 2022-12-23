@@ -490,11 +490,17 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         }
         double start12=0;
         double end12=0;
+        double start14=0;
+        double end14=0;
+        
         start12=omp_get_wtime();
         death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
         end12=omp_get_wtime();
         
+        start14=omp_get_wtime();
         sortRow(cell_array, cell_array1,Col,9,nthreads);///sort cell type
+        end14=omp_get_wtime();
+        
         stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall);
         int C1=cell_array.rows();
 
@@ -514,6 +520,8 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         double start11=0;
         double end11=0;
         
+        double start13=0;
+        double end13=0;
         #pragma omp parallel
         {
             #pragma omp sections
@@ -551,8 +559,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                     start11=omp_get_wtime();
                     SaveAllPNG( Visual_range_x,  Visual_range_y, cell_array,  H,  T,  alpha,  beta, deltah);
                     end11=omp_get_wtime();
-                }
-                
+                } 
             }
         }
         
@@ -573,7 +580,9 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
             }
             default:
             {
+                start13=omp_get_wtime();
                 sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
+                end13=omp_get_wtime();
                 
                 start04=omp_get_wtime();
                 omp_set_num_threads(nthreads);
@@ -587,6 +596,8 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                     }
                 }
                 end04=omp_get_wtime();
+                
+                sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
                 
                 start06=omp_get_wtime();
                 for (int i=C1; i>=1; i--)
@@ -619,11 +630,21 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         double programTimes11 = end11 -start11;
         double programTimes12 = end12 -start12;
         
+        double programTimes13 = end13 -start13;
+        double programTimes14 = end14 -start14;
+        
         switch (nthreads)
         {
             case 1:
             {
-                cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time per main loop   :  "<<programTimes07<< "\n  =>  time per delta h  :  "<<programTimes08<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
+                cout << "Completeness: "<< completeness << "%" << endl;
+                cout << "  =>  h = " << h << endl;
+                cout << "  =>  Cost time (D:H:M:S): "<< days02 <<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << endl;
+                cout << "  =>  time per main loop   :  "<< programTimes07 << endl;
+                cout << "  =>  time per delta h  :  "<< programTimes08 << endl;
+                cout << "  =>  Cell number  :  "<< C1 << endl;
+                cout << "  =>  threads  :  "<< nthreads << endl;
+                cout << "**********************************************************"<< endl;
                 break;
             }
             default:
@@ -632,23 +653,48 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 {
                     case 1:
                     {
-                        cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time save CellTraceArray   :  "<<programTimes05 << "\n  =>  time save PNG   :  "<<programTimes09 << "\n  =>  time save allPNG   :  "<<programTimes11 << "\n  =>  time save CellArray   :  "<<programTimes10<< "\n  =>  time Dead Cell eliminateion   :  "<<programTimes12 << "\n  =>  time per Migration loop   :  "<<programTimes04 << "\n  =>  time per Division loop   :  "<<programTimes06<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
+                        cout << "Completeness: "<< completeness << "%" << endl;
+                        cout << "  =>  h = " << h << endl;
+                        cout << "  =>  Cost time (D:H:M:S): "<< days02 <<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << endl;
+                        cout << "  =>  time save CellTraceArray   :  "<< programTimes05 << endl;
+                        cout << "  =>  time save PNG   :  "<< programTimes09 << endl;
+                        cout << "  =>  time save CellArray   :  "<< programTimes10 << endl;
+                        cout << "  =>  time save allPNG   :  "<< programTimes11 << endl;
+                        cout << "  =>  time Dead Cell eliminateion   :  "<< programTimes12 << endl;
+                        cout << "  =>  time Sort cell type   :  "<< programTimes14 << endl;
+                        cout << "  =>  time Sort Cell division   :  "<< programTimes13 << endl;
+                        cout << "  =>  time per Migration loop   :  "<< programTimes04 << endl;
+                        cout << "  =>  time per Division loop   :  "<< programTimes06 << endl;
+                        cout << "  =>  time per delta h  :  "<< programTimes00 << endl;
+                        cout << "  =>  Cell number  :  "<< C1 << endl;
+                        cout << "  =>  threads  :  "<< nthreads << endl;
+                        cout << "**********************************************************"<< endl;
                         break;
                     }
                         
                     default:
                     {
-                        cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time save CellTraceArray   :  "<<programTimes05 << "\n  =>  time save PNG   :  "<<programTimes09 << "\n  =>  time save CellArray   :  "<<programTimes10<< "\n  =>  time Dead Cell eliminateion   :  "<<programTimes12 << "\n  =>  time per Migration loop   :  "<<programTimes04 << "\n  =>  time per Division loop   :  "<<programTimes06<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
+                        cout << "Completeness: "<< completeness << "%" << endl;
+                        cout << "  =>  h = " << h << endl;
+                        cout << "  =>  Cost time (D:H:M:S): "<< days02 <<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << endl;
+                        cout << "  =>  time save CellTraceArray   :  "<< programTimes05 << endl;
+                        cout << "  =>  time save PNG   :  "<< programTimes09 << endl;
+                        cout << "  =>  time save CellArray   :  "<< programTimes10 << endl;
+                        cout << "  =>  time Dead Cell eliminateion   :  "<< programTimes12 << endl;
+                        cout << "  =>  time Sort cell type   :  "<< programTimes14 << endl;
+                        cout << "  =>  time Sort Cell division   :  "<< programTimes13 << endl;
+                        cout << "  =>  time per Migration loop   :  "<< programTimes04 << endl;
+                        cout << "  =>  time per Division loop   :  "<< programTimes06 << endl;
+                        cout << "  =>  time per delta h  :  "<< programTimes00 << endl;
+                        cout << "  =>  Cell number  :  "<< C1 << endl;
+                        cout << "  =>  threads  :  "<< nthreads << endl;
+                        cout << "**********************************************************"<< endl;
                         break;
                     }
                 }
                 break;
             }
         }
-        
-        fflush(stdout);
-        
-        
     }
 }
 #endif /* free_living_growth_hpp */
