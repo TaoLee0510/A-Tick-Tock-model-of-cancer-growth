@@ -37,10 +37,15 @@
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
 #include "cell_type_transform.hpp"
+#include <chrono>
+
+
+using std::chrono::high_resolution_clock;
 using namespace std;
 using namespace blitz;
 void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,int &K_label,Array<int, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<int,2> &cell_trace,Array<int,2> cell_trace_temp, int &cell_index,int &generation,int &r_label,int Col,double K_formation_rate)
 {
+    auto start = std::chrono::high_resolution_clock::now();
     std::random_device r;
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
     std::mt19937 RNG(seed);
@@ -49,7 +54,9 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
     gsl_rng *r7;
     gsl_rng_env_setup();
     T7 = gsl_rng_ranlxs0;
-    gsl_rng_default_seed = ((unsigned long)(time(NULL))+i);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
+    gsl_rng_default_seed = (duration.count());
     r7 = gsl_rng_alloc(T7);
     int pro_loci[8]={0};
     int pro_loci1[4]={0};

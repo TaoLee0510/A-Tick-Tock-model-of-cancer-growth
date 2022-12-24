@@ -35,18 +35,23 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "density_calculation.hpp"
+#include <chrono>
 
+using std::chrono::high_resolution_clock;
 
 void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,int &K_label,int i,Array<int, 3> sub_visual, Array<int,3> Visual_range,Array<float, 2> &cell_array, double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,int &r_label,double K_formation_rate)
 {
     double Dr1=density_calculation(i, sub_visual, Visual_range, cell_array);
     double initial_K_growth_rate1;
     double migration_rate_K2;
+    auto start = std::chrono::high_resolution_clock::now();
     const gsl_rng_type *T78;
     gsl_rng *r78;
     gsl_rng_env_setup();
     T78 = gsl_rng_ranlxs0;
-    gsl_rng_default_seed = ((unsigned long)(time(NULL))+i);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
+    gsl_rng_default_seed = (duration.count());
     r78 = gsl_rng_alloc(T78);
     if(cell_array(i,14)==0)
     {
@@ -61,7 +66,9 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                 gsl_rng *r77;
                 gsl_rng_env_setup();
                 T77 = gsl_rng_ranlxs0;
-                gsl_rng_default_seed = ((unsigned long)(time(NULL))+i+i);
+                auto end = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
+                gsl_rng_default_seed = (duration.count());
                 r77 = gsl_rng_alloc(T77);
                 double random_uni=gsl_rng_uniform(r77);
                 if(random_uni<=K_formation_rate)
@@ -203,6 +210,8 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
         {
             if(Dr1>=0.5)
             {
+                auto end = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
                 std::random_device r;
                 std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
                 std::mt19937 RNG(seed);
@@ -210,7 +219,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                 gsl_rng *r77;
                 gsl_rng_env_setup();
                 T77 = gsl_rng_ranlxs0;
-                gsl_rng_default_seed = ((unsigned long)(time(NULL))+i+i);
+                gsl_rng_default_seed = (duration.count());
                 r77 = gsl_rng_alloc(T77);
                 double random_uni=gsl_rng_uniform(r77);
                 if(random_uni<=K_formation_rate)

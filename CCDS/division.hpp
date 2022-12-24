@@ -35,9 +35,13 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
+#include <chrono>
+
+using std::chrono::high_resolution_clock;
 using namespace blitz;
 void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall,int Col)
 {
+    auto start = std::chrono::high_resolution_clock::now();
     std::random_device r;
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
     std::mt19937 RNG(seed);
@@ -46,7 +50,9 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
     gsl_rng *r7;
     gsl_rng_env_setup();
     T7 = gsl_rng_ranlxs0;
-    gsl_rng_default_seed = ((unsigned long)(time(NULL))+i);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
+    gsl_rng_default_seed = (duration.count());
     r7 = gsl_rng_alloc(T7);
     int pro_loci[8]={0};
     int pro_loci1[4]={0};

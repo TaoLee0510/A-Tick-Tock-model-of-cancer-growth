@@ -99,9 +99,9 @@
 #include "SaveCellArraySingleCell.hpp"
 #include "SaveCellTraceArray.hpp"
 #include "SaveAllPNG.hpp"
+#include <chrono>
 
-
-
+using std::chrono::high_resolution_clock;
 
 void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, float alpha, float beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,int Single_cell,double K_formation_rate,double bunderD, double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time,int threads,int DynamicThreads)
 {
@@ -151,11 +151,14 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     
     int Col=31;
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    auto start = std::chrono::high_resolution_clock::now();
     const gsl_rng_type *T00;
     gsl_rng *r00;
     gsl_rng_env_setup();
     T00 = gsl_rng_ranlxs0;
-    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
+    gsl_rng_default_seed = (duration.count());
     r00 = gsl_rng_alloc(T00);
     std::random_device r;
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
