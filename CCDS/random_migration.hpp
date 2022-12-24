@@ -46,7 +46,7 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
     gsl_rng *r5;
     gsl_rng_env_setup();
     T5 = gsl_rng_ranlxs0;
-//    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
+    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
     r5 = gsl_rng_alloc(T5);
     int x1=cell_array(i,1);
     int y1=cell_array(i,5);

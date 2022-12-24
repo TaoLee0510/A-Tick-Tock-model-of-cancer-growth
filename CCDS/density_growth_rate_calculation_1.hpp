@@ -25,7 +25,7 @@ void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, i
     gsl_rng *r3;
     gsl_rng_env_setup();
     T3 = gsl_rng_ranlxs0;
-//    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
+    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
     r3 = gsl_rng_alloc(T3);
     for (int i=1; i<=C0; i++)
     {

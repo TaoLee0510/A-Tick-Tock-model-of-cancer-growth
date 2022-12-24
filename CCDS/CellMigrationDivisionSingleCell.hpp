@@ -73,7 +73,7 @@ void CellMigrationDivisionSingleCell(int &DDM, int i, double &deltah,Array<float
                     gsl_rng *r10;
                     gsl_rng_env_setup();
                     T10 = gsl_rng_ranlxs0;
-//                    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
+                    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
                     r10 = gsl_rng_alloc(T10);
                     if (cell_array(i,25)==0)
                     {

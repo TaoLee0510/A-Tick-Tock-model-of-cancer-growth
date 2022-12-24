@@ -155,7 +155,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     gsl_rng *r00;
     gsl_rng_env_setup();
     T00 = gsl_rng_ranlxs0;
-//    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
+    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
     r00 = gsl_rng_alloc(T00);
     std::random_device r;
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
