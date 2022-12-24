@@ -571,7 +571,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                 {
                     for (int i=C1; i>=1; i--)
                     {
-                        #pragma omp flush(cell_array,Visual_range)
+//                        #pragma omp flush(cell_array,Visual_range)
                         CellMigration(DDM, i,r10, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, Visual_range_x,Visual_range_y,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration);
                         
                     }
@@ -579,29 +579,17 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                 end04=omp_get_wtime();
                 
                 sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
-                #pragma omp parallel
+                start05=omp_get_wtime();
+                save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng);
+                end05=omp_get_wtime();
+                
+                start06=omp_get_wtime();
+                for (int i=C1; i>=1; i--)
                 {
-                    #pragma omp sections
-                    {
-                        
-                        #pragma omp section
-                        {
-                            start05=omp_get_wtime();
-                            save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng);
-                            end05=omp_get_wtime();
-                        }
-
-                        #pragma omp section
-                        {
-                            start06=omp_get_wtime();
-                            for (int i=C1; i>=1; i--)
-                            {
-                                CellDivision( i,  max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1,  proliferation_loci, cell_temp, cell_label,  deltah, utralsmall, Col, deathjudge, Visual_range_x, Visual_range_y);
-                            }
-                            end06=omp_get_wtime();
-                        }
-                    }
+                    CellDivision( i,  max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1,  proliferation_loci, cell_temp, cell_label,  deltah, utralsmall, Col, deathjudge, Visual_range_x, Visual_range_y);
                 }
+                end06=omp_get_wtime();
+                
                 break;
             }
         }
@@ -622,12 +610,28 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
         {
             case 1:
             {
-                cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time per main loop   :  "<<programTimes07<< "\n  =>  time per delta h  :  "<<programTimes08<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
+                cout << "Completeness: "<< completeness << "%" << endl;
+                cout << "  =>  h = " << h << endl;
+                cout << "  =>  Cost time (D:H:M:S): "<< days02 <<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << endl;
+                cout << "  =>  time per main loop   :  "<< programTimes07 << endl;
+                cout << "  =>  time per delta h  :  "<< programTimes08 << endl;
+                cout << "  =>  Cell number  :  "<< C1 << endl;
+                cout << "  =>  threads  :  "<< nthreads << endl;
+                cout << "**********************************************************"<< endl;
                 break;
             }
             default:
             {
-                cout << "Completeness: "<< completeness << "%" << "\n  =>  h = " << h <<"\n  =>  Cost time (D:H:M:S): "<< days02<<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << "\n  =>  time per Migration loop   :  "<<programTimes04<< "\n  =>  time save data   :  "<<programTimes05<< "\n  =>  time per Division loop   :  "<<programTimes06<< "\n  =>  time per delta h  :  "<<programTimes00<<  "\n  =>  Cell number  :  "<< C1 <<  "\n  =>  threads  :  "<< nthreads <<"\n****************************************" <<endl;
+                cout << "Completeness: "<< completeness << "%" << endl;
+                cout << "  =>  h = " << h << endl;
+                cout << "  =>  Cost time (D:H:M:S): "<< days02 <<":"<< hours02 <<":"<< minutes02 <<":"<< seconds02 << endl;
+                cout << "  =>  time per Migration loop   :  "<< programTimes04 << endl;
+                cout << "  =>  time save data  :  "<< programTimes05 << endl;
+                cout << "  =>  time per Division loop   :  "<< programTimes06 << endl;
+                cout << "  =>  time per delta h  :  "<< programTimes00 << endl;
+                cout << "  =>  Cell number  :  "<< C1 << endl;
+                cout << "  =>  threads  :  "<< nthreads << endl;
+                cout << "**********************************************************"<< endl;
                 break;
             }
         }
