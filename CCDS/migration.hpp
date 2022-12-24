@@ -54,16 +54,21 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
+#include <chrono>
 
+using std::chrono::high_resolution_clock;
 using namespace blitz;
 void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> &Visual_range, Array<int,2> cor_big, Array<int, 2> area_square, Array<int, 2> sub_area_square, Array<int, 2> cor_small, Array<int, 2> area_square_s, Array<int, 2>  sub_area_square_s,double &migration_judgement)
 {
+    auto start = std::chrono::high_resolution_clock::now();
     Range all = Range::all();
     const gsl_rng_type *T6;
     gsl_rng *r6;
     gsl_rng_env_setup();
     T6 = gsl_rng_ranlxs0;
-    gsl_rng_default_seed = ((unsigned long)(time(NULL))+i);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
+    gsl_rng_default_seed = (duration.count());
     r6 = gsl_rng_alloc(T6);
     int x1=cell_array(i,1);
     int y1=cell_array(i,5);
