@@ -29,7 +29,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
     gsl_rng *r4;
     gsl_rng_env_setup();
     T4 = gsl_rng_ranlxs0;
-//    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
+    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
     r4 = gsl_rng_alloc(T4);
     for (int rows=1; rows<=C; rows++)
     {
