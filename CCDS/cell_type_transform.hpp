@@ -46,7 +46,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
     gsl_rng *r78;
     gsl_rng_env_setup();
     T78 = gsl_rng_ranlxs0;
-    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
+    gsl_rng_default_seed = ((unsigned long)(time(NULL))+i);
     r78 = gsl_rng_alloc(T78);
     if(cell_array(i,14)==0)
     {
@@ -61,7 +61,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                 gsl_rng *r77;
                 gsl_rng_env_setup();
                 T77 = gsl_rng_ranlxs0;
-                gsl_rng_default_seed = ((unsigned long)(time(NULL)));
+                gsl_rng_default_seed = ((unsigned long)(time(NULL))+i+i);
                 r77 = gsl_rng_alloc(T77);
                 double random_uni=gsl_rng_uniform(r77);
                 if(random_uni<=K_formation_rate)
@@ -210,7 +210,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                 gsl_rng *r77;
                 gsl_rng_env_setup();
                 T77 = gsl_rng_ranlxs0;
-                gsl_rng_default_seed = ((unsigned long)(time(NULL)));
+                gsl_rng_default_seed = ((unsigned long)(time(NULL))+i+i);
                 r77 = gsl_rng_alloc(T77);
                 double random_uni=gsl_rng_uniform(r77);
                 if(random_uni<=K_formation_rate)

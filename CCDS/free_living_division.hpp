@@ -49,7 +49,7 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
     gsl_rng *r7;
     gsl_rng_env_setup();
     T7 = gsl_rng_ranlxs0;
-    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
+    gsl_rng_default_seed = ((unsigned long)(time(NULL))+i);
     r7 = gsl_rng_alloc(T7);
     int pro_loci[8]={0};
     int pro_loci1[4]={0};
