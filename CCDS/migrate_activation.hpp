@@ -43,7 +43,7 @@ void migrate_activation(Array<float, 2> &cell_array, double bunderD, Array<int, 
     gsl_rng *r10;
     gsl_rng_env_setup();
     T10 = gsl_rng_ranlxs0;
-    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
+//    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
     r10 = gsl_rng_alloc(T10);
     int i;
     int C= cell_array.rows();

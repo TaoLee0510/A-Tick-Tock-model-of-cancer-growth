@@ -63,7 +63,7 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
     gsl_rng *r6;
     gsl_rng_env_setup();
     T6 = gsl_rng_ranlxs0;
-    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
+//    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
     r6 = gsl_rng_alloc(T6);
     int x1=cell_array(i,1);
     int y1=cell_array(i,5);
