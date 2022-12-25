@@ -152,6 +152,10 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     int Col=31;
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     auto start = std::chrono::high_resolution_clock::now();
+    std::random_device r;
+    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
+    std::mt19937 RNG(seed);
+    std::uniform_real_distribution<> dis(0.05, 0.95);
     const gsl_rng_type *T00;
     gsl_rng *r00;
     gsl_rng_env_setup();
@@ -160,10 +164,6 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
     gsl_rng_default_seed = (duration.count());
     r00 = gsl_rng_alloc(T00);
-    std::random_device r;
-    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
-    std::mt19937 RNG(seed);
-    std::uniform_real_distribution<> dis(0.05, 0.95);
     //////////////////////////////////////////////////////////////array definition///////////////////////////////////////////////////////////////////////
     Range all = Range::all();
     Array<int,3> Visual_range(Vx,Vy,4,FortranArray<3>());
@@ -586,7 +586,6 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 {
                     for (int i=C1; i>=1; i--)
                     {
-//                        #pragma omp flush(cell_array,Visual_range)
                         CellMigration(DDM, i, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, Visual_range_x,Visual_range_y,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration);
                         
                     }

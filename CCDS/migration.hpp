@@ -62,6 +62,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
 {
     auto start = std::chrono::high_resolution_clock::now();
     Range all = Range::all();
+    int x1=cell_array(i,1);
+    int y1=cell_array(i,5);
     const gsl_rng_type *T6;
     gsl_rng *r6;
     gsl_rng_env_setup();
@@ -70,8 +72,6 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
     gsl_rng_default_seed = (duration.count());
     r6 = gsl_rng_alloc(T6);
-    int x1=cell_array(i,1);
-    int y1=cell_array(i,5);
     int cell_type=(int)cell_array(i,9);
     switch (cell_type)
     {
