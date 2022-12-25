@@ -46,14 +46,6 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
     std::mt19937 RNG(seed);
     Range all = Range::all();
-    const gsl_rng_type *T7;
-    gsl_rng *r7;
-    gsl_rng_env_setup();
-    T7 = gsl_rng_ranlxs0;
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
-    gsl_rng_default_seed = (duration.count());
-    r7 = gsl_rng_alloc(T7);
     int pro_loci[8]={0};
     int pro_loci1[4]={0};
     int pro_loci2[4]={0};
@@ -138,6 +130,16 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
     cor_small_1(all,7)=D,b;
     cor_small_1(all,8)=C,b;
     int cor_temp1[16]={0};
+    
+    const gsl_rng_type *T7;
+    gsl_rng *r7;
+    gsl_rng_env_setup();
+    T7 = gsl_rng_ranlxs0;
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
+    gsl_rng_default_seed = (duration.count());
+    r7 = gsl_rng_alloc(T7);
+    
     if (cell_array(i,14)==0)
     {
         double growth_rate_inherent=cell_array(i,10);

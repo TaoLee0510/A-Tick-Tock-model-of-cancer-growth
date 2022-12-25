@@ -63,6 +63,7 @@ using std::chrono::high_resolution_clock;
 
 void CellMigration(int &DDM, int i, double &deltah,Array<float, 2> &cell_array, Array<int, 3> &Visual_range, Array<int,2> cor_big, Array<int, 2> area_square, Array<int, 2> sub_area_square, Array<int, 2> cor_small, Array<int, 2> area_square_s, Array<int, 2>  sub_area_square_s,double &migration_judgement,double deathjudge, double beta_distribution_alpha_mig_time,double beta_distribution_beta_mig_time,int chemotaxis,double bunderD,Array<int, 3> sub_visual,int Visual_range_x,int Visual_range_y,double beta_distribution_alpha_for_normal_migration,double migration_rate_r_mean_quia,double beta_distribution_beta_for_normal_migration)
 {
+    auto start = std::chrono::high_resolution_clock::now();
     if (cell_array(i,1)>=100 && cell_array(i,5) >=100 && cell_array(i,1)<=Visual_range_x+100 && cell_array(i,5)<=Visual_range_y+100)
     {
         if (cell_array(i,11)>deathjudge)
@@ -72,7 +73,6 @@ void CellMigration(int &DDM, int i, double &deltah,Array<float, 2> &cell_array, 
                 double undividing_time=21.6/cell_array(i,11);
                 if (cell_array(i,16)<=undividing_time)
                 {
-                    auto start = std::chrono::high_resolution_clock::now();
                     const gsl_rng_type *T10;
                     gsl_rng *r10;
                     gsl_rng_env_setup();
@@ -231,8 +231,4 @@ void CellMigration(int &DDM, int i, double &deltah,Array<float, 2> &cell_array, 
         }
     }
 }
-
-
-
-
 #endif /* CellMigration_hpp */
