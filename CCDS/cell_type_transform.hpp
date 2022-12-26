@@ -84,7 +84,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                     cell_temp(1,11)=initial_K_growth_rate1;// $11: density growth rate
                     migration_rate_K2=gsl_ran_beta(r77,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
                     cell_temp(1,12)=migration_rate_K2;// $12: inherent migration rate
-                    cell_temp(1,13)=cell_array(i,13);// $13: mass absorb rate
+//                    cell_temp(1,13)=cell_array(i,13);// $13: mass absorb rate
                     cell_temp(1,14)=0;// $14: cell_array stage
                     cell_temp(1,15)=K_label;// $15: cell_array index
                     cell_temp(1,22)=1;//    $22: cell_array viability
@@ -125,7 +125,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                         cell_temp(1,12)=mig1;
                     }
                     
-                    cell_temp(1,13)=cell_array(i,13);
+//                    cell_temp(1,13)=cell_array(i,13);
                     cell_temp(1,15)=r_label+1;
                     cell_temp(1,18)=0;
                     cell_temp(1,19)=cell_array(i,19);
@@ -160,7 +160,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                 
                 
                 cell_temp(1,12)=cell_array(i,12);
-                cell_temp(1,13)=cell_array(i,13);
+//                cell_temp(1,13)=cell_array(i,13);
                 cell_temp(1,15)=r_label+1;
                 cell_temp(1,18)=0;
                 cell_temp(1,19)=cell_array(i,19);
@@ -188,7 +188,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
             
             cell_temp(1,12)=cell_array(i,12)=gsl_ran_beta(r78,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
             
-            cell_temp(1,13)=cell_array(i,13);
+//            cell_temp(1,13)=cell_array(i,13);
             cell_temp(1,15)=K_label;
             cell_temp(1,18)=0;
             cell_temp(1,19)=cell_array(i,19);
@@ -235,7 +235,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                     cell_temp(1,11)=initial_K_growth_rate1;// $11: density growth rate
                     migration_rate_K2=gsl_ran_beta(r77,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
                     cell_temp(1,12)=migration_rate_K2;// $12: inherent migration rate
-                    cell_temp(1,13)=cell_array(i,13);// $13: mass absorb rate
+//                    cell_temp(1,13)=cell_array(i,13);// $13: mass absorb rate
                     cell_temp(1,15)=K_label;// $15: cell_array index
                     cell_temp(1,22)=1;//    $22: cell_array viability
                     cell_temp(1,23)=0;
@@ -273,7 +273,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                         cell_temp(1,12)=mig1;
                     }
                     
-                    cell_temp(1,13)=cell_array(i,13);
+//                    cell_temp(1,13)=cell_array(i,13);
                     cell_temp(1,15)=r_label+1;
                     cell_temp(1,18)=cell_array(i,18);
                     cell_temp(1,19)=cell_array(i,19);
@@ -311,7 +311,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
                     cell_temp(1,12)=mig1;
                 }
                 
-                cell_temp(1,13)=cell_array(i,13);
+//                cell_temp(1,13)=cell_array(i,13);
                 cell_temp(1,15)=r_label+1;
                 cell_temp(1,18)=cell_array(i,18);
                 cell_temp(1,19)=cell_array(i,19);
@@ -334,7 +334,7 @@ void cell_type_transform(Array<float, 2> &cell_temp, double beta_distribution_al
             cell_temp(1,11)=cell_array(i,11);
             
             cell_temp(1,12)=gsl_ran_beta(r78,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
-            cell_temp(1,13)=cell_array(i,13);
+//            cell_temp(1,13)=cell_array(i,13);
             cell_temp(1,15)=K_label;
             cell_temp(1,18)=0;
             cell_temp(1,19)=cell_array(i,19);
