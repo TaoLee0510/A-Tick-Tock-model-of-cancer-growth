@@ -413,16 +413,12 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     }
     else
     {
-        nthreads=threads;
+        nthreads=1;
     }
     for (int  H=0; H<1000000000; H++)
     {
         double start00=omp_get_wtime();
-        if (h>time_interval)
-        {
-            fclose(fid2);
-            break;
-        }
+
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         time_t rawtime;
         struct tm * timeinfo;
@@ -446,6 +442,14 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         
         double completeness=(h/time_interval)*100;
         
+        if (h>time_interval)
+        {
+            fprintf(fid2, "%s\n" ,"Simulation Completed!");
+            fprintf(fid2, "%s %d %s %d %s %d %s %d \n" ,"Cost time (D:H:M:S)  :",days02 ,":", hours02 ,":",minutes02,":", minutes02);
+            fprintf(fid2, "%s\n" ,"*********************************************************");
+            fclose(fid2);
+            break;
+        }
         
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         int C2=cell_array.rows();
