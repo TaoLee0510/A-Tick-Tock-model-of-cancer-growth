@@ -43,7 +43,7 @@
 using std::chrono::high_resolution_clock;
 using namespace std;
 using namespace blitz;
-void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,int &K_label,Array<int, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<int,2> &cell_trace,Array<int,2> cell_trace_temp, int &cell_index,int &generation,int &r_label,int Col,double K_formation_rate)
+void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,int &K_label,Array<int, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<int,2> &cell_trace,Array<int,2> cell_trace_temp, int &cell_index,int &generation,int &r_label,int Col,double K_formation_rate,FILE * fid2)
 {
     auto start = std::chrono::high_resolution_clock::now();
     std::random_device r;
@@ -156,13 +156,14 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
             float X1=growth_rate_inherent*(1-0.05);
             float X2=growth_rate_inherent*(1+0.05);
             cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
-            cell_array(i,13)=cell_array(i,13)+1;
+            int division_times=(int)cell_array(i,Col);
+            cell_array(i,Col)=division_times+1;
             
             if(cell_array(i,9)==1)
             {
                 cell_array(i,15)=r_label;
             }
-            else if (cell_array(i,9)==1)
+            else if (cell_array(i,9)==2)
             {
                 cell_array(i,15)=K_label;
             }
@@ -180,8 +181,8 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
             cell_temp(1,29)=cell_index;
             cell_temp(1,30)=cell_array(i,30);
             
-            cell_array(i,Col)=cell_array(i,13);
-            cell_temp(1,Col)=cell_array(i,13);
+//            cell_array(i,Col)=cell_array(i,13);
+            cell_temp(1,Col)=cell_array(i,Col);
             
             
             int cor_temp_length=0;
@@ -1468,32 +1469,32 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
         }
         case 1:
         {
-            float growth_rate_inherent=cell_array(i,10);
-            float X1=growth_rate_inherent*(1-0.05);
-            float X2=growth_rate_inherent*(1+0.05);
-            cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
-            
-            r_label=r_label+1;
-            K_label=K_label+1;
-            if(cell_array(i,9)==1)
-            {
-                cell_array(i,15)=r_label;
-            }
-            else if (cell_array(i,9)==1)
-            {
-                cell_array(i,15)=K_label;
-            }
-            cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label, K_formation_rate);
-            
-            cell_index=cell_index+1;
-            generation=generation+1;
-            cell_array(i,30)=cell_array(i,29);
-            cell_array(i,29)=cell_index;
-            
-            cell_index=cell_index+1;
-            cell_temp(1,29)=cell_index;
-            cell_temp(1,30)=cell_array(i,30);
-            
+//            float growth_rate_inherent=cell_array(i,10);
+//            float X1=growth_rate_inherent*(1-0.05);
+//            float X2=growth_rate_inherent*(1+0.05);
+//            cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
+//
+//            r_label=r_label+1;
+//            K_label=K_label+1;
+//            if(cell_array(i,9)==1)
+//            {
+//                cell_array(i,15)=r_label;
+//            }
+//            else if (cell_array(i,9)==1)
+//            {
+//                cell_array(i,15)=K_label;
+//            }
+//            cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label, K_formation_rate);
+//
+//            cell_index=cell_index+1;
+//            generation=generation+1;
+//            cell_array(i,30)=cell_array(i,29);
+//            cell_array(i,29)=cell_index;
+//
+//            cell_index=cell_index+1;
+//            cell_temp(1,29)=cell_index;
+//            cell_temp(1,30)=cell_array(i,30);
+//
             
             Array<int, 2> cor_temp_2(1,8,FortranArray<2>());
             cor_temp_2=0;
@@ -1527,6 +1528,32 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
             }
             if (loci_number!=0)
             {
+                float growth_rate_inherent=cell_array(i,10);
+                float X1=growth_rate_inherent*(1-0.05);
+                float X2=growth_rate_inherent*(1+0.05);
+                cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
+                
+                r_label=r_label+1;
+                K_label=K_label+1;
+                if(cell_array(i,9)==1)
+                {
+                    cell_array(i,15)=r_label;
+                }
+                else if (cell_array(i,9)==1)
+                {
+                    cell_array(i,15)=K_label;
+                }
+                cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label, K_formation_rate);
+                
+                cell_index=cell_index+1;
+                generation=generation+1;
+                cell_array(i,30)=cell_array(i,29);
+                cell_array(i,29)=cell_index;
+                
+                cell_index=cell_index+1;
+                cell_temp(1,29)=cell_index;
+                cell_temp(1,30)=cell_array(i,30);
+                
                 cell_label=cell_label+1;
                 int cellstage=Visual_range(x,y,3);
                 shuffle(cor_temp, cor_temp+loci_number,RNG);
@@ -1545,11 +1572,14 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
                 cell_temp(1,16)=0;
                 cell_array(i,16)=0;
                 
-                cell_array(i,15)=r_label;
-                cell_array(i,13)=cell_array(i,13)+1;
+                int division_times=(int)cell_array(i,Col);
+                cell_array(i,Col)=division_times+1;
                 
-                cell_temp(1,Col)=cell_array(i,13);
-                cell_array(i,Col)=cell_array(i,13);
+                cell_array(i,15)=r_label;
+//                cell_array(i,13)=cell_array(i,13)+1;
+                
+                cell_temp(1,Col)=cell_array(i,Col);
+//                cell_array(i,Col)=cell_array(i,13);
             }
             else
             {
@@ -1559,26 +1589,26 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
                     Visual_range(cell_array(i,1),cell_array(i,5),all)=0;
                     cell_temp(1,22)=0;
                 }
-                else
-                {
-                    if (utralsmall==1)
-                    {
-                        cell_temp(1,1)=cell_array(i,1);
-                        cell_temp(1,5)=cell_array(i,5);
-                        cell_array(i,14)=2;
-                        cell_temp(1,14)=2;
-                        Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),3)=2;
-                        Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),4)=cell_label;
-                        cell_array(i,20)=0;
-                        cell_temp(1,20)=0;
-                        cell_temp(1,16)=0;
-                        cell_array(i,16)=0;
-                        cell_array(i,13)=cell_array(i,13)+1;
-                        cell_temp(1,Col)=cell_array(i,13);
-                        cell_array(i,Col)=cell_array(i,13);
-                        
-                    }
-                }
+//                else
+//                {
+//                    if (utralsmall==1)
+//                    {
+//                        cell_temp(1,1)=cell_array(i,1);
+//                        cell_temp(1,5)=cell_array(i,5);
+//                        cell_array(i,14)=2;
+//                        cell_temp(1,14)=2;
+//                        Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),3)=2;
+//                        Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),4)=cell_label;
+//                        cell_array(i,20)=0;
+//                        cell_temp(1,20)=0;
+//                        cell_temp(1,16)=0;
+//                        cell_array(i,16)=0;
+//                        cell_array(i,13)=cell_array(i,13)+1;
+//                        cell_temp(1,Col)=cell_array(i,13);
+//                        cell_array(i,Col)=cell_array(i,13);
+//
+//                    }
+//                }
             }
             delete[] cor_temp;
             cor_temp = NULL;
@@ -1586,28 +1616,28 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
             cor_temp_3 = NULL;
             break;
         }
-        case 2:
-        {
-            int cor_temp_length=0;
-            for (int s=1;s<=8;s++)
-            {
-                int x1=cor_small_1(1,s);
-                int y1=cor_small_1(2,s);
-                if (Visual_range(x1,y1,1)==0)
-                {
-                    cor_temp_length=cor_temp_length+1;
-                }
-            }
-            if (cor_temp_length==0)
-            {
-                cell_array(i,22)=0;
-            }
-            else
-            {
-                cell_array(i,16)=cell_array(i,16)+deltah;
-            }
-            break;
-        }
+//        case 2:
+//        {
+//            int cor_temp_length=0;
+//            for (int s=1;s<=8;s++)
+//            {
+//                int x1=cor_small_1(1,s);
+//                int y1=cor_small_1(2,s);
+//                if (Visual_range(x1,y1,1)==0)
+//                {
+//                    cor_temp_length=cor_temp_length+1;
+//                }
+//            }
+//            if (cor_temp_length==0)
+//            {
+//                cell_array(i,22)=0;
+//            }
+//            else
+//            {
+//                cell_array(i,16)=cell_array(i,16)+deltah;
+//            }
+//            break;
+//        }
     }
     
     int celltypes=(int)cell_array(i,9);
@@ -1655,35 +1685,56 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
     if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
     {
         cell_trace_temp.resize(2,150);
+        cell_trace_temp=0;
         cell_trace_temp(1,Range(2,4))=cell_array(i,Range(29,Col));
         cell_trace_temp(2,Range(2,4))=cell_temp(1,Range(29,Col));
         cell_trace_temp(1,1)=cell_temp(1,15);
         cell_trace_temp(2,1)=cell_temp(1,15);
         
         int current_size_trace=cell_trace.rows();
-        int GN=cell_trace_temp(1,4);
+        int division_parents=0;
         for (int rows=current_size_trace;rows>=1;rows--)
         {
             if(cell_trace_temp(1,3) == cell_trace(rows,2))
             {
-                cell_trace_temp(1,Range(5,150))=cell_trace(rows,Range(5,150));
-                cell_trace_temp(2,Range(5,150))=cell_trace(rows,Range(5,150));
+                cell_trace_temp(1,Range(6,150))=cell_trace(rows,Range(6,150));
+                cell_trace_temp(2,Range(6,150))=cell_trace(rows,Range(6,150));
+                division_parents=cell_trace(rows,4);
                 break;
             }
         }
-        
-        cell_trace_temp(1,GN+5)=1;
-        cell_trace_temp(2,GN+5)=2;
-        
+        int GN=cell_trace_temp(1,4);
+        if (GN > division_parents)
+        {
+            cell_trace_temp(1,GN+5)=1;
+            cell_trace_temp(2,GN+5)=2;
+        }
+        else if (GN == division_parents)
+        {
+            cell_trace_temp(1,GN+6)=1;
+            cell_trace_temp(2,GN+6)=2;
+            cell_trace_temp(1,4)=GN+1;
+            cell_array(i,4)=GN+1;
+            fprintf(fid2, "%s\n" ,"Cell division counts error! Error type 1");
+            fprintf(fid2, "%s %d %s %d %s %d\n" ,"Parent cell label :",cell_trace_temp(1,3) ,"Daughter cells : ",cell_trace_temp(1,3), "and" , cell_trace_temp(2,3));
+            fprintf(fid2, "%s\n" ,"*********************************************************");
+        }
+        else if (GN < division_parents)
+        {
+            cell_trace_temp(1,GN+7)=1;
+            cell_trace_temp(2,GN+7)=2;
+            cell_trace_temp(1,4)=GN+2;
+            cell_array(i,4)=GN+2;
+            fprintf(fid2, "%s\n" ,"Cell division counts error! Error type 2");
+            fprintf(fid2, "%s %d %s %d %s %d\n" ,"Parent cell label :",cell_trace_temp(1,3) ,"Daughter cells : ",cell_trace_temp(1,3), "and" , cell_trace_temp(2,3));
+            fprintf(fid2, "%s\n" ,"*********************************************************");
+        }
         
         cell_trace.resizeAndPreserve(current_size_trace+2,150);
         cell_trace(current_size_trace+1,all)=cell_trace_temp(1,all);
         cell_trace(current_size_trace+2,all)=cell_trace_temp(2,all);
         
-        
-        
         int current_size=cell_array.rows();
-        
         cell_array.resizeAndPreserve(current_size+1,Col);
         cell_array(current_size+1,all)=cell_temp(1,all);
         
