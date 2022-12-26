@@ -413,7 +413,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     }
     else
     {
-        nthreads=threads;
+        nthreads=1;
     }
     for (int  H=0; H<1000000000; H++)
     {
