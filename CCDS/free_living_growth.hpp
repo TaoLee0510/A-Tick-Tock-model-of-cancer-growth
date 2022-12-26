@@ -451,43 +451,46 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         int C2=cell_array.rows();
         if(DynamicThreads==1)
         {
-            int CNumber=ceil(C2/5000);
-            switch (CNumber)
+            if (nthreads<threads)
             {
-                case 0:
+                int CNumber=ceil(C2/5000);
+                switch (CNumber)
                 {
-                    nthreads=(int)(threads*0.5);
-                    break;
-                }
-                case 1:
-                {
-                    nthreads=(int)(threads*0.6);
-                    break;
-                }
-                case 2:
-                {
-                    nthreads=(int)(threads*0.7);
-                    break;
-                }
-                case 3:
-                {
-                    nthreads=(int)(threads*0.8);
-                    break;
-                }
-                case 4:
-                {
-                    nthreads=(int)(threads*0.9);
-                    break;
-                }
-                case 5:
-                {
-                    nthreads=threads;
-                    break;
-                }
-                default:
-                {
-                    nthreads=threads;
-                    break;
+                    case 0:
+                    {
+                        nthreads=(int)(threads*0.5);
+                        break;
+                    }
+                    case 1:
+                    {
+                        nthreads=(int)(threads*0.6);
+                        break;
+                    }
+                    case 2:
+                    {
+                        nthreads=(int)(threads*0.7);
+                        break;
+                    }
+                    case 3:
+                    {
+                        nthreads=(int)(threads*0.8);
+                        break;
+                    }
+                    case 4:
+                    {
+                        nthreads=(int)(threads*0.9);
+                        break;
+                    }
+                    case 5:
+                    {
+                        nthreads=threads;
+                        break;
+                    }
+                    default:
+                    {
+                        nthreads=threads;
+                        break;
+                    }
                 }
             }
         }
