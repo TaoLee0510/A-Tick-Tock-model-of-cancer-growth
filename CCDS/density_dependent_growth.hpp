@@ -60,6 +60,11 @@
 #include "CellDivision.hpp"
 #include "CellMigrationDivisionSingleCell.hpp"
 #include "CellMigrationDivision.hpp"
+#include "SaveClonePNGS.hpp"
+#include "SaveCellArray.hpp"
+#include "SavePNGS.hpp"
+#include "SavePNGHR.hpp"
+#include "SaveClonePNGHR.hpp"
 
 void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, float alpha, float beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,double bunderD,double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time, int threads,int DynamicThreads)
 {
@@ -432,7 +437,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     cell_array.resize(N0,28);
     cell_array=0;
     cell_array(all,all)=cell_array0(all,all);
-    migrate_activation(cell_array, bunderD, sub_visual, Visual_range,migration_time_range, migration_rate_r_mean_quia,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time,DDM);
+//    migrate_activation(cell_array, bunderD, sub_visual, Visual_range,migration_time_range, migration_rate_r_mean_quia,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time,DDM);
     density_growth_rate_calculation_1(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK,death_time_range_r,death_time_range_K,cell_array, sub_visual, Visual_range);
     sortRow(cell_array,cell_array1,Col,17,1);
     double h=0;
@@ -559,6 +564,9 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
             }
             default:
             {
+                
+                sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
+                
                 start04=omp_get_wtime();
                 omp_set_num_threads(nthreads);
                 #pragma omp parallel for schedule(dynamic)
@@ -574,7 +582,47 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                 
                 sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
                 start05=omp_get_wtime();
-                save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng);
+                #pragma omp parallel
+                {
+                    #pragma omp sections
+                    {
+                        #pragma omp section
+                        {
+                            if (H%MMR==0)
+                            {
+                                SavePNGS(Visual_range_x, Visual_range_y, T, alpha, beta, cell_array);
+                            }
+                        }
+                        #pragma omp section
+                        {
+                            if (H%MMR==0)
+                            {
+                                SaveClonePNGS(Visual_range_x, Visual_range_y, T, alpha, beta, cell_array, colorspace);
+                            }
+                        }
+                        #pragma omp section
+                        {
+                            if (H%MMR==0)
+                            {
+                                SaveCellArray(T, alpha, beta, cell_array , Col);
+                            }
+                        }
+                        #pragma omp section
+                        {
+                            if (allpng==1)
+                            {
+                                SavePNGHR( Visual_range_x,  Visual_range_y, cell_array,  H,  T,  alpha,  beta, deltah);
+                            }
+                        }
+                        #pragma omp section
+                        {
+                            if (allpng==1)
+                            {
+                                SaveClonePNGHR( Visual_range_x,  Visual_range_y, cell_array,  H,  T,  alpha,  beta, deltah,colorspace);
+                            }
+                        }
+                    }
+                }
                 end05=omp_get_wtime();
                 
                 start06=omp_get_wtime();
@@ -586,6 +634,10 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                 
                 break;
             }
+        }
+        if (H%MMR==0)
+        {
+            T++;
         }
         end07=omp_get_wtime();
         double programTimes04 = end04 - start04;

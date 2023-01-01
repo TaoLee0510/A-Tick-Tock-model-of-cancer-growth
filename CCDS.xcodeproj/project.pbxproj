@@ -45,6 +45,11 @@
 		046CC78E2260EF8B009F1C14 /* density_dependent_growth.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = density_dependent_growth.hpp; sourceTree = "<group>"; };
 		046CC7912261001B009F1C14 /* Low_density_initial_growth.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Low_density_initial_growth.hpp; sourceTree = "<group>"; };
 		04AEA12721EA56AB00BE3706 /* deltah_recalculation.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = deltah_recalculation.hpp; sourceTree = "<group>"; };
+		E62660DD2961B8F3007C994E /* SaveClonePNGS.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveClonePNGS.hpp; sourceTree = "<group>"; };
+		E62660E02961BA16007C994E /* SaveCellArray.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveCellArray.hpp; sourceTree = "<group>"; };
+		E62660E32961BA7B007C994E /* SavePNGS.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SavePNGS.hpp; sourceTree = "<group>"; };
+		E62660E62961BC97007C994E /* SavePNGHR.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SavePNGHR.hpp; sourceTree = "<group>"; };
+		E62660E92961BCFB007C994E /* SaveClonePNGHR.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveClonePNGHR.hpp; sourceTree = "<group>"; };
 		E63BCE962944F0EE00A44073 /* SavePNGSingleCell.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SavePNGSingleCell.hpp; sourceTree = "<group>"; };
 		E63BCE992944F11700A44073 /* SaveCellArraySingleCell.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveCellArraySingleCell.hpp; sourceTree = "<group>"; };
 		E63BCE9C2944F13A00A44073 /* SaveAllPNG.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveAllPNG.hpp; sourceTree = "<group>"; };
@@ -116,6 +121,11 @@
 				E63BCEA82945C66100A44073 /* sortRowReverse.hpp */,
 				0434498220B2619F003532BA /* stage_convert.hpp */,
 				0434498620B2619F003532BA /* save_data.hpp */,
+				E62660E32961BA7B007C994E /* SavePNGS.hpp */,
+				E62660DD2961B8F3007C994E /* SaveClonePNGS.hpp */,
+				E62660E02961BA16007C994E /* SaveCellArray.hpp */,
+				E62660E62961BC97007C994E /* SavePNGHR.hpp */,
+				E62660E92961BCFB007C994E /* SaveClonePNGHR.hpp */,
 				E6538332291D39D700C2B0F6 /* save_data_free_living.hpp */,
 				E63BCE962944F0EE00A44073 /* SavePNGSingleCell.hpp */,
 				E63BCE992944F11700A44073 /* SaveCellArraySingleCell.hpp */,
