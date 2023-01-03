@@ -35,7 +35,7 @@
 #include "deltah_calculation.hpp"
 
 using namespace blitz;
-void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> &Visual_range, Array<int,2> cor_big, Array<int, 2> area_square, Array<int, 2> sub_area_square, Array<int, 2> cor_small, Array<int, 2> area_square_s, Array<int, 2>  sub_area_square_s,double &migration_judgement)
+void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3> &Visual_range, Array<int,2> cor_big, Array<int, 2> area_square, Array<int, 2> sub_area_square, Array<int, 2> cor_small, Array<int, 2> area_square_s, Array<int, 2>  sub_area_square_s,double &migration_judgement)
 {
     std::random_device r;
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
@@ -1718,8 +1718,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 ////////////////////////////////////////////// migration ////////////////////////////////////
                 if (order == 1)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -1736,8 +1736,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order == 2)////2
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -1752,8 +1752,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order == 3)///3
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -1771,8 +1771,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order == 4)///4
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell_y=5;cor_cell_y<=8;cor_cell_y++)
                     {
@@ -1787,8 +1787,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order == 5)///5
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -1805,8 +1805,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order == 6)///6
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -1821,8 +1821,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order == 7)///7
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -1839,8 +1839,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order == 8)///8
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell_y=5;cor_cell_y<=8;cor_cell_y++)
                     {
@@ -3556,8 +3556,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 /////////////////////////////////////////////////////migration///////////////////////////////////////
                 if (order == 1)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1-1,y1-1,1)=1;
                     Visual_range(x1-1,y1-1,2)=cell_array(i,15);
@@ -3570,8 +3570,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order == 2)///2
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1-1,y1,1)=1;
                     Visual_range(x1-1,y1,2)=cell_array(i,15);
@@ -3583,8 +3583,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order == 3)///3
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1-1,y1+1,1)=1;
                     Visual_range(x1-1,y1+1,2)=cell_array(i,15);
@@ -3597,8 +3597,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order == 4)///4
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1,y1+1,1)=1;
                     Visual_range(x1,y1+1,2)=cell_array(i,15);
@@ -3610,8 +3610,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order == 5)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1+1,y1+1,1)=1;
                     Visual_range(x1+1,y1+1,2)=cell_array(i,15);
@@ -3624,8 +3624,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order == 6)///6
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1+1,y1,1)=1;
                     Visual_range(x1+1,y1,2)=cell_array(i,15);
@@ -3637,8 +3637,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order == 7)///7
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1+1,y1-1,1)=1;
                     Visual_range(x1+1,y1-1,2)=cell_array(i,15);
@@ -3651,8 +3651,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order == 8)///8
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1,y1-1,1)=1;
                     Visual_range(x1,y1-1,2)=cell_array(i,15);
@@ -3745,8 +3745,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 ////////////////////////////////////////////////////////////////////migration//////////////////////////////////////////////////////
                 if (order==1)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -3763,8 +3763,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order==2)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -3779,8 +3779,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order==3)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -3797,8 +3797,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order==4)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell_y=5; cor_cell_y<=8; cor_cell_y++)
                     {
@@ -3813,8 +3813,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order==5)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -3831,8 +3831,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order==6)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -3847,8 +3847,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order==7)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -3865,8 +3865,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order==8)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell_y=5; cor_cell_y<=8; cor_cell_y++)
                     {
@@ -3958,8 +3958,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 if (order==1)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1-1,y1-1,1)=1;
                     Visual_range(x1-1,y1-1,2)=cell_array(i,15);
@@ -3972,8 +3972,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order==2)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1-1,y1,1)=1;
                     Visual_range(x1-1,y1,2)=cell_array(i,15);
@@ -3985,8 +3985,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order==3)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1-1,y1+1,1)=1;
                     Visual_range(x1-1,y1+1,2)=cell_array(i,15);
@@ -3999,8 +3999,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order==4)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1,y1+1,1)=1;
                     Visual_range(x1,y1+1,2)=cell_array(i,15);
@@ -4012,8 +4012,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order==5)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1+1,y1+1,1)=1;
                     Visual_range(x1+1,y1+1,2)=cell_array(i,15);
@@ -4026,8 +4026,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order==6)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1+1,y1,1)=1;
                     Visual_range(x1+1,y1,2)=cell_array(i,15);
@@ -4039,8 +4039,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order==7)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1+1,y1-1,1)=1;
                     Visual_range(x1+1,y1-1,2)=cell_array(i,15);
@@ -4053,8 +4053,8 @@ void migration(int i, double deltah, Array<float, 2> &cell_array, Array<int, 3> 
                 }
                 else if (order==8)
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1,y1-1,1)=1;
                     Visual_range(x1,y1-1,2)=cell_array(i,15);

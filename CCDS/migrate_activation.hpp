@@ -37,7 +37,7 @@
 #include "density_calculation.hpp"
 #include "deltah_calculation.hpp"
 
-void migrate_activation(Array<float, 2> &cell_array, double bunderD, Array<int, 3> sub_visual, Array<int,3> Visual_range,double migration_time_range, double migration_rate_r_mean_quia, double beta_distribution_alpha_for_normal_migration, double beta_distribution_beta_for_normal_migration, double beta_distribution_alpha_mig_time, double beta_distribution_beta_mig_time, int DDM)
+void migrate_activation(Array<double, 2> &cell_array, double bunderD, Array<long, 3> sub_visual, Array<long,3> Visual_range,double migration_time_range, double migration_rate_r_mean_quia, double beta_distribution_alpha_for_normal_migration, double beta_distribution_beta_for_normal_migration, double beta_distribution_alpha_mig_time, double beta_distribution_beta_mig_time, int DDM)
 {
     const gsl_rng_type *T10;
     gsl_rng *r10;

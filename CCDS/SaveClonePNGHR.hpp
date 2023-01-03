@@ -16,7 +16,7 @@
 #include <cmath>
 
 using namespace blitz;
-void SaveClonePNGHR(int Visual_range_x, int Visual_range_y, Array<float,2> cell_array, int H, int &T, float alpha, float beta,double deltah, Array<double,2> colorspace)
+void SaveClonePNGHR(int Visual_range_x, int Visual_range_y, Array<double,2> cell_array, int H, int &T, double alpha, double beta,double deltah, Array<double,2> colorspace)
 {
     double TT=deltah*(double)3600*(double)H;
     

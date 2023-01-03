@@ -14,7 +14,7 @@
 #include <blitz/array.h>
 
 
-void deltah_recalculation(double &deltah, Array<float,2> cell_array, int &MMR, int DDM)
+void deltah_recalculation(double &deltah, Array<double,2> cell_array, int &MMR, int DDM)
 {
     if (DDM==1)
     {

@@ -58,7 +58,7 @@
 #include <omp.h>
 
 
-void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, float alpha, float beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,double bunderD,double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time,int threads)
+void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, double alpha, double beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,double bunderD,double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time,int threads)
 {
     time_t raw_initial_time;
     struct tm * initial_time;
@@ -115,9 +115,9 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     std::uniform_real_distribution<> dis(0.05, 0.95);
     //////////////////////////////////////////////////////////////array definition///////////////////////////////////////////////////////////////////////
     Range all = Range::all();
-    Array<int,3> Visual_range(Vx,Vy,4,FortranArray<3>());
+    Array<long,3> Visual_range(Vx,Vy,4,FortranArray<3>());
     Visual_range(all,all,all)=0;
-    Array<float,2> cell_array(1,Col,FortranArray<2>());
+    Array<double,2> cell_array(1,Col,FortranArray<2>());
     cell_array=0;
     //    $9: cell_array type
     //    $10: inherent growth rate
@@ -139,13 +139,13 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     //    $26: migration lasted time
     //    $27: passed time of migration
     //    $28: migration rate
-    Array<float,2> cell_array1(1,Col,FortranArray<2>());
+    Array<double,2> cell_array1(1,Col,FortranArray<2>());
     cell_array1=0;
-    Array<float,2> cell_array_temp(1,Col,FortranArray<2>());
+    Array<double,2> cell_array_temp(1,Col,FortranArray<2>());
     cell_array_temp=0;
-    Array<float, 2> cell_array_temp1(1,Col,FortranArray<2>());
+    Array<double, 2> cell_array_temp1(1,Col,FortranArray<2>());
     cell_array_temp1=0;
-    Array<float,2> cell_array2(1,Col,FortranArray<2>());
+    Array<double,2> cell_array2(1,Col,FortranArray<2>());
     cell_array2=0;
     Array<int,2> cor_big(1,4,FortranArray<2>());
     cor_big=0;
@@ -171,15 +171,15 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     cor_small_1=0;
     Array<int, 2> proliferation_loci(1,4,FortranArray<2>());
     proliferation_loci=0;
-    Array<float, 2> cell_temp(1,Col,FortranArray<2>());
+    Array<double, 2> cell_temp(1,Col,FortranArray<2>());
     cell_temp=0;
-    Array<int, 3> sub_visual(3,3,4,FortranArray<3>());
+    Array<long, 3> sub_visual(3,3,4,FortranArray<3>());
     sub_visual=0;
-    Array<float,2> cell_array0(1,Col,FortranArray<2>());
+    Array<double,2> cell_array0(1,Col,FortranArray<2>());
     cell_array0=0;
-    Array<float,2> cell_array_out(1,Col,FortranArray<2>());
+    Array<double,2> cell_array_out(1,Col,FortranArray<2>());
     cell_array_out=0;
-    Array<float,2> cell_array_inner(1,Col,FortranArray<2>());
+    Array<double,2> cell_array_inner(1,Col,FortranArray<2>());
     cell_array_out=0;
     Array<int,2> A(Visual_range_x/2,Visual_range_y/2,FortranArray<2>());
     A=0;
@@ -245,7 +245,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     double uniup_r=gsl_cdf_gaussian_P(max_growth_rate_r-muhatr, sigmahatr );
     double unilow_K=gsl_cdf_gaussian_P(min_growth_rate_K-muhatK, sigmahatK );
     double uniup_K=gsl_cdf_gaussian_P(max_growth_rate_K-muhatK, sigmahatK );
-    Array<float,2> radom_number(1,N0,FortranArray<2>());
+    Array<double,2> radom_number(1,N0,FortranArray<2>());
     for (int x=1;x<=N0r;x++)
     {
         double mig=gsl_ran_beta(r00,beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
@@ -283,7 +283,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     double uniup_K1=gsl_cdf_gaussian_P(max_growth_rate_K-muhatK, sigmahatK );
     
     /////////////////////////*Migration seepd generation*/////////////////////
-    Array<float,2> radom_number1(1,N01,FortranArray<2>());
+    Array<double,2> radom_number1(1,N01,FortranArray<2>());
     for (int x=1;x<=N0r1;x++)
     {
         double mig=gsl_ran_beta(r00,beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;

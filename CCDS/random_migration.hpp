@@ -36,7 +36,7 @@
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
 using namespace blitz;
-void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<int, 3> &Visual_range, Array<int,2> cor_big, Array<int, 2> area_square, Array<int, 2> sub_area_square, Array<int, 2> cor_small, Array<int, 2> area_square_s, Array<int, 2>  sub_area_square_s,double &migration_judgement)
+void random_migration(int i, double deltah,Array<double, 2> &cell_array, Array<long, 3> &Visual_range, Array<int,2> cor_big, Array<int, 2> area_square, Array<int, 2> sub_area_square, Array<int, 2> cor_small, Array<int, 2> area_square_s, Array<int, 2>  sub_area_square_s,double &migration_judgement)
 {
     //    std::random_device r;
     //    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
@@ -126,8 +126,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
             {
                 case 1:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -145,8 +145,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
                 }
                 case 2:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -162,8 +162,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
                 }
                 case 3:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -181,8 +181,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
                 }
                 case 4:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell_y=5; cor_cell_y<=8; cor_cell_y++)
                     {
@@ -198,8 +198,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
                 }
                 case 5:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -217,8 +217,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
                 }
                 case 6:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -234,8 +234,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
                 }
                 case 7:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell=1; cor_cell<=4; cor_cell++)
                     {
@@ -253,8 +253,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
                 }
                 case 8:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
                     for (int cor_cell_y=5; cor_cell_y<=8; cor_cell_y++)
                     {
@@ -350,8 +350,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
             {
                 case 1:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1-1,y1-1,1)=1;
                     Visual_range(x1-1,y1-1,2)=cell_array(i,15);
@@ -365,8 +365,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
                 }
                 case 2:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1-1,y1,1)=1;
                     Visual_range(x1-1,y1,2)=cell_array(i,15);
@@ -379,8 +379,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
                 }
                 case 3:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1-1,y1+1,1)=1;
                     Visual_range(x1-1,y1+1,2)=cell_array(i,15);
@@ -394,8 +394,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
                 }
                 case 4:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1,y1+1,1)=1;
                     Visual_range(x1,y1+1,2)=cell_array(i,15);
@@ -408,8 +408,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
                 }
                 case 5:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1+1,y1+1,1)=1;
                     Visual_range(x1+1,y1+1,2)=cell_array(i,15);
@@ -423,8 +423,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
                 }
                 case 6:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1+1,y1,1)=1;
                     Visual_range(x1+1,y1,2)=cell_array(i,15);
@@ -437,8 +437,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
                 }
                 case 7:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1+1,y1-1,1)=1;
                     Visual_range(x1+1,y1-1,2)=cell_array(i,15);
@@ -452,8 +452,8 @@ void random_migration(int i, double deltah,Array<float, 2> &cell_array, Array<in
                 }
                 case 8:
                 {
-                    int cell_label_1=Visual_range(x1,y1,4);
-                    int cellstage=Visual_range(x1,y1,3);
+                    long cell_label_1=Visual_range(x1,y1,4);
+                    long cellstage=Visual_range(x1,y1,3);
                     Visual_range(x1,y1,all)=0;
                     Visual_range(x1,y1-1,1)=1;
                     Visual_range(x1,y1-1,2)=cell_array(i,15);

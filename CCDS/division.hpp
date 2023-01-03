@@ -39,7 +39,7 @@
 
 using std::chrono::high_resolution_clock;
 using namespace blitz;
-void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall,int Col)
+void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<double, 2> &cell_array, Array<double,2> cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall,int Col)
 {
     auto start = std::chrono::high_resolution_clock::now();
     std::random_device r;
@@ -143,8 +143,8 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
     if (cell_array(i,14)==0)
     {
         double growth_rate_inherent=cell_array(i,10);
-        float X1=growth_rate_inherent*(1-0.05);
-        float X2=growth_rate_inherent*(1+0.05);
+        double X1=growth_rate_inherent*(1-0.05);
+        double X2=growth_rate_inherent*(1+0.05);
         cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
         cell_temp(1,9)=cell_array(i,9);
         cell_temp(1,10)=cell_array(i,10);
@@ -207,7 +207,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
             cell_temp(1,20)=0;
             cell_temp(1,16)=0;
             cell_array(i,16)=0;
-            int cell_index= (int)cell_array(i,15);
+            long cell_index= (int)cell_array(i,15);
             Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),1)=1;
             Visual_range((int)cell_temp(1,2),(int)cell_temp(1,6),1)=1;
             Visual_range((int)cell_temp(1,3),(int)cell_temp(1,7),1)=1;
@@ -328,8 +328,8 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                 cell_temp(1,20)=0;
                 cell_temp(1,16)=0;
                 cell_array(i,16)=0;
-                int cell_label_1=Visual_range(x,y,4);
-                int cellstage=Visual_range(x,y,3);
+                long cell_label_1=Visual_range(x,y,4);
+                long cellstage=Visual_range(x,y,3);
                 cell_label=cell_label+1;
                 if (pro_loci_number1 > 1 && pro_loci_number2 >1)
                 {
@@ -1228,12 +1228,12 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                     shuffle(random_pro_loci_1,random_pro_loci_1+cor_pro_1_length,RNG);
 //                    gsl_ran_shuffle(r7, random_pro_loci_1, cor_pro_1_length, sizeof (int));
                     Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
-                    cell_temp(1,1)=(float)cor_pro_1(1,random_pro_loci_1[0]);
-                    cell_temp(1,5)=(float)cor_pro_1(2,random_pro_loci_1[0]);
+                    cell_temp(1,1)=(double)cor_pro_1(1,random_pro_loci_1[0]);
+                    cell_temp(1,5)=(double)cor_pro_1(2,random_pro_loci_1[0]);
                     cell_temp(1,14)=1;
                     cell_temp(1,15)=cell_array(i,15);
-                    cell_array(i,1)=(float)cor_pro_1(1,random_pro_loci_1[1]);
-                    cell_array(i,5)=(float)cor_pro_1(2,random_pro_loci_1[1]);
+                    cell_array(i,1)=(double)cor_pro_1(1,random_pro_loci_1[1]);
+                    cell_array(i,5)=(double)cor_pro_1(2,random_pro_loci_1[1]);
                     if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
                     {
                         Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),1)=1;
@@ -1262,8 +1262,8 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                 cell_temp(1,20)=0;
                 cell_temp(1,16)=0;
                 cell_array(i,16)=0;
-                int cell_label_1=Visual_range(x,y,4);
-                int cellstage=Visual_range(x,y,3);
+                long cell_label_1=Visual_range(x,y,4);
+                long cellstage=Visual_range(x,y,3);
                 cell_label=cell_label+1;
                 Array<int, 2> pro_loci_small_1(2,16,FortranArray<2>());
                 pro_loci_small_1=0;
@@ -1313,12 +1313,12 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
                 shuffle(random_pro_loci_1,random_pro_loci_1+pro_loci_small_length,RNG);
 //                gsl_ran_shuffle(r7, random_pro_loci_1, pro_loci_small_length, sizeof (int));
                 Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
-                cell_temp(1,1)=(float)pro_loci_small(1,random_pro_loci_1[0]);
-                cell_temp(1,5)=(float)pro_loci_small(2,random_pro_loci_1[0]);
+                cell_temp(1,1)=(double)pro_loci_small(1,random_pro_loci_1[0]);
+                cell_temp(1,5)=(double)pro_loci_small(2,random_pro_loci_1[0]);
                 cell_temp(1,14)=1;
                 cell_temp(1,15)=cell_array(i,15);
-                cell_array(i,1)=(float)pro_loci_small(1,random_pro_loci_1[1]);
-                cell_array(i,5)=(float)pro_loci_small(2,random_pro_loci_1[1]);
+                cell_array(i,1)=(double)pro_loci_small(1,random_pro_loci_1[1]);
+                cell_array(i,5)=(double)pro_loci_small(2,random_pro_loci_1[1]);
                 if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
                 {
                     Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),1)=1;
@@ -1346,9 +1346,9 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
     }
     else if (cell_array(i,14)==1)
     {
-        float growth_rate_inherent=cell_array(i,10);
-        float X1=growth_rate_inherent*(1-0.05);
-        float X2=growth_rate_inherent*(1+0.05);
+        double growth_rate_inherent=cell_array(i,10);
+        double X1=growth_rate_inherent*(1-0.05);
+        double X2=growth_rate_inherent*(1+0.05);
         cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
         cell_temp(1,9)=cell_array(i,9);
         cell_temp(1,10)=cell_array(i,10);
@@ -1397,13 +1397,13 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<f
         if (loci_number!=0)
         {
             cell_label=cell_label+1;
-            int cellstage=Visual_range(x,y,3);
+            long cellstage=Visual_range(x,y,3);
             shuffle(cor_temp, cor_temp+loci_number,RNG);
 //            gsl_ran_shuffle(r7, cor_temp, loci_number, sizeof (int));
             int loci=cor_temp_3[cor_temp[0]];
             cell_temp(1,1)=cor_small_1(1,loci);
             cell_temp(1,5)=cor_small_1(2,loci);
-            int cell_index=cell_array(i,15);
+            long cell_index=cell_array(i,15);
             Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),1)=1;
             Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),2)=cell_index;
             Visual_range((int)cell_temp(1,1),(int)cell_temp(1,5),3)=cellstage;

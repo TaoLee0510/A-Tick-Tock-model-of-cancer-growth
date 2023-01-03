@@ -78,8 +78,8 @@ int main(int argc, char *argv[])
     double R0=60;
     double R1=50;
     double mix_ratio_initial=0.5;
-    float alpha=2.2;
-    float beta=0;
+    double alpha=2.2;
+    double beta=0;
     int DDM=1;
     int chemotaxis=1;
     double bunderD=0.9;
@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
     while( (opt = getopt_long(argc, argv, short_options, long_options, NULL)) != -1){
         switch (opt){
             case '?':
-                fprintf(stdout, "Usage: %s --Visual_range_x=<int> --Visual_range_y=<int> --R0=<double> --R1=<double> --mix_ratio_initial=<double> --alpha=<float> --beta=<float> --DDM=<int> --chemotaxis=<int> --bunderD=<double> --migration_rate_r_mean=<double> --migration_rate_r_mean_quia=<double> --migration_rate_K_mean=<double> --beta_distribution_alpha=<double> --beta_distribution_expected=<double> --beta_distribution_alpha_mig_time=<double> --beta_distribution_expected_mig_time=<double> --deathjudge=<double> --time_interval=<double> --utralsmall=<int> --allpng=<int> --Low_density_initial=<int>, --Single_cell=<int> --K_formation_rate=<double> --threads=<int> --DynamicThreads=<int>", argv[0]);
+                fprintf(stdout, "Usage: %s --Visual_range_x=<int> --Visual_range_y=<int> --R0=<double> --R1=<double> --mix_ratio_initial=<double> --alpha=<double> --beta=<double> --DDM=<int> --chemotaxis=<int> --bunderD=<double> --migration_rate_r_mean=<double> --migration_rate_r_mean_quia=<double> --migration_rate_K_mean=<double> --beta_distribution_alpha=<double> --beta_distribution_expected=<double> --beta_distribution_alpha_mig_time=<double> --beta_distribution_expected_mig_time=<double> --deathjudge=<double> --time_interval=<double> --utralsmall=<int> --allpng=<int> --Low_density_initial=<int>, --Single_cell=<int> --K_formation_rate=<double> --threads=<int> --DynamicThreads=<int>", argv[0]);
                 return 0;
             case 'x':
                 Visual_range_x = atoi(optarg);
