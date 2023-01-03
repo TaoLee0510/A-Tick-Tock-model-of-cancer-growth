@@ -1663,10 +1663,10 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
     {
         cell_array(i,all)=cell_temp(2,all);
 //        cell_array(i,22)=0;
-        fprintf(fid2, "%s\n" ,"Cell division error: Daughter cell failed to get coordinates!");
+//        fprintf(fid2, "%s\n" ,"Cell division error: Daughter cell failed to get coordinates!");
 //        fprintf(fid2, "%s\n" ,"Mark cells as inviabile.");
-        fprintf(fid2, "%s %d\n" ,"Cell label :",(int)cell_array(i,30));
-        fprintf(fid2, "%s\n" ,"*********************************************************");
+//        fprintf(fid2, "%s %d\n" ,"Cell label :",(int)cell_array(i,30));
+//        fprintf(fid2, "%s\n" ,"*********************************************************");
     }
     if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
     {
