@@ -91,15 +91,15 @@ int main(int argc, char *argv[])
     double beta_distribution_alpha_mig_time=0.005;
     double beta_distribution_expected_mig_time=0.3;
     double deathjudge=0.005;
-    double time_interval=220;
+    double time_interval=1008;
     int utralsmall=0; //1 yes, 0 no
     int allpng=0;
     int Low_density_initial=1;
-    int Single_cell=0;
+    int Single_cell=1;
     int opt = 0;
     double K_formation_rate=0.05;
-    int threads=1;
-    int DynamicThreads = 0;
+    int threads=8;
+    int DynamicThreads = 1;
     while( (opt = getopt_long(argc, argv, short_options, long_options, NULL)) != -1){
         switch (opt){
             case '?':
@@ -306,10 +306,10 @@ int main(int argc, char *argv[])
                 break;
         }
     }
-//    if(DynamicThreads==1)
-//    {
-//        threads=1;
-//    }
+    if(DynamicThreads==1)
+    {
+        threads=1;
+    }
     if(Single_cell==1)
     {
         mix_ratio_initial=1;

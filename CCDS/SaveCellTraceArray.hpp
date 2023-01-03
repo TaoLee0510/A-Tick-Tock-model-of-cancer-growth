@@ -17,7 +17,7 @@
 #include <cmath>
 
 using namespace blitz;
-void SaveCellTraceArray(int &T, double alpha, double beta, Array<long,2> cell_trace)
+void SaveCellTraceArray(int T, double alpha, double beta, Array<long,2> cell_trace)
 {
     char filedir1 [100] = {'\0'};
     sprintf(filedir1, "./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,T);
