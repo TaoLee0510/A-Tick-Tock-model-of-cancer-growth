@@ -1638,7 +1638,7 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
         }
     }
     
-    int celltypes_temp=(int)cell_temp(i,9);
+    int celltypes_temp=(int)cell_temp(1,9);
     switch (celltypes_temp)
     {
         case 1:

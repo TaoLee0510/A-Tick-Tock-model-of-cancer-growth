@@ -16,7 +16,7 @@
 #include <cmath>
 
 using namespace blitz;
-void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01, int MMR, int H, int &T, double alpha, double beta, Array<double,2> cell_array, int migration_judgement,double deltah, Array<double,2> colorspace, int DDM, int allpng,int Col, Array<long,2> cell_trace)
+void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01, int MMR, int H, int T, double alpha, double beta, Array<double,2> cell_array, int migration_judgement,double deltah, Array<double,2> colorspace, int DDM, int allpng,int Col, Array<long,2> cell_trace)
 {
     if (H%MMR==0)
     {

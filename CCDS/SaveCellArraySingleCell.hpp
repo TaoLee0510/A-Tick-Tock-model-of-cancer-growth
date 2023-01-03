@@ -16,7 +16,7 @@
 #include <cmath>
 
 using namespace blitz;
-void SaveCellArraySingleCell(int &T, double alpha, double beta, Array<double,2> cell_array ,int Col)
+void SaveCellArraySingleCell(int T, double alpha, double beta, Array<double,2> cell_array ,int Col)
 {
     char filedir3 [100] = {'\0'};
     sprintf(filedir3, "./a_%.1f_b_%.1f/Cell_array_a_%.1f_b_%.1f_h_%.1d.txt",alpha,beta,alpha,beta,T);
