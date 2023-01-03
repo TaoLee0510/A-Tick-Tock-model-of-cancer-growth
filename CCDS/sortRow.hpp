@@ -33,7 +33,7 @@ int cmp1( const void *a ,const void *B)
 
 using namespace blitz;
 using namespace std;
-void sortRow(Array<float, 2> &cell_array, Array<float, 2> cell_array1, int Col, int colnum_to_sort,int threads)
+void sortRow(Array<double, 2> &cell_array, Array<double, 2> cell_array1, int Col, int colnum_to_sort,int threads)
 {
     switch (threads)
     {

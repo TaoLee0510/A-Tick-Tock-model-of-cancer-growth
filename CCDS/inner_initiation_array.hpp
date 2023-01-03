@@ -32,14 +32,14 @@
 #include <blitz/array.h>
 #include "random_uniform.hpp"
 using namespace blitz;
-void inner_initiation_array(int N0,int N01,int R0,int Visual_range_x, int Visual_range_y, Array<float,2> &cell_array_inner, Array<int,3> Visual_range, double uniup_r1, double unilow_r1, double sigmahatr,double muhatr, double uniup_K1, double unilow_K1, double sigmahatK,double muhatK, int N0r1,int N0K1, double *migration_rate_r1, double *migration_rate_K1)
+void inner_initiation_array(int N0,int N01,int R0,int Visual_range_x, int Visual_range_y, Array<double,2> &cell_array_inner, Array<long,3> Visual_range, double uniup_r1, double unilow_r1, double sigmahatr,double muhatr, double uniup_K1, double unilow_K1, double sigmahatK,double muhatK, int N0r1,int N0K1, double *migration_rate_r1, double *migration_rate_K1)
 {
     std::random_device r;
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
     std::mt19937 RNG(seed);
     double initial_r_growth_rate[N0r1];
     double initial_K_growth_rate[N0K1];
-    Array<float,2> cor(2,N01+1,FortranArray<2>());
+    Array<double,2> cor(2,N01+1,FortranArray<2>());
     cor=0;
     int number_cor=1;
     for (int x=1; x<=Visual_range_x; x++)
@@ -57,20 +57,20 @@ void inner_initiation_array(int N0,int N01,int R0,int Visual_range_x, int Visual
             }
         }
     }
-    float random_cor[N01];
+    double random_cor[N01];
     for (int x=0; x<N01; x++)
     {
         random_cor[x]=x+1;
     }
     shuffle(random_cor, random_cor+N01,RNG);
-    Array<float,2> cell_array_cor(2,N01,FortranArray<2>());
+    Array<double,2> cell_array_cor(2,N01,FortranArray<2>());
     for (int x=1; x<=N01; x++)
     {
         int seed = random_cor[x-1];
         cell_array_cor(1,x)=cor(1,seed);
         cell_array_cor(2,x)=cor(2,seed);
     }
-    Array<float,2> radom_number(1,N01,FortranArray<2>());
+    Array<double,2> radom_number(1,N01,FortranArray<2>());
     radom_number=random_uniform(N01);
     double rangr2 = uniup_r1 - unilow_r1;
     for (int x=1; x<=N0r1; x++)

@@ -17,7 +17,7 @@
 #include <blitz/array.h>
 
 using namespace blitz;
-void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, float alpha, float beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, Array<float, 2> &cell_array,Array<int, 3> &sub_visual,Array<int,3> Visual_range)
+void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, Array<double, 2> &cell_array,Array<long, 3> &sub_visual,Array<long,3> Visual_range)
 {
     Range all = Range::all();
     int C0= cell_array.rows();
@@ -39,7 +39,7 @@ void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, i
                 if (cell_array(i,1)>=100 && cell_array(i,5) >=100 && cell_array(i,1)<=Visual_range_x+100 && cell_array(i,5)<=Visual_range_y+100)
                 {
                     sub_visual(all,all,all)=Visual_range(Range(cell_array(i,1)-2,cell_array(i,1)+3),Range(cell_array(i,5)-2,cell_array(i,5)+3),all);
-                    int cell_count[36];
+                    long cell_count[36];
                     int cc=0;
                     for (int cx=0; cx<6; cx++)
                     {
@@ -58,8 +58,8 @@ void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, i
                     {
                         cells_number=cells_number-1;
                     }
-                    int subcell_r[36]={0};
-                    int subcell_K[36]={0};
+                    long subcell_r[36]={0};
+                    long subcell_K[36]={0};
                     int r_cells_number=0;
                     int K_cells_number=0;
                     for(int cxx=1;cxx<=6;cxx++)
@@ -131,7 +131,7 @@ void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, i
                 if (cell_array(i,1)>=100 && cell_array(i,5) >=100 && cell_array(i,1)<=Visual_range_x+100 && cell_array(i,5)<=Visual_range_y+100)
                 {
                     sub_visual(all,all,all)=Visual_range(Range(cell_array(i,1)-2,cell_array(i,1)+3),Range(cell_array(i,5)-2,cell_array(i,5)+3),all);
-                    int cell_count[36];
+                    long cell_count[36];
                     int cc=0;
                     for (int cx=0; cx<6; cx++)
                     {
@@ -162,8 +162,8 @@ void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, i
                     {
                         cells_number=cells_number-1;
                     }
-                    int subcell_r[36]={0};
-                    int subcell_K[36]={0};
+                    long subcell_r[36]={0};
+                    long subcell_K[36]={0};
                     int r_cells_number=0;
                     int K_cells_number=0;
                     for(int cxx=1;cxx<=6;cxx++)

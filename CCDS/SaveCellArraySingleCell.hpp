@@ -16,7 +16,7 @@
 #include <cmath>
 
 using namespace blitz;
-void SaveCellArraySingleCell(int &T, float alpha, float beta, Array<float,2> cell_array ,int Col)
+void SaveCellArraySingleCell(int &T, double alpha, double beta, Array<double,2> cell_array ,int Col)
 {
     char filedir3 [100] = {'\0'};
     sprintf(filedir3, "./a_%.1f_b_%.1f/Cell_array_a_%.1f_b_%.1f_h_%.1d.txt",alpha,beta,alpha,beta,T);
@@ -27,16 +27,22 @@ void SaveCellArraySingleCell(int &T, float alpha, float beta, Array<float,2> cel
     {
         for(int co=1;co<=Col;co++)
         {
-            if(co<Col)
+            if(co<29)
             {
                 fprintf(fid3,"%g\t",cell_array(i,co));
             }
+            else if (co>=29 & co<Col)
+            {
+                fprintf(fid3,"%ld\t",(long)cell_array(i,co));
+            }
             else
             {
-                fprintf(fid3,"%g\n",cell_array(i,co));
+                fprintf(fid3,"%ld\n",(long)cell_array(i,co));
             }
         }
     }
     fclose(fid3);
+    
+    
 }
 #endif /* SaveCellArraySingleCell_hpp */

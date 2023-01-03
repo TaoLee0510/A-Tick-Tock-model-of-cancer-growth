@@ -30,7 +30,7 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 using namespace blitz;
-void stage_convert(int Visual_range_x, int Visual_range_y, Array<float,2> &cell_array, Array<int,3> &Visual_range, int &cell_label,int utralsmall)
+void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell_array, Array<long,3> &Visual_range, int &cell_label,int utralsmall)
 {
     std::random_device r;
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
@@ -47,7 +47,7 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<float,2> &cell_
             {
                 int x1 = cell_array(x,1);
                 int y1 = cell_array(x,5);
-                int loci_cor[9]={0};
+                long loci_cor[9]={0};
                 int loci_direction=0;
                 for (int xx=x1-1;xx<=x1+1;xx++)
                 {
@@ -215,7 +215,7 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<float,2> &cell_
             {
                 int x1 = cell_array(x,1);
                 int y1 = cell_array(x,5);
-                Array<float,2> cor_small(3,3,FortranArray<2>());
+                Array<double,2> cor_small(3,3,FortranArray<2>());
                 cor_small=0;
                 cor_small(all,all)=Visual_range(Range(x1-1,x1+1),Range(y1-1,y1+1),1);
                 if (cor_small(1,1)==0)
@@ -454,7 +454,7 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<float,2> &cell_
                 {
                     int x1 = cell_array(x,1);
                     int y1 = cell_array(x,5);
-                    int loci_cor[9]={0};
+                    long loci_cor[9]={0};
                     int loci_direction=0;
                     for (int xx=x1-1;xx<=x1+1;xx++)
                     {

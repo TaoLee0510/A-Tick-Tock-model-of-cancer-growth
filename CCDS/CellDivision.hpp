@@ -58,7 +58,7 @@
 #include "sortRow.hpp"
 #include <omp.h>
 
-void CellDivision(int i, double max_growth_rate_r, double max_growth_rate_K, Array<float, 2> &cell_array, Array<float,2> cell_array_temp, Array<int, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<float, 2> cell_temp,int &cell_label, double &deltah,int utralsmall,int Col,double deathjudge,int Visual_range_x,int Visual_range_y)
+void CellDivision(int i, double max_growth_rate_r, double max_growth_rate_K, Array<double, 2> &cell_array, Array<double,2> cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall,int Col,double deathjudge,int Visual_range_x,int Visual_range_y)
 {
     if(cell_array(i,1)==0 && cell_array(i,5) ==0)
     {

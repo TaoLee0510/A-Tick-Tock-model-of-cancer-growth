@@ -13,7 +13,7 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 using namespace blitz;
-int inner_count_low_density(int Visual_range_x, int Visual_range_y, Array<int,3> Visual_range, int N01, double R1)
+int inner_count_low_density(int Visual_range_x, int Visual_range_y, Array<long,3> Visual_range, int N01, double R1)
 {
     for (int x=1;x<=Visual_range_x;x++)
     {

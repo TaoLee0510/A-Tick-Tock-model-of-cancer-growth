@@ -17,7 +17,7 @@
 #include <cmath>
 
 using namespace blitz;
-void SavePNGS(int Visual_range_x, int Visual_range_y, int &T, float alpha, float beta, Array<float,2> cell_array)
+void SavePNGS(int Visual_range_x, int Visual_range_y, int &T, double alpha, double beta, Array<double,2> cell_array)
 {
     /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////
     char filedir4 [100] = {'\0'};

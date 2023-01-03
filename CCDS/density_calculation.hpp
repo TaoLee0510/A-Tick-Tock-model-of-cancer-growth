@@ -36,7 +36,7 @@
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
 
-double density_calculation(int i, Array<int, 3> sub_visual, Array<int,3> Visual_range,Array<float, 2> cell_array)
+double density_calculation(int i, Array<long, 3> sub_visual, Array<long,3> Visual_range,Array<double, 2> cell_array)
 {
     Range all = Range::all();
     int ar=70;
@@ -49,7 +49,7 @@ double density_calculation(int i, Array<int, 3> sub_visual, Array<int,3> Visual_
     sub_visual.resize(ar,ar,4);
     sub_visual=0;
     sub_visual(all,all,4)=Visual_range(Range(cell_array(i,1)-xar,cell_array(i,1)+yar),Range(cell_array(i,5)-xar,cell_array(i,5)+yar),4);
-    int cell_count[cell_number_limit];////********
+    long cell_count[cell_number_limit];////********
     int cc=0;
     for (int cx=0; cx<ar; cx++)
     {

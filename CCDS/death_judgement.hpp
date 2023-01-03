@@ -18,7 +18,7 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 using namespace blitz;
-void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, float alpha, float beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, Array<float, 2> &cell_array, Array<float,2> &cell_array_temp, Array<int, 3> sub_visual, Array<int,3> &Visual_range, double deathjudge, int Col)
+void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, Array<double, 2> &cell_array, Array<double,2> &cell_array_temp, Array<long, 3> sub_visual, Array<long,3> &Visual_range, double deathjudge, int Col)
 {
     std::random_device r;
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
@@ -42,7 +42,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                     sub_visual.resize(6,6,4);
                     sub_visual=0;
                     sub_visual(all,all,all)=Visual_range(Range(cell_array(rows,1)-2,cell_array(rows,1)+3),Range(cell_array(rows,5)-2,cell_array(rows,5)+3),all);
-                    int cell_count[36];
+                    long cell_count[36];
                     int cc=0;
                     for (int cx=0; cx<6; cx++)
                     {
@@ -61,8 +61,8 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                     {
                         cells_number=cells_number-1;
                     }
-                    int subcell_r[36]={0};
-                    int subcell_K[36]={0};
+                    long subcell_r[36]={0};
+                    long subcell_K[36]={0};
                     int r_cells_number=0;
                     int K_cells_number=0;
                     for(int cxx=1;cxx<=6;cxx++)
@@ -150,7 +150,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                     sub_visual.resize(6,6,4);
                     sub_visual=0;
                     sub_visual(all,all,all)=Visual_range(Range(cell_array(rows,1)-2,cell_array(rows,1)+3),Range(cell_array(rows,5)-2,cell_array(rows,5)+3),all);
-                    int cell_count[36];
+                    long cell_count[36];
                     int cc=0;
                     for (int cx=0; cx<6; cx++)
                     {
@@ -160,7 +160,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                             cc++;
                         }
                     }
-                    int cell_stage[36];
+                    long cell_stage[36];
                     int cs=0;
                     for (int csx=0; csx<6; csx++)
                     {
@@ -183,8 +183,8 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                     {
                         cells_number=cells_number-1;
                     }
-                    int subcell_r[36]={0};
-                    int subcell_K[36]={0};
+                    long subcell_r[36]={0};
+                    long subcell_K[36]={0};
                     int r_cells_number=0;
                     int K_cells_number=0;
                     for(int cxx=1;cxx<=6;cxx++)
@@ -292,7 +292,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                             sub_visual.resize(6,6,4);
                             sub_visual=0;
                             sub_visual(all,all,all)=Visual_range(Range(cell_array(rows,1)-2,cell_array(rows,1)+3),Range(cell_array(rows,5)-2,cell_array(rows,5)+3),all);
-                            int cell_count[36];
+                            long cell_count[36];
                             int cc=0;
                             for (int cx=0; cx<6; cx++)
                             {
@@ -311,8 +311,8 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                             {
                                 cells_number=cells_number-1;
                             }
-                            int subcell_r[36]={0};
-                            int subcell_K[36]={0};
+                            long subcell_r[36]={0};
+                            long subcell_K[36]={0};
                             int r_cells_number=0;
                             int K_cells_number=0;
                             for(int cxx=1;cxx<=6;cxx++)
@@ -397,7 +397,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                             sub_visual.resize(6,6,4);
                             sub_visual=0;
                             sub_visual(all,all,all)=Visual_range(Range(cell_array(rows,1)-2,cell_array(rows,1)+3),Range(cell_array(rows,5)-2,cell_array(rows,5)+3),all);
-                            int cell_count[36];
+                            long cell_count[36];
                             int cc=0;
                             for (int cx=0; cx<6; cx++)
                             {
@@ -407,7 +407,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                                     cc++;
                                 }
                             }
-                            int cell_stage[36];
+                            long cell_stage[36];
                             int cs=0;
                             for (int csx=0; csx<6; csx++)
                             {
@@ -430,8 +430,8 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                             {
                                 cells_number=cells_number-1;
                             }
-                            int subcell_r[36]={0};
-                            int subcell_K[36]={0};
+                            long subcell_r[36]={0};
+                            long subcell_K[36]={0};
                             int r_cells_number=0;
                             int K_cells_number=0;
                             for(int cxx=1;cxx<=6;cxx++)
@@ -547,8 +547,8 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
             }
             else if(cell_array(site,14)==2)
             {
-                float usx=cell_array(site,1);
-                float usy=cell_array(site,5);
+                double usx=cell_array(site,1);
+                double usy=cell_array(site,5);
                 cell_array(site,1)=1;
                 cell_array(site,5)=1;
                 for (int us=1;us<=C;us++)
