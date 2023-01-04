@@ -38,12 +38,13 @@
 #include "deltah_calculation.hpp"
 #include "cell_type_transform.hpp"
 #include <chrono>
+#include <omp.h>
 
 
 using std::chrono::high_resolution_clock;
 using namespace std;
 using namespace blitz;
-void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<double, 2> &cell_array, Array<double,2> cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<long,2> &cell_trace,Array<long,2> cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2)
+void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<double, 2> &cell_array, Array<double,2> cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<long,2> &cell_trace,Array<long,2> cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads)
 {
     auto start = std::chrono::high_resolution_clock::now();
     std::random_device r;
@@ -1688,16 +1689,36 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
 
         int current_size_trace=cell_trace.rows();
         long division_parents=0;
-        for (int rows=current_size_trace;rows>=1;rows--)
+//        for (int rows=current_size_trace;rows>=1;rows--)
+//        {
+//            if(cell_trace_temp(1,3) == cell_trace(rows,2))
+//            {
+//                cell_trace_temp(1,Range(6,150))=cell_trace(rows,Range(6,150));
+//                cell_trace_temp(2,Range(6,150))=cell_trace(rows,Range(6,150));
+//                division_parents=cell_trace(rows,4);
+//                break;
+//            }
+//        }
+        
+        
+        
+        int trace_row=0;
+        omp_set_num_threads(threads);
+        #pragma omp parallel for schedule(dynamic)
         {
-            if(cell_trace_temp(1,3) == cell_trace(rows,2))
+            for (int rows=current_size_trace;rows>=1;rows--)
             {
-                cell_trace_temp(1,Range(6,150))=cell_trace(rows,Range(6,150));
-                cell_trace_temp(2,Range(6,150))=cell_trace(rows,Range(6,150));
-                division_parents=cell_trace(rows,4);
-                break;
+                if(cell_trace_temp(1,3) == cell_trace(rows,2))
+                {
+                    trace_row=rows;
+                }
             }
         }
+        cell_trace_temp(1,Range(6,150))=cell_trace(trace_row,Range(6,150));
+        cell_trace_temp(2,Range(6,150))=cell_trace(trace_row,Range(6,150));
+        division_parents=cell_trace(trace_row,4);
+        
+
         int GN=(int)cell_trace_temp(1,4);
         if (GN > division_parents)
         {
