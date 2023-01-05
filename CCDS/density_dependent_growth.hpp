@@ -108,6 +108,8 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     int MMR2=0;
     int cell_label=(Visual_range_x+200)*(Visual_range_y+200)+1;
     int Col=28;
+    int borderx=Visual_range_x+100;
+    int bordery=Visual_range_x+100;
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     const gsl_rng_type *T00;
     gsl_rng *r00;
@@ -557,7 +559,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                 save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng);
                 for (int i=C1; i>=1; i--)
                 {
-                    CellMigrationDivision(DDM, i,  deltah, cell_array, Visual_range, cor_big,area_square,sub_area_square,  cor_small,  area_square_s, sub_area_square_s, migration_judgement, deathjudge,  beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD, sub_visual, Visual_range_x, Visual_range_y, beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration,  max_growth_rate_r,  max_growth_rate_K,  cell_array_temp, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp, cell_label, utralsmall, Col);
+                    CellMigrationDivision(DDM, i,  deltah, cell_array, Visual_range, cor_big,area_square,sub_area_square,  cor_small,  area_square_s, sub_area_square_s, migration_judgement, deathjudge,  beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD, sub_visual, borderx, bordery, beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration,  max_growth_rate_r,  max_growth_rate_K,  cell_array_temp, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp, cell_label, utralsmall, Col);
                 }
                 end08=omp_get_wtime();
                 break;
@@ -574,7 +576,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                     for (int i=C1; i>=1; i--)
                     {
 //                        #pragma omp flush(cell_array,Visual_range)
-                        CellMigration(DDM, i, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, Visual_range_x,Visual_range_y,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration);
+                        CellMigration(DDM, i, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration);
                         
                     }
                 }
@@ -628,7 +630,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                 start06=omp_get_wtime();
                 for (int i=C1; i>=1; i--)
                 {
-                    CellDivision( i,  max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1,  proliferation_loci, cell_temp, cell_label,  deltah, utralsmall, Col, deathjudge, Visual_range_x, Visual_range_y);
+                    CellDivision( i,  max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1,  proliferation_loci, cell_temp, cell_label,  deltah, utralsmall, Col, deathjudge, borderx, bordery);
                 }
                 end06=omp_get_wtime();
                 

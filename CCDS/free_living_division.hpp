@@ -1750,6 +1750,8 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
         cell_trace(current_size_trace+1,all)=cell_trace_temp(1,all);
         cell_trace(current_size_trace+2,all)=cell_trace_temp(2,all);
         
+        cell_temp(1,13)=gsl_rng_uniform(r7);
+        
         int current_size=cell_array.rows();
         cell_array.resizeAndPreserve(current_size+1,Col);
         cell_array(current_size+1,all)=cell_temp(1,all);
