@@ -102,6 +102,8 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     int cell_label=(Visual_range_x+200)*(Visual_range_y+200)+1;
     
     int Col=28;
+    int borderx=Visual_range_x+100;
+    int bordery=Visual_range_x+100;
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     const gsl_rng_type *T00;
     gsl_rng *r00;
@@ -481,7 +483,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
         int C1=cell_array.rows();
         for (int i=C1; i>=1; i--)
         {
-            if (cell_array(i,1)>=100 && cell_array(i,5) >=100 && cell_array(i,1)<=Visual_range_x+100 && cell_array(i,5)<=Visual_range_y+100)
+            if (cell_array(i,1)>=100 && cell_array(i,5) >=100 && cell_array(i,1)<=borderx && cell_array(i,5)<=bordery)
             {
                 if (cell_array(i,11)>deathjudge)
                 {

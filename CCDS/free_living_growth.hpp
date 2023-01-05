@@ -14,7 +14,7 @@
 //    $10: inherent growth rate
 //    $11: density growth rate
 //    $12: inherent migration rate
-//    $13: mass absorb rate
+//    $13: random label
 //    $14: cell_array stage
 //    $15: cell_array index
 //    $16: pass time to next division
@@ -150,6 +150,9 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
 //    int generation=0;
     
     int Col=31;
+    
+    int borderx=Visual_range_x+100;
+    int bordery=Visual_range_x+100;
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     auto start = std::chrono::high_resolution_clock::now();
     std::random_device r;
@@ -531,7 +534,12 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         double end11=0;
         double start13=0;
         double end13=0;
-        
+//        double start16=0;
+//        double end16=0;
+        double start15=0;
+        double end15=0;
+        double programTimes16 = 0;
+        omp_set_num_threads(nthreads);
         #pragma omp parallel
         {
             #pragma omp sections
@@ -582,16 +590,16 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
                 for (int i=C1; i>=1; i--)
                 {
-                    CellMigrationDivisionSingleCell(DDM, i, deltah,cell_array, Visual_range, cor_big,  area_square,  sub_area_square,  cor_small, area_square_s, sub_area_square_s, migration_judgement, max_growth_rate_r,  max_growth_rate_K, cell_array_temp,  cor_big_1, cor_big_1_change_shape,  cor_small_1, proliferation_loci,  cell_temp, cell_label , utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K,  unilow_K, sigmahatK, muhatK, K_label,sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration, cell_trace, cell_trace_temp,  cell_index,  r_label, Col, K_formation_rate, deathjudge,  beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD, Visual_range_x, Visual_range_y,fid2,nthreads);
+                    CellMigrationDivisionSingleCell(DDM, i, deltah,cell_array, Visual_range, cor_big,  area_square,  sub_area_square,  cor_small, area_square_s, sub_area_square_s, migration_judgement, max_growth_rate_r,  max_growth_rate_K, cell_array_temp,  cor_big_1, cor_big_1_change_shape,  cor_small_1, proliferation_loci,  cell_temp, cell_label , utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K,  unilow_K, sigmahatK, muhatK, K_label,sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration, cell_trace, cell_trace_temp,  cell_index,  r_label, Col, K_formation_rate, deathjudge,  beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD, borderx, bordery,fid2,nthreads);
                 }
                 end08=omp_get_wtime();
                 break;
             }
             default:
             {
-                start13=omp_get_wtime();
-                sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
-                end13=omp_get_wtime();
+                start15=omp_get_wtime();
+                sortRow(cell_array,cell_array1,Col,13,nthreads);///sort random label
+                end15=omp_get_wtime();
                 
                 start04=omp_get_wtime();
                 omp_set_num_threads(nthreads);
@@ -599,18 +607,22 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 {
                     for (int i=C1; i>=1; i--)
                     {
-                        CellMigration(DDM, i, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, Visual_range_x,Visual_range_y,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration);
+                        CellMigration(DDM, i, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration);
                         
                     }
                 }
                 end04=omp_get_wtime();
                 
+                start13=omp_get_wtime();
                 sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
+                end13=omp_get_wtime();
                 
+                double programTimes15 = 0;
                 start06=omp_get_wtime();
                 for (int i=C1; i>=1; i--)
                 {
-                    CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape,cor_small_1, proliferation_loci,cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, r_label, Col, K_formation_rate, deathjudge, Visual_range_x, Visual_range_y,fid2,nthreads);
+                    CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape,cor_small_1, proliferation_loci,cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, r_label, Col, K_formation_rate, deathjudge, borderx, bordery,fid2,nthreads,programTimes15);
+                    programTimes16 = programTimes16 + programTimes15;
                 }
                 end06=omp_get_wtime();
                 break;
@@ -634,6 +646,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         double programTimes12 = end12 -start12;
         double programTimes13 = end13 -start13;
         double programTimes14 = end14 -start14;
+        double programTimes15 = end15 -start15;
         switch (nthreads)
         {
             case 1:
@@ -663,8 +676,10 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                         cout << "  =>  time save allPNG   :  "<< programTimes11 << endl;
                         cout << "  =>  time Dead Cell eliminateion   :  "<< programTimes12 << endl;
                         cout << "  =>  time Sort cell type   :  "<< programTimes14 << endl;
-                        cout << "  =>  time Sort Cell division   :  "<< programTimes13 << endl;
+                        cout << "  =>  time Sort Random Number   :  "<< programTimes15 << endl;
                         cout << "  =>  time per Migration loop   :  "<< programTimes04 << endl;
+                        cout << "  =>  time Sort Cell division   :  "<< programTimes13 << endl;
+                        cout << "  =>  time costs in Cell Division   :  "<< programTimes16 << endl;
                         cout << "  =>  time per Division loop   :  "<< programTimes06 << endl;
                         cout << "  =>  time per delta h  :  "<< programTimes00 << endl;
                         cout << "  =>  Cell number  :  "<< C1 << endl;
@@ -682,8 +697,10 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                         cout << "  =>  time save CellArray   :  "<< programTimes10 << endl;
                         cout << "  =>  time Dead Cell eliminateion   :  "<< programTimes12 << endl;
                         cout << "  =>  time Sort cell type   :  "<< programTimes14 << endl;
-                        cout << "  =>  time Sort Cell division   :  "<< programTimes13 << endl;
+                        cout << "  =>  time Sort Random Number   :  "<< programTimes15 << endl;
                         cout << "  =>  time per Migration loop   :  "<< programTimes04 << endl;
+                        cout << "  =>  time Sort Cell division   :  "<< programTimes13 << endl;
+                        cout << "  =>  time costs in Cell Division   :  "<< programTimes16 << endl;
                         cout << "  =>  time per Division loop   :  "<< programTimes06 << endl;
                         cout << "  =>  time per delta h  :  "<< programTimes00 << endl;
                         cout << "  =>  Cell number  :  "<< C1 << endl;

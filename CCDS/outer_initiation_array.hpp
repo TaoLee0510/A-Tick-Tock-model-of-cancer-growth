@@ -39,6 +39,13 @@ Array<double,2> outer_initiation_array(int N0, int Visual_range_x, int Visual_ra
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
     std::mt19937 RNG(seed);
     
+    const gsl_rng_type *T1;
+    gsl_rng *r1;
+    gsl_rng_env_setup();
+    T1 = gsl_rng_ranlxs0;
+    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
+    r1 = gsl_rng_alloc(T1);
+    
     double initial_r_growth_rate[N0r];
     double initial_K_growth_rate[N0K];
     Array<double,2> cor(2,N0+1,FortranArray<2>());
@@ -113,6 +120,7 @@ Array<double,2> outer_initiation_array(int N0, int Visual_range_x, int Visual_ra
             cell_array_out_1(x,10)=initial_r_growth_rate[x-1];
             cell_array_out_1(x,11)=initial_r_growth_rate[x-1];
             cell_array_out_1(x,12)=migration_rate_r[x-1];
+            cell_array_out_1(x,13)=gsl_rng_uniform(r1);
             cell_array_out_1(x,14)=0;
             cell_array_out_1(x,15)=x;
             cell_array_out_1(x,22)=1;
@@ -140,6 +148,7 @@ Array<double,2> outer_initiation_array(int N0, int Visual_range_x, int Visual_ra
             cell_array_out_1(x,10)=initial_K_growth_rate[a];
             cell_array_out_1(x,11)=initial_K_growth_rate[a];
             cell_array_out_1(x,12)=migration_rate_K[a];
+            cell_array_out_1(x,13)=gsl_rng_uniform(r1);
             cell_array_out_1(x,14)=0;
             cell_array_out_1(x,15)=x;
             cell_array_out_1(x,22)=1;
