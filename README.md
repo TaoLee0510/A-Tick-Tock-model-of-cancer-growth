@@ -1,6 +1,14 @@
-# Cancer-growth-model-with-density-dependent-migration-and-taxis.
+# Tick-Tock-growth-model-of-cancer-cells
+
+Cancer growth model with density dependent-migration and taxis.
 
 Unfinished project. Any questions? contact me via taolee.lit@gmail.com.
+
+
+
+Tick-Tock growth model of cancer cells
+
+![image](model.gif)
 
 Population growth
 
