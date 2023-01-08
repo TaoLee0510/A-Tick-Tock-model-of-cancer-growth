@@ -1,5 +1,5 @@
 # Tick-Tock-growth-model-of-cancer-cells
-[image](Tick-Tock_1.gif)
+![image](Tick-Tock_1.gif)
 
 
 
