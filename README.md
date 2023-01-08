@@ -1,4 +1,7 @@
 # Tick-Tock-growth-model-of-cancer-cells
+[image](Tick-Tock_1.gif)
+
+
 
 Cancer growth model with density dependent-migration and taxis.
 
