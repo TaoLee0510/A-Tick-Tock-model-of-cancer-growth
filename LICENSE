@@ -1,11 +1,12 @@
                COPYRIGHT AND PERMISSION NOTICE
                               CCDS
 
-                      Copyright (C) 2019 
+                      Copyright (C) 2023 
 Tao Li
 All rights reserved.
 
-Cancer growth model with density dependent migration and taxis(CCDS) is a 
+A Tick-Tock model of tumor growth, which named cancer growth model with 
+density dependent migration and taxis(CCDS) previously, is a 
 population dynamic in-silico simulation program. All codes are generated 
 by Tao Li. Tao Li (“Developer”) of Software CCDS (“Software”) give 
 recipient (“Recipient”) and Recipient’s Institution (“Institution”) 
