@@ -7,23 +7,25 @@ Unfinished project. Any questions? contact me via taolee.lit@gmail.com.
 
 
 
-Tick-Tock growth model of cancer cells
+Graphical abstract of a Tick-Tock model of tumor growth: 
 
 ![image](model.gif)
 
-Population growth
+
+
+Population initial growth with different parameters:
 
 ![image](visualization.gif)
 
 
 
-Single cell initial growth
+Single cell initial growth with different parameters:
 
 ![image](visualization_SingleCell.gif)
 
 
 
-Experimental observation
+Experimental observation of populationi initial growth:
 
 ![image](observation.jpg)
 
