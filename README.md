@@ -1,7 +1,7 @@
-# ![image](Tick-Tock_1.gif) Tick-Tock-growth-model-of-cancer-cells
+# ![image](Tick-Tock_1.gif) A Tick-Tock model of tumor growth
 
 
-Cancer growth model with density dependent-migration and taxis.
+Cancer growth model with phenotypic trade-offs between proliferation and survival; colonization and competition.
 
 Unfinished project. Any questions? contact me via taolee.lit@gmail.com.
 
