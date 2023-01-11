@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "0434497720B25F3D003532BA"
-               BuildableName = "CCDS"
-               BlueprintName = "CCDS"
-               ReferencedContainer = "container:CCDS.xcodeproj">
+               BuildableName = "ATCG"
+               BlueprintName = "ATCG"
+               ReferencedContainer = "container:ATCG.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -31,9 +31,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "0434497720B25F3D003532BA"
-            BuildableName = "CCDS"
-            BlueprintName = "CCDS"
-            ReferencedContainer = "container:CCDS.xcodeproj">
+            BuildableName = "ATCG"
+            BlueprintName = "ATCG"
+            ReferencedContainer = "container:ATCG.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <AdditionalOptions>
@@ -61,9 +61,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "0434497720B25F3D003532BA"
-            BuildableName = "CCDS"
-            BlueprintName = "CCDS"
-            ReferencedContainer = "container:CCDS.xcodeproj">
+            BuildableName = "ATCG"
+            BlueprintName = "ATCG"
+            ReferencedContainer = "container:ATCG.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <AdditionalOptions>
@@ -85,9 +85,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "0434497720B25F3D003532BA"
-            BuildableName = "CCDS"
-            BlueprintName = "CCDS"
-            ReferencedContainer = "container:CCDS.xcodeproj">
+            BuildableName = "ATCG"
+            BlueprintName = "ATCG"
+            ReferencedContainer = "container:ATCG.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
