@@ -23,7 +23,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		0434497820B25F3D003532BA /* CCDS */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CCDS; sourceTree = BUILT_PRODUCTS_DIR; };
+		0434497820B25F3D003532BA /* ATCG */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ATCG; sourceTree = BUILT_PRODUCTS_DIR; };
 		0434497B20B25F3D003532BA /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		0434498220B2619F003532BA /* stage_convert.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = stage_convert.hpp; sourceTree = "<group>"; };
 		0434498320B2619F003532BA /* outer_initiation_array.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = outer_initiation_array.hpp; sourceTree = "<group>"; };
@@ -83,7 +83,7 @@
 		0434496F20B25F3D003532BA = {
 			isa = PBXGroup;
 			children = (
-				0434497A20B25F3D003532BA /* CCDS */,
+				0434497A20B25F3D003532BA /* ATCG */,
 				0434497920B25F3D003532BA /* Products */,
 			);
 			sourceTree = "<group>";
@@ -91,12 +91,12 @@
 		0434497920B25F3D003532BA /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				0434497820B25F3D003532BA /* CCDS */,
+				0434497820B25F3D003532BA /* ATCG */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		0434497A20B25F3D003532BA /* CCDS */ = {
+		0434497A20B25F3D003532BA /* ATCG */ = {
 			isa = PBXGroup;
 			children = (
 				0434497B20B25F3D003532BA /* main.cpp */,
@@ -143,15 +143,15 @@
 				E64361ED2940D8B700AC39F2 /* CellDivision.hpp */,
 				E64361F62940DEA900AC39F2 /* CellMigrationDivision.hpp */,
 			);
-			path = CCDS;
+			path = ATCG;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		0434497720B25F3D003532BA /* CCDS */ = {
+		0434497720B25F3D003532BA /* ATCG */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 0434497F20B25F3D003532BA /* Build configuration list for PBXNativeTarget "CCDS" */;
+			buildConfigurationList = 0434497F20B25F3D003532BA /* Build configuration list for PBXNativeTarget "ATCG" */;
 			buildPhases = (
 				0434497420B25F3D003532BA /* Sources */,
 				0434497520B25F3D003532BA /* Frameworks */,
@@ -161,9 +161,9 @@
 			);
 			dependencies = (
 			);
-			name = CCDS;
+			name = ATCG;
 			productName = CCDS;
-			productReference = 0434497820B25F3D003532BA /* CCDS */;
+			productReference = 0434497820B25F3D003532BA /* ATCG */;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
@@ -180,7 +180,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 0434497320B25F3D003532BA /* Build configuration list for PBXProject "CCDS" */;
+			buildConfigurationList = 0434497320B25F3D003532BA /* Build configuration list for PBXProject "ATCG" */;
 			compatibilityVersion = "Xcode 9.3";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -193,7 +193,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				0434497720B25F3D003532BA /* CCDS */,
+				0434497720B25F3D003532BA /* ATCG */,
 			);
 		};
 /* End PBXProject section */
@@ -264,6 +264,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				"INFOPLIST_FILE[sdk=*]" = "";
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -426,7 +427,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		0434497320B25F3D003532BA /* Build configuration list for PBXProject "CCDS" */ = {
+		0434497320B25F3D003532BA /* Build configuration list for PBXProject "ATCG" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				0434497D20B25F3D003532BA /* Debug */,
@@ -435,7 +436,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		0434497F20B25F3D003532BA /* Build configuration list for PBXNativeTarget "CCDS" */ = {
+		0434497F20B25F3D003532BA /* Build configuration list for PBXNativeTarget "ATCG" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				0434498020B25F3D003532BA /* Debug */,
