@@ -213,10 +213,10 @@
 		0434497D20B25F3D003532BA /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
+				ALWAYS_SEARCH_USER_PATHS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -264,21 +264,59 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				HEADER_SEARCH_PATHS = (
+					/usr/local/include,
+					/opt/homebrew/Cellar/freetype/2.12.0/include/freetype2,
+					/opt/homebrew/include,
+					/usr/local/include/freetype2,
+					/opt/homebrew/Cellar/libomp/15.0.7/include,
+				);
+				"HEADER_SEARCH_PATHS[arch=*]" = "";
 				"INFOPLIST_FILE[sdk=*]" = "";
-				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				LIBRARY_SEARCH_PATHS = (
+					/usr/local/lib,
+					/opt/homebrew/lib,
+					/opt/homebrew/Cellar/freetype/2.12.0/lib,
+					/usr/local/include/freetype2,
+					/opt/homebrew/Cellar/libomp/15.0.7/lib,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.1;
 				MTL_ENABLE_DEBUG_INFO = YES;
+				NEW_SETTING = "";
 				ONLY_ACTIVE_ARCH = YES;
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(OTHER_CFLAGS)",
+					"-Xclang",
+					"-fopenmp",
+				);
+				OTHER_LDFLAGS = (
+					"-lgsl",
+					"-lgslcblas",
+					"-lfreetype",
+					"-lpng",
+					"-lpngwriter",
+					"-lz",
+					"-DNO_FREETYPE",
+					"-lomp",
+					"-DBZ_THREADSAFE",
+				);
 				SDKROOT = macosx;
+				USER_HEADER_SEARCH_PATHS = (
+					/opt/homebrew/Cellar/freetype/2.12.0/include/freetype2,
+					/opt/homebrew/include,
+					/usr/local/include/freetype2,
+					/opt/homebrew/Cellar/libomp/15.0.7/include,
+				);
 			};
 			name = Debug;
 		};
 		0434497E20B25F3D003532BA /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
+				ALWAYS_SEARCH_USER_PATHS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -321,10 +359,47 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				HEADER_SEARCH_PATHS = (
+					/usr/local/include,
+					/opt/homebrew/Cellar/freetype/2.12.0/include/freetype2,
+					/opt/homebrew/include,
+					/usr/local/include/freetype2,
+					/opt/homebrew/Cellar/libomp/15.0.7/include,
+				);
+				LIBRARY_SEARCH_PATHS = (
+					/usr/local/lib,
+					/opt/homebrew/lib,
+					/opt/homebrew/Cellar/freetype/2.12.0/lib,
+					/usr/local/include/freetype2,
+					/opt/homebrew/Cellar/libomp/15.0.7/lib,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
+				NEW_SETTING = "";
 				ONLY_ACTIVE_ARCH = YES;
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(OTHER_CFLAGS)",
+					"-Xclang",
+					"-fopenmp",
+				);
+				OTHER_LDFLAGS = (
+					"-lgsl",
+					"-lgslcblas",
+					"-lfreetype",
+					"-lpng",
+					"-lpngwriter",
+					"-lz",
+					"-DNO_FREETYPE",
+					"-lomp",
+					"-DBZ_THREADSAFE",
+				);
 				SDKROOT = macosx;
+				USER_HEADER_SEARCH_PATHS = (
+					/opt/homebrew/Cellar/freetype/2.12.0/include/freetype2,
+					/opt/homebrew/include,
+					/usr/local/include/freetype2,
+					/opt/homebrew/Cellar/libomp/15.0.7/include,
+				);
 			};
 			name = Release;
 		};
