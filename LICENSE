@@ -5,7 +5,7 @@
 Tao Li
 All rights reserved.
 
-A Tick-Tock model of tumor growth (ATCG), which named cancer growth model 
+A Tick-Tock model of cancer growth (ATCG), which named cancer growth model 
 with density dependent migration and taxis (CCDS) previously, is a 
 population dynamic in-silico simulation program. All codes are generated 
 by Tao Li. Tao Li (“Developer”) of Software ATCG (“Software”) give 
