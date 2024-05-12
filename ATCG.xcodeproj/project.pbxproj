@@ -269,16 +269,19 @@
 					/opt/homebrew/Cellar/freetype/2.12.0/include/freetype2,
 					/opt/homebrew/include,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/15.0.7/include,
+					/opt/homebrew/Cellar/libomp/18.1.5/include,
+					/opt/homebrew/opt/libomp/include,
 				);
 				"HEADER_SEARCH_PATHS[arch=*]" = "";
 				"INFOPLIST_FILE[sdk=*]" = "";
+				LD_RUNPATH_SEARCH_PATHS = /opt/homebrew/opt/libomp/lib;
 				LIBRARY_SEARCH_PATHS = (
 					/usr/local/lib,
 					/opt/homebrew/lib,
 					/opt/homebrew/Cellar/freetype/2.12.0/lib,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/15.0.7/lib,
+					/opt/homebrew/Cellar/libomp/18.1.5/lib,
+					/opt/homebrew/opt/libomp/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.1;
 				MTL_ENABLE_DEBUG_INFO = YES;
@@ -305,7 +308,8 @@
 					/opt/homebrew/Cellar/freetype/2.12.0/include/freetype2,
 					/opt/homebrew/include,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/15.0.7/include,
+					/opt/homebrew/Cellar/libomp/18.1.5/include,
+					/opt/homebrew/opt/libomp/include,
 				);
 			};
 			name = Debug;
@@ -364,14 +368,17 @@
 					/opt/homebrew/Cellar/freetype/2.12.0/include/freetype2,
 					/opt/homebrew/include,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/15.0.7/include,
+					/opt/homebrew/Cellar/libomp/18.1.5/include,
+					/opt/homebrew/opt/libomp/include,
 				);
+				LD_RUNPATH_SEARCH_PATHS = /opt/homebrew/opt/libomp/lib;
 				LIBRARY_SEARCH_PATHS = (
 					/usr/local/lib,
 					/opt/homebrew/lib,
 					/opt/homebrew/Cellar/freetype/2.12.0/lib,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/15.0.7/lib,
+					/opt/homebrew/Cellar/libomp/18.1.5/lib,
+					/opt/homebrew/opt/libomp/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
@@ -398,7 +405,8 @@
 					/opt/homebrew/Cellar/freetype/2.12.0/include/freetype2,
 					/opt/homebrew/include,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/15.0.7/include,
+					/opt/homebrew/Cellar/libomp/18.1.5/include,
+					/opt/homebrew/opt/libomp/include,
 				);
 			};
 			name = Release;
