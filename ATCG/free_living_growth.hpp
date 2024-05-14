@@ -147,7 +147,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     long r_label=1;
     long K_label=500000000;
     long cell_index=0;
-//    int generation=0;
+  //int generation=0;
     
     int Col=31;
     
@@ -421,7 +421,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     for (int  H=0; H<1000000000; H++)
     {
         double start00=omp_get_wtime();
-
+        
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         time_t rawtime;
         struct tm * timeinfo;
@@ -516,7 +516,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         
         stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall);
         int C1=cell_array.rows();
-
+        
         double start04=0;
         double end04=0;
         double start05=0;
@@ -534,8 +534,8 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         double end11=0;
         double start13=0;
         double end13=0;
-//        double start16=0;
-//        double end16=0;
+      //double start16=0;
+      //double end16=0;
         double start15=0;
         double end15=0;
         double programTimes16 = 0;
@@ -577,10 +577,10 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                     start11=omp_get_wtime();
                     SaveAllPNG( Visual_range_x,  Visual_range_y, cell_array,  H,  T,  alpha,  beta, deltah);
                     end11=omp_get_wtime();
-                } 
+                }
             }
         }
-
+        
         switch (nthreads)
         {
             case 1:
