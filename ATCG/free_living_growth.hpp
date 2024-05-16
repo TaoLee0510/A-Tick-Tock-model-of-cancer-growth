@@ -597,55 +597,58 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
             }
             default:
             {
-                if (H%(MMR/10)==0)
+                int JU =H%(MMR/20);
+                switch (JU)
                 {
-                    start15=omp_get_wtime();
-                    sortRow(cell_array,cell_array1,Col,13,nthreads);///sort random label
-                    end15=omp_get_wtime();
-                    
-                    start04=omp_get_wtime();
-                    omp_set_num_threads(nthreads);
-                    #pragma omp parallel for schedule(dynamic)
+                    case 0:
                     {
+                        start15=omp_get_wtime();
+                        sortRow(cell_array,cell_array1,Col,13,nthreads);///sort random label
+                        end15=omp_get_wtime();
+                        
+                        start04=omp_get_wtime();
+                        omp_set_num_threads(nthreads);
+                        #pragma omp parallel for schedule(dynamic)
+                        {
+                            for (int i=C1; i>=1; i--)
+                            {
+                                CellMigration(DDM, i, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration);
+                            }
+                        }
+                        end04=omp_get_wtime();
+                        start13=omp_get_wtime();
+                        sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
+                        end13=omp_get_wtime();
+                        
+                        double programTimes15 = 0;
+                        start06=omp_get_wtime();
                         for (int i=C1; i>=1; i--)
                         {
-                            CellMigration(DDM, i, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration);
+                            CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape,cor_small_1, proliferation_loci,cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, r_label, Col, K_formation_rate, deathjudge, borderx, bordery,fid2,nthreads,programTimes15);
+                            programTimes16 = programTimes16 + programTimes15;
                         }
+                        end06=omp_get_wtime();
                     }
-                    end04=omp_get_wtime();
-                    start13=omp_get_wtime();
-                    sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
-                    end13=omp_get_wtime();
-                    
-                    double programTimes15 = 0;
-                    start06=omp_get_wtime();
-                    for (int i=C1; i>=1; i--)
+                    default:
                     {
-                        CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape,cor_small_1, proliferation_loci,cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, r_label, Col, K_formation_rate, deathjudge, borderx, bordery,fid2,nthreads,programTimes15);
-                        programTimes16 = programTimes16 + programTimes15;
-                    }
-                    end06=omp_get_wtime();
-                }
-                else
-                {
-                    start15=omp_get_wtime();
-                    sortRow(cell_array,cell_array1,Col,13,nthreads);///sort random label
-                    end15=omp_get_wtime();
-                    
-                    start04=omp_get_wtime();
-                    omp_set_num_threads(nthreads);
-                    #pragma omp parallel for schedule(dynamic)
-                    {
-                        for (int i=C1; i>=1; i--)
+                        start15=omp_get_wtime();
+                        sortRow(cell_array,cell_array1,Col,13,nthreads);///sort random label
+                        end15=omp_get_wtime();
+                        
+                        start04=omp_get_wtime();
+                        omp_set_num_threads(nthreads);
+                        #pragma omp parallel for schedule(dynamic)
                         {
-                            CellMigration(DDM, i, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration);
-                            cell_array(i,16)=cell_array(i,16)+deltah;// add detalh
+                            for (int i=C1; i>=1; i--)
+                            {
+                                CellMigration(DDM, i, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration);
+                                cell_array(i,16)=cell_array(i,16)+deltah;// add detalh
+                            }
                         }
+                        end04=omp_get_wtime();
                     }
-                    end04=omp_get_wtime();
                 }
-                
-                
+
 //                start13=omp_get_wtime();
 //                sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
 //                end13=omp_get_wtime();
