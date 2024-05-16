@@ -1,6 +1,6 @@
 //
 //  main.cpp
-//  CCDS
+// ATCG
 //
 //  Created by Tao Lee on 5/21/18.
 //  Copyright © 2018 Tao Lee. All rights reserved.
