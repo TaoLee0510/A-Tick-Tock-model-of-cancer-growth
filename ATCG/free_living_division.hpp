@@ -1703,17 +1703,18 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
         
         
         int trace_row=0;
-        omp_set_num_threads(threads);
-        #pragma omp parallel for schedule(dynamic)
-        {
-            for (int rows=current_size_trace;rows>=1;rows--)
+        //omp_set_num_threads(threads);
+        //#pragma omp parallel for schedule(dynamic)
+        //{
+            for (int rows=current_size_trace;rows!=0;--rows)
             {
                 if(cell_trace_temp(1,3) == cell_trace(rows,2))
                 {
                     trace_row=rows;
+                    break;
                 }
             }
-        }
+        //}
         cell_trace_temp(1,Range(6,150))=cell_trace(trace_row,Range(6,150));
         cell_trace_temp(2,Range(6,150))=cell_trace(trace_row,Range(6,150));
         division_parents=cell_trace(trace_row,4);
