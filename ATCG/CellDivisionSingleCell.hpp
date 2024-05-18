@@ -64,7 +64,7 @@ void CellDivisionSingleCell(int i, double max_growth_rate_r, double max_growth_r
     {
         cell_array(i,22)=0;
     }
-    if (cell_array(i,1)>=100 && cell_array(i,5) >=100 && cell_array(i,1)<=borderx && cell_array(i,5)<=bordery && cell_array(i,17)>0)
+    if (cell_array(i,17)>0 && cell_array(i,1)>=100 && cell_array(i,5) >=100 && cell_array(i,1)<=borderx && cell_array(i,5)<=bordery)
     {
         
         if (cell_array(i,16)<cell_array(i,17))
