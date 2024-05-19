@@ -86,6 +86,7 @@
 #include "random_migration.hpp"
 #include "migration.hpp"
 #include "free_living_division.hpp"
+#include "free_living_division_single_thread.hpp"
 #include "migrate_activation.hpp"
 #include "density_calculation.hpp"
 #include "deltah_recalculation.hpp"
@@ -515,6 +516,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         end14=omp_get_wtime();
         
         stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall);
+        
         int C1=cell_array.rows();
         
         double start04(0);
@@ -584,7 +586,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         if (nthreads != 1)
         {
             //int JU =H%(170);// every 51 mins; 170*deltah=0.85 hours, equ 51mins. 0.85/17=0.05. 51mins ~5% cell generation(fast)
-            int JU =H%(170);
+            int JU =H%(50);
             if (JU !=0 )
             {
                 start15=omp_get_wtime();
@@ -626,15 +628,35 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 
                 double programTimes15 = 0;
                 start06=omp_get_wtime();
-               // omp_set_num_threads(nthreads);
-                //#pragma omp parallel for schedule(dynamic)
-                //{
-                    for (int i=C1; i!=0; --i)
-                    {
-                        CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape,cor_small_1, proliferation_loci,cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, r_label, Col, K_formation_rate, deathjudge, borderx, bordery,fid2,nthreads,programTimes15);
-                        programTimes16 = programTimes16 + programTimes15;
-                    }
-                //}
+
+                Array<long,2> cell_trace_ndcells(1,150,FortranArray<2>());
+                cell_trace_ndcells=0;
+//                
+//                Array<double,2> cell_array_ndcells(1,Col,FortranArray<2>());
+//                cell_array_ndcells=0;
+//                
+                int ndcells(0);
+                
+                for (int i=C1; i!=0; --i)
+                {
+                    CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape,cor_small_1, proliferation_loci,cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, r_label, Col, K_formation_rate, deathjudge, borderx, bordery,fid2,nthreads,programTimes15,cell_trace_ndcells,ndcells);//,cell_array_ndcells);
+                    programTimes16 = programTimes16 + programTimes15;
+                }
+                
+//                //////////////// add offsprings to the cell trace array //and cell array
+                if (ndcells!=0)
+                {
+                    int current_size_trace=cell_trace.rows();
+                    int current_size_trace_ndcells=cell_trace_ndcells.rows();
+                    cell_trace.resizeAndPreserve(current_size_trace+current_size_trace_ndcells,150);
+                    cell_trace(Range(current_size_trace+1,toEnd),all)=cell_trace_ndcells(Range(1,current_size_trace_ndcells),all);
+//                    
+//                    int current_size=cell_array.rows();
+//                    int current_size_ndcells=cell_array_ndcells.rows();
+//                    cell_array.resizeAndPreserve(current_size+current_size_ndcells,Col);
+//                    cell_array(Range(current_size+1,toEnd),all)=cell_array_ndcells(Range(1,current_size_ndcells),all);
+                }
+                
                 end06=omp_get_wtime();
             }
         }

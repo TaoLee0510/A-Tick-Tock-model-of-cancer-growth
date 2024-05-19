@@ -50,6 +50,7 @@
 		E62660E32961BA7B007C994E /* SavePNGS.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SavePNGS.hpp; sourceTree = "<group>"; };
 		E62660E62961BC97007C994E /* SavePNGHR.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SavePNGHR.hpp; sourceTree = "<group>"; };
 		E62660E92961BCFB007C994E /* SaveClonePNGHR.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveClonePNGHR.hpp; sourceTree = "<group>"; };
+		E635C4302BF90E3A00449AB7 /* free_living_division_single_thread.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = free_living_division_single_thread.hpp; sourceTree = "<group>"; };
 		E63BCE962944F0EE00A44073 /* SavePNGSingleCell.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SavePNGSingleCell.hpp; sourceTree = "<group>"; };
 		E63BCE992944F11700A44073 /* SaveCellArraySingleCell.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveCellArraySingleCell.hpp; sourceTree = "<group>"; };
 		E63BCE9C2944F13A00A44073 /* SaveAllPNG.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveAllPNG.hpp; sourceTree = "<group>"; };
@@ -136,6 +137,7 @@
 				0434499420B261A0003532BA /* migration.hpp */,
 				0434498520B2619F003532BA /* division.hpp */,
 				E653832C291D387E00C2B0F6 /* free_living_division.hpp */,
+				E635C4302BF90E3A00449AB7 /* free_living_division_single_thread.hpp */,
 				E67D960529178FD500117705 /* cell_type_transform.hpp */,
 				E64361E72940D88A00AC39F2 /* CellMigration.hpp */,
 				E64361F32940D8E300AC39F2 /* CellMigrationDivisionSingleCell.hpp */,
@@ -247,7 +249,7 @@
 				CODE_SIGN_IDENTITY = "Mac Developer";
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
-				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;

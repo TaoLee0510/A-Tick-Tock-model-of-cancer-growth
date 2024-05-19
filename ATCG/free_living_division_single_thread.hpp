@@ -1,13 +1,16 @@
 //
-//  free_living_division.hpp
-//  CCDS
+//  free_living_division_single_thread.hpp
+//  ATCG
 //
-//  Created by Tao Lee on 11/10/22.
-//  Copyright © 2022 Tao Lee. All rights reserved.
+//  Created by Tao Lee on 5/19/24.
+//  Copyright © 2024 Tao Lee. All rights reserved.
 //
 
-#ifndef free_living_division_hpp
-#define free_living_division_hpp
+#ifndef free_living_division_single_thread_hpp
+#define free_living_division_single_thread_hpp
+
+//
+
 
 
 #include <stdio.h>
@@ -44,7 +47,7 @@
 using std::chrono::high_resolution_clock;
 using namespace std;
 using namespace blitz;
-void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<double, 2> &cell_array, Array<double,2> cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<long,2> &cell_trace,Array<long,2> cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads,Array<long,2> &cell_trace_ndcells,int &ndcells)//,Array<double,2> &cell_array_ndcells)
+void free_living_division_single_thread(int i, double max_growth_rate_r, double max_growth_rate_K, Array<double, 2> &cell_array, Array<double,2> cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<long,2> &cell_trace,Array<long,2> cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads)
 {
     auto start = std::chrono::high_resolution_clock::now();
     std::random_device r;
@@ -1669,11 +1672,8 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
 //        fprintf(fid2, "%s %d\n" ,"Cell label :",(int)cell_array(i,30));
 //        fprintf(fid2, "%s\n" ,"*********************************************************");
     }
-    
-    
     if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
     {
-        ++ndcells;
         cell_trace_temp.resize(2,150);
         cell_trace_temp=0;
 //        cell_trace_temp(1,Range(2,4))=cell_array(i,Range(29,Col));
@@ -1750,42 +1750,9 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
             fprintf(fid2, "%s\n" ,"*********************************************************");
         }
         
-        
-        if (ndcells!=0)
-        {
-            int ndcells_number=cell_trace_ndcells.rows();
-            if(ndcells_number!=1)
-            {
-                cell_trace_ndcells.resizeAndPreserve(ndcells_number+2,150);
-                cell_trace_ndcells(ndcells_number+1,all)=cell_trace_temp(1,all);
-                cell_trace_ndcells(ndcells_number+2,all)=cell_trace_temp(2,all);
-            }
-            else
-            {
-                cell_trace_ndcells.resizeAndPreserve(2,150);
-                cell_trace_ndcells(1,all)=cell_trace_temp(1,all);
-                cell_trace_ndcells(2,all)=cell_trace_temp(2,all);
-            }
-            
-//            cell_temp(1,13)=gsl_rng_uniform(r7);
-//            int cell_array_ndcells_number=cell_array_ndcells.rows();
-//            
-//            if(cell_array_ndcells_number!=1)
-//            {
-//                cell_array_ndcells.resizeAndPreserve(cell_array_ndcells_number+1,Col);
-//                cell_array_ndcells(cell_array_ndcells_number+1,all)=cell_temp(1,all);
-//            }
-//            else
-//            {
-//                cell_array_ndcells(1,all)=cell_temp(1,all);
-//            }
-            
-        }
-        
-        
-//        cell_trace.resizeAndPreserve(current_size_trace+2,150);
-//        cell_trace(current_size_trace+1,all)=cell_trace_temp(1,all);
-//        cell_trace(current_size_trace+2,all)=cell_trace_temp(2,all);
+        cell_trace.resizeAndPreserve(current_size_trace+2,150);
+        cell_trace(current_size_trace+1,all)=cell_trace_temp(1,all);
+        cell_trace(current_size_trace+2,all)=cell_trace_temp(2,all);
         
         cell_temp(1,13)=gsl_rng_uniform(r7);
         

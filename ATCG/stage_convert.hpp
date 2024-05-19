@@ -45,6 +45,9 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell
         {
             if(cell_array(x,14)==1)
             {
+                
+//                cout << cell_array(x,14) << endl;
+                
                 int x1 = cell_array(x,1);
                 int y1 = cell_array(x,5);
                 long loci_cor[9]={0};
@@ -57,6 +60,15 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell
                         loci_direction=loci_direction+1;
                     }
                 }
+                
+//                cout << Visual_range(Range(x1-1,x1+1),Range(y1-1,y1+1),1)<< endl;
+                
+                
+                
+                
+//                cout << loci_cor[0] << ";" <<loci_cor[1] << ";" <<loci_cor[2] << ";" << loci_cor[3] << ";" <<loci_cor[4] << ";" <<loci_cor[5] << ";" <<loci_cor[6] << ";" << loci_cor[7]  <<  endl;
+                
+                 
                 if (loci_cor[0]==0 && loci_cor[1]==0 && loci_cor[3]==0)
                 {
                     stage_cor[0]=1;
@@ -73,6 +85,12 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell
                 {
                     stage_cor[3]=4;
                 }
+                
+                
+//                cout << stage_cor[0] << ";" <<stage_cor[1] << ";" <<stage_cor[2] << ";" <<stage_cor[3]  << endl;
+                
+                
+                
                 int size=0;
                 for(int a=0;a<4;a++)
                 {
@@ -83,6 +101,9 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell
                 }
                 if (size>0)
                 {
+                    
+//                    cout << size << endl;
+                    
                     int *stage_cor_1=new int[size];
                     int num=0;
                     for(int a=0;a<4;a++)
@@ -95,6 +116,10 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell
                     }
                     shuffle(stage_cor_1,stage_cor_1+num,RNG);
                     int scor=stage_cor_1[0];
+                    
+//                    cout << scor << endl;
+                    
+                    
                     if (scor==1)
                     {
                         cell_array(x,14)=0;
@@ -122,6 +147,11 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell
                         Visual_range((int)cell_array(x,2),(int)cell_array(x,6),4)=Visual_range(x1,y1,4);
                         Visual_range((int)cell_array(x,3),(int)cell_array(x,7),4)=Visual_range(x1,y1,4);
                         Visual_range((int)cell_array(x,4),(int)cell_array(x,8),4)=Visual_range(x1,y1,4);
+                        
+                        
+//                        cout << cell_array(x,14) << endl;
+                        
+                        
                     }
                     else if (scor==2)
                     {
@@ -150,6 +180,10 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell
                         Visual_range((int)cell_array(x,2),(int)cell_array(x,6),4)=Visual_range(x1,y1,4);
                         Visual_range((int)cell_array(x,3),(int)cell_array(x,7),4)=Visual_range(x1,y1,4);
                         Visual_range((int)cell_array(x,4),(int)cell_array(x,8),4)=Visual_range(x1,y1,4);
+                        
+//                        cout << cell_array(x,14) << endl;
+                        
+                        
                     }
                     else if (scor==3)
                     {
@@ -178,6 +212,10 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell
                         Visual_range((int)cell_array(x,2),(int)cell_array(x,6),4)=Visual_range(x1,y1,4);
                         Visual_range((int)cell_array(x,3),(int)cell_array(x,7),4)=Visual_range(x1,y1,4);
                         Visual_range((int)cell_array(x,4),(int)cell_array(x,8),4)=Visual_range(x1,y1,4);
+                        
+//                        cout << cell_array(x,14) << endl;
+                        
+                        
                     }
                     else if (scor==4)
                     {
@@ -206,6 +244,10 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell
                         Visual_range((int)cell_array(x,2),(int)cell_array(x,6),4)=Visual_range(x1,y1,4);
                         Visual_range((int)cell_array(x,3),(int)cell_array(x,7),4)=Visual_range(x1,y1,4);
                         Visual_range((int)cell_array(x,4),(int)cell_array(x,8),4)=Visual_range(x1,y1,4);
+                        
+//                        cout << cell_array(x,14) << endl;
+                        
+                        
                     }
                     delete[] stage_cor_1;
                     stage_cor_1 = NULL;

@@ -31,7 +31,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
     T4 = gsl_rng_ranlxs0;
     gsl_rng_default_seed = ((unsigned long)(time(NULL)));
     r4 = gsl_rng_alloc(T4);
-    for (int rows=1; rows<=C; rows++)
+    for (int rows=1; rows<=C; ++rows)
     {
         if (cell_array(rows,11)>deathjudge)
         {
@@ -515,7 +515,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
     }
     int current_size=cell_array.rows();
     int sum =0;
-    for (int CN=1; CN<=current_size; CN++)
+    for (int CN=1; CN<=current_size; ++CN)
     {
         if (cell_array(CN,22)==1 && cell_array(CN,1)!=0 && cell_array(CN,5)!=0)
         {
@@ -525,7 +525,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
     cell_array_temp.resize(sum,Col);
     cell_array_temp=0;
     int site1=1;
-    for (int site=1; site<= current_size; site++)
+    for (int site=1; site<= current_size; ++site)
     {
         if (cell_array(site,22)==1 && cell_array(site,1)!=0 && cell_array(site,5)!=0)
         {

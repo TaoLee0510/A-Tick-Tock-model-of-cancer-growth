@@ -73,8 +73,8 @@ static const struct option long_options[] = {
 
 int main(int argc, char *argv[])
 {
-    int Visual_range_x=2000;
-    int Visual_range_y=2000;
+    int Visual_range_x=3000;
+    int Visual_range_y=3000;
     double R0=60;
     double R1=50;
     double mix_ratio_initial=0.5;
@@ -95,10 +95,10 @@ int main(int argc, char *argv[])
     int utralsmall=0; //1 yes, 0 no
     int allpng=0;
     int Low_density_initial=1;
-    int Single_cell=0;
+    int Single_cell=1;
     int opt = 0;
     double K_formation_rate=0.05;
-    int threads=1;
+    int threads=16;
     int DynamicThreads = 1;
     while( (opt = getopt_long(argc, argv, short_options, long_options, NULL)) != -1){
         switch (opt){
