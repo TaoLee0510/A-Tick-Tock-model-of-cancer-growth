@@ -18,7 +18,7 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 using namespace blitz;
-void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, Array<double, 2> &cell_array, Array<double,2> &cell_array_temp, Array<long, 3> sub_visual, Array<long,3> &Visual_range, double deathjudge, int Col)
+void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, Array<double, 2> &cell_array, Array<double,2> &cell_array_temp, Array<long, 3> sub_visual, Array<long,3> &Visual_range, double deathjudge, int Col,int nthreads)
 {
     std::random_device r;
     std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
@@ -514,12 +514,16 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
         }
     }
     int current_size=cell_array.rows();
+    omp_set_num_threads(nthreads);
     int sum =0;
-    for (int CN=1; CN<=current_size; ++CN)
+    #pragma omp parallel for schedule(dynamic) reduction(+:sum)
     {
-        if (cell_array(CN,22)==1 && cell_array(CN,1)!=0 && cell_array(CN,5)!=0)
+        for (int CN=1; CN<=current_size; ++CN)
         {
-            sum=sum+1;
+            if (cell_array(CN,22)==1 && cell_array(CN,1)!=0 && cell_array(CN,5)!=0)
+            {
+                sum=sum+1;
+            }
         }
     }
     cell_array_temp.resize(sum,Col);

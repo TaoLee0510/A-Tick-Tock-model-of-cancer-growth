@@ -508,7 +508,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         double end14(0);
         
         start12=omp_get_wtime();
-        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col);
+        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads);
         end12=omp_get_wtime();
         
         start14=omp_get_wtime();
@@ -632,14 +632,14 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 Array<long,2> cell_trace_ndcells(1,150,FortranArray<2>());
                 cell_trace_ndcells=0;
 //                
-//                Array<double,2> cell_array_ndcells(1,Col,FortranArray<2>());
-//                cell_array_ndcells=0;
+                Array<double,2> cell_array_ndcells(1,Col,FortranArray<2>());
+                cell_array_ndcells=0;
 //                
                 int ndcells(0);
                 
                 for (int i=C1; i!=0; --i)
                 {
-                    CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape,cor_small_1, proliferation_loci,cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, r_label, Col, K_formation_rate, deathjudge, borderx, bordery,fid2,nthreads,programTimes15,cell_trace_ndcells,ndcells);//,cell_array_ndcells);
+                    CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape,cor_small_1, proliferation_loci,cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, r_label, Col, K_formation_rate, deathjudge, borderx, bordery,fid2,nthreads,programTimes15,cell_trace_ndcells,ndcells,cell_array_ndcells);
                     programTimes16 = programTimes16 + programTimes15;
                 }
                 
@@ -649,12 +649,16 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                     int current_size_trace=cell_trace.rows();
                     int current_size_trace_ndcells=cell_trace_ndcells.rows();
                     cell_trace.resizeAndPreserve(current_size_trace+current_size_trace_ndcells,150);
-                    cell_trace(Range(current_size_trace+1,toEnd),all)=cell_trace_ndcells(Range(1,current_size_trace_ndcells),all);
-//                    
-//                    int current_size=cell_array.rows();
+                    cell_trace(Range(current_size_trace+1,toEnd),all)=cell_trace_ndcells(all,all);
+
+
 //                    int current_size_ndcells=cell_array_ndcells.rows();
-//                    cell_array.resizeAndPreserve(current_size+current_size_ndcells,Col);
-//                    cell_array(Range(current_size+1,toEnd),all)=cell_array_ndcells(Range(1,current_size_ndcells),all);
+//                    cell_array.resizeAndPreserve(C1+current_size_ndcells,Col);
+//                    cell_array(Range(C1+1,toEnd),all)=cell_array_ndcells(all,all);
+                    
+                    int current_size_ndcells=cell_array_ndcells.rows();
+                    cell_array.resizeAndPreserve(C1+current_size_ndcells-1,Col);
+                    cell_array(Range(C1+1,toEnd),all)=cell_array_ndcells(Range(2,toEnd),all);
                 }
                 
                 end06=omp_get_wtime();
