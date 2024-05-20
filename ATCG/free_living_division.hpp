@@ -1766,33 +1766,9 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
                 cell_trace_ndcells(1,all)=cell_trace_temp(1,all);
                 cell_trace_ndcells(2,all)=cell_trace_temp(2,all);
             }
-            
-//            cell_temp(1,13)=gsl_rng_uniform(r7);
-//            int cell_array_ndcells_number=cell_array_ndcells.rows();
-//            
-//            if(cell_array_ndcells_number!=1)
-//            {
-//                cell_array_ndcells.resizeAndPreserve(cell_array_ndcells_number+1,Col);
-//                cell_array_ndcells(cell_array_ndcells_number+1,all)=cell_temp(1,all);
-//            }
-//            else
-//            {
-//                cell_array_ndcells(1,all)=cell_temp(1,all);
-//            }
+
             
         }
-        
-        
-//        cell_trace.resizeAndPreserve(current_size_trace+2,150);
-//        cell_trace(current_size_trace+1,all)=cell_trace_temp(1,all);
-//        cell_trace(current_size_trace+2,all)=cell_trace_temp(2,all);
-        
-//        cell_temp(1,13)=gsl_rng_uniform(r7);
-//        
-//        int current_size=cell_array.rows();
-//        cell_array.resizeAndPreserve(current_size+1,Col);
-//        cell_array(current_size+1,all)=cell_temp(1,all);
-        
         
         cell_temp(1,13)=gsl_rng_uniform(r7);
         int cell_array_ndcells_number=cell_array_ndcells.rows();
