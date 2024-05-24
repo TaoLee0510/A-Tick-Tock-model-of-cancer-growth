@@ -60,12 +60,13 @@ void read_file(Array<double,2> &cell_array,Array<long,2> &cell_trace, Array<doub
     else//file exits
     {
         LINES1=CountLines(Cell_trace_arry_file);
-        cell_trace.resize(LINES,150);
+        cell_trace.resize(LINES1,150);
+        
         int cols=150;
         int num=0;
         while(!file1.eof()) //read file
         {
-            for(int i=1;i<=cols;++i)
+            for(int i=0;i<cols;++i)
             {
 
                     file1 >> cell_trace(num+1,i+1);
