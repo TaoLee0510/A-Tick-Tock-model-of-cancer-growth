@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
     int RecoveryMode = 0;
     int Hours = 0;
     string Cell_arry_file = "temp";
-    string Cell_trace_arry_file = "temp";
+    string Cell_trace_arry_file = "/temp";
     string Parameters = "temp";
     while( (opt = getopt_long(argc, argv, short_options, long_options, NULL)) != -1){
         switch (opt){
