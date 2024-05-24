@@ -103,7 +103,7 @@ void sortRow(Array<double, 2> &cell_array, Array<double, 2> cell_array1, int Col
                     
                     cell_array1.resize(C_16, Col);
                     
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(dynamic)
                     {
                         for (int CNx=0; CNx<C_16; CNx++)
                         {
@@ -171,7 +171,7 @@ void sortRow(Array<double, 2> &cell_array, Array<double, 2> cell_array1, int Col
                     
                     cell_array1.resize(C_16, Col);
                     
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(dynamic)
                     {
                         for (int CNx=0; CNx<C_16; CNx++)
                         {
@@ -235,7 +235,7 @@ void sortRow(Array<double, 2> &cell_array, Array<double, 2> cell_array1, int Col
                     
                     cell_array1.resize(C_16, Col);
                     
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(dynamic)
                     {
                         for (int CNx=0; CNx<C_16; CNx++)
                         {

@@ -61,6 +61,12 @@
 		E64361F02940D8D100AC39F2 /* CellDivisionSingleCell.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CellDivisionSingleCell.hpp; sourceTree = "<group>"; };
 		E64361F32940D8E300AC39F2 /* CellMigrationDivisionSingleCell.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CellMigrationDivisionSingleCell.hpp; sourceTree = "<group>"; };
 		E64361F62940DEA900AC39F2 /* CellMigrationDivision.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CellMigrationDivision.hpp; sourceTree = "<group>"; };
+		E64C589B2BFF26620035BACF /* SaveVisualArrayL1.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveVisualArrayL1.hpp; sourceTree = "<group>"; };
+		E64C589E2BFF266F0035BACF /* SaveVisualArrayL2.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveVisualArrayL2.hpp; sourceTree = "<group>"; };
+		E64C58A12BFF267C0035BACF /* SaveVisualArrayL3.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SaveVisualArrayL3.hpp; sourceTree = "<group>"; };
+		E64C58A42C0092060035BACF /* free_living_growth_recovery.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = free_living_growth_recovery.hpp; sourceTree = "<group>"; };
+		E64C58A72C00924F0035BACF /* read_files.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = read_files.hpp; sourceTree = "<group>"; };
+		E64C58AA2C0098120035BACF /* CountLines.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CountLines.hpp; sourceTree = "<group>"; };
 		E6538329291D362800C2B0F6 /* free_living_growth.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = free_living_growth.hpp; sourceTree = "<group>"; };
 		E653832C291D387E00C2B0F6 /* free_living_division.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = free_living_division.hpp; sourceTree = "<group>"; };
 		E6538332291D39D700C2B0F6 /* save_data_free_living.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = save_data_free_living.hpp; sourceTree = "<group>"; };
@@ -102,6 +108,9 @@
 			children = (
 				0434497B20B25F3D003532BA /* main.cpp */,
 				E6538329291D362800C2B0F6 /* free_living_growth.hpp */,
+				E64C58AA2C0098120035BACF /* CountLines.hpp */,
+				E64C58A72C00924F0035BACF /* read_files.hpp */,
+				E64C58A42C0092060035BACF /* free_living_growth_recovery.hpp */,
 				046CC7912261001B009F1C14 /* Low_density_initial_growth.hpp */,
 				046CC78E2260EF8B009F1C14 /* density_dependent_growth.hpp */,
 				0434499520B261A0003532BA /* random_uniform.hpp */,
@@ -132,6 +141,9 @@
 				E63BCE992944F11700A44073 /* SaveCellArraySingleCell.hpp */,
 				E63BCE9F2944F15B00A44073 /* SaveCellTraceArray.hpp */,
 				E63BCE9C2944F13A00A44073 /* SaveAllPNG.hpp */,
+				E64C589B2BFF26620035BACF /* SaveVisualArrayL1.hpp */,
+				E64C589E2BFF266F0035BACF /* SaveVisualArrayL2.hpp */,
+				E64C58A12BFF267C0035BACF /* SaveVisualArrayL3.hpp */,
 				0434498F20B261A0003532BA /* random_migration.hpp */,
 				0434498820B2619F003532BA /* density_calculation.hpp */,
 				0434499420B261A0003532BA /* migration.hpp */,
