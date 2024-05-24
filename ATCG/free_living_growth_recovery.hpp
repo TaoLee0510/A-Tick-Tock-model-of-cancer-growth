@@ -1,47 +1,14 @@
 //
-//  free_living_growth.hpp
-//  CCDS
+//  free_living_growth_recovery.hpp
+//  ATCG
 //
-//  Created by Tao Lee on 11/10/22.
-//  Copyright © 2022 Tao Lee. All rights reserved.
+//  Created by Tao Lee on 5/24/24.
+//  Copyright © 2024 Tao Lee. All rights reserved.
 //
-//
-//
-//
-//
-//    cell_array discription:
-//    $9: cell_array type
-//    $10: inherent growth rate
-//    $11: density growth rate
-//    $12: inherent migration rate
-//    $13: random label
-//    $14: cell_array stage
-//    $15: cell_array index
-//    $16: pass time to next division
-//    $17: time for a generation
-//    $18: death time
-//    $19: time passed to death
-//    $20: pass time to next migrate
-//    $21: ones migrate time
-//    $22: cell_array viability
-//    $23: last migration direction
-//    $24: migration lable: 1=follow  0=initial
-//    $25: migration judgement lables:  0: non_migration  1: migration
-//    $26: migration lasted time
-//    $27: passed time of migration
-//    $28: migration rate
-//    $29: cell label;CI (add 1 when division occured; r-cell: 1-4999999999; K-cell: 500000000-9999999999)
-//    $30: parants label; PI
-//    $31: generation times/division times
-//    $32: division marker 1:division,0:non-division
 
+#ifndef free_living_growth_recovery_hpp
+#define free_living_growth_recovery_hpp
 
-
-
-
-
-#ifndef free_living_growth_hpp
-#define free_living_growth_hpp
 
 #include <stdio.h>
 #include <omp.h>
@@ -100,14 +67,14 @@
 #include "SaveCellArraySingleCell.hpp"
 #include "SaveCellTraceArray.hpp"
 #include "SaveAllPNG.hpp"
-
-
+#include "read_files.hpp"
+#include "CountLines.hpp"
 
 #include <chrono>
 
 using std::chrono::high_resolution_clock;
 
-void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, double alpha, double beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,int Single_cell,double K_formation_rate,double bunderD, double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time,int threads,int DynamicThreads)
+void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double R0, double R1, double mix_ratio_initial, double alpha, double beta, int DDM, int chemotaxis, double migration_rate_r_mean, double migration_rate_r_mean_quia, double migration_rate_K_mean, double deathjudge, double time_interval, int utralsmall, int allpng,int Single_cell,double K_formation_rate,double bunderD, double beta_distribution_alpha, double beta_distribution_expected, double beta_distribution_alpha_mig_time, double beta_distribution_expected_mig_time,int threads,int DynamicThreads, string Cell_arry_file, string Cell_trace_arry_file, string Parameters,int Hours)
 {
     time_t raw_initial_time;
     struct tm * initial_time;
@@ -293,49 +260,68 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     N0=1;
     N0r=N0*mix_ratio_initial;
     N0K=1;
-    double migration_rate_r[N0r];
-    double migration_rate_K[N0K];
-    double unilow_r=gsl_cdf_gaussian_P(min_growth_rate_r-muhatr, sigmahatr );
-    double uniup_r=gsl_cdf_gaussian_P(max_growth_rate_r-muhatr, sigmahatr );
     unilow_K=gsl_cdf_gaussian_P(min_growth_rate_K-muhatK, sigmahatK );
     uniup_K=gsl_cdf_gaussian_P(max_growth_rate_K-muhatK, sigmahatK );
     Array<double,2> radom_number(1,N0,FortranArray<2>());
-    for (int x=1;x<=N0r;x++)
+
+    ///////////////////////////////////////////////////////// read files //////////////////////////////////////////////////////////////////////////////////////
+    
+    Array<double,2> Parameters_array(39,1,FortranArray<2>());
+    Parameters_array=0;
+    
+    read_file(cell_array,cell_trace, Parameters_array, Cell_arry_file,Cell_trace_arry_file, Parameters);
+    
+    
+
+    Vx=Parameters_array(3,1)+200;
+    Vy=Parameters_array(4,1)+200;
+    
+    division_interval=Parameters_array(39,1);
+    
+    
+    int Cell_number = cell_array.rows();
+    
+    for (int i=1; i<=Cell_number; ++i)
     {
-        double mig=gsl_ran_beta(r00,beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
-        if (mig<=migration_rate_r_mean_quia)
+        if(cell_array(i,2)==0 && cell_array(i,6)==0)
         {
-            migration_rate_r[x-1]=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
+            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),1)=1;
+            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),2)=cell_array(i,15);
+            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),3)=cell_array(i,14);
+            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),4)=cell_label;
+            cell_label=cell_label+1;
         }
         else
         {
-            migration_rate_r[x-1]=mig;
+            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),1)=1;
+            Visual_range(int(cell_array(i,2)),int(cell_array(i,6)),1)=1;
+            Visual_range(int(cell_array(i,3)),int(cell_array(i,7)),1)=1;
+            Visual_range(int(cell_array(i,4)),int(cell_array(i,8)),1)=1;
+            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),2)=cell_array(i,15);
+            Visual_range(int(cell_array(i,2)),int(cell_array(i,6)),2)=cell_array(i,15);
+            Visual_range(int(cell_array(i,3)),int(cell_array(i,7)),2)=cell_array(i,15);
+            Visual_range(int(cell_array(i,4)),int(cell_array(i,8)),2)=cell_array(i,15);
+            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),3)=cell_array(i,14);
+            Visual_range(int(cell_array(i,2)),int(cell_array(i,6)),3)=cell_array(i,14);
+            Visual_range(int(cell_array(i,3)),int(cell_array(i,7)),3)=cell_array(i,14);
+            Visual_range(int(cell_array(i,4)),int(cell_array(i,8)),3)=cell_array(i,14);
+            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),4)=cell_label;
+            Visual_range(int(cell_array(i,2)),int(cell_array(i,6)),4)=cell_label;
+            Visual_range(int(cell_array(i,3)),int(cell_array(i,7)),4)=cell_label;
+            Visual_range(int(cell_array(i,4)),int(cell_array(i,8)),4)=cell_label;
+            cell_label=cell_label+1;
         }
-        for (int x=1;x<=N0K;x++)
-        {
-            migration_rate_K[x-1]=gsl_ran_beta(r00,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
-        }
+
     }
+
     
     /////////////////////////Initiation////////////////////////////////
-    cell_array_out.resize(N0,Col);
-    cell_array_out=0;
-    cell_array_out=outer_initiation_array(N0, Visual_range_x, Visual_range_y, A, uniup_r, unilow_r, sigmahatr, muhatr, uniup_K, unilow_K, sigmahatK, muhatK, N0r, N0K, migration_rate_r, migration_rate_K,Col);
-    Visual_range=outer_initiation_visualrange(cell_array_out, N0, Vx, Vy, cell_label);
-    
-    cell_array0.resize(N0,Col);
-    cell_array0=0;
-    cell_array0(all,all)=cell_array_out(all,all);
-    
+
     deltah=0.005;
     
     N00=N0;
     MMR=1/deltah;
-    
-    cell_trace(1,1)=cell_array0(1,15);
-    cell_trace(1,2)=1;
-    cell_index=N0;
-    
+
     
     //////////////////////////////////////////////////////////////////////////output parameters/////////////////////////////////////////////////////
     char dirname [100] = {'\0'};
@@ -347,7 +333,6 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     char dirname2 [100] = {'\0'};
     sprintf(dirname2, "mkdir ./a_%.1f_b_%.1f_CellTrace",alpha,beta);
     system(dirname2);
-
     if (allpng==1)
     {
         char dirname2 [100] = {'\0'};
@@ -356,7 +341,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
 
     }
     char filedir [100] = {'\0'};
-    sprintf(filedir, "./Parameters.txt");
+    sprintf(filedir, "./Parameters_recovery.txt");
     FILE * fid1;
     fid1=fopen (filedir,"w+");
     fprintf(fid1, "%s %s %lf\n" ,"R0", "=", R0);
@@ -401,21 +386,20 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     fclose(fid1);
     
     char filedir1 [100] = {'\0'};
-    sprintf(filedir1, "./Logs.txt");
+    sprintf(filedir1, "./Logs_recovery.txt");
     FILE * fid2;
     fid2=fopen (filedir1,"w+");
     ////////////////////////////////////////////////////////////////////migration and proliferation//////////////////////////////////////////////////////////////
-    cell_array.resize(N0,Col);
-    cell_array=0;
-    cell_array(all,all)=cell_array0(all,all);
-    migrate_activation(cell_array, bunderD, sub_visual, Visual_range,migration_time_range, migration_rate_r_mean_quia,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, DDM);
-    density_growth_rate_calculation_1(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK,death_time_range_r,death_time_range_K,cell_array, sub_visual, Visual_range);
-    sortRow(cell_array,cell_array1,Col,17,1);///sort time per generation
-    double h=0;
-    int T=0;
+    double h=Hours;
+    int T=Hours;
     double migration_judgement=0;
     int MaxThread=omp_get_max_threads();
     int nthreads;
+    
+    sortRow(cell_array,cell_array1,Col,29,MaxThread);///sort cell index
+    
+    cell_index=cell_array(cell_array.rows(),29);
+
     if(MaxThread<threads)
     {
         cout <<"Warning: custom threads larger than the system maximal threads, reset it as system maximal threads!" <<endl;
@@ -461,6 +445,8 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
             fclose(fid2);
             break;
         }
+        
+        
         
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         int C2=cell_array.rows();
@@ -515,6 +501,8 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         double end14(0);
         
         int JU =H%division_interval;
+
+
         start12=omp_get_wtime();
         death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads);
         end12=omp_get_wtime();
@@ -597,7 +585,6 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                     SaveAllPNG( Visual_range_x,  Visual_range_y, cell_array,  H,  T,  alpha,  beta, deltah);
                     end11=omp_get_wtime();
                 }
-
                 
             }
         }
@@ -774,4 +761,5 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         h=h+deltah;
     }
 }
-#endif /* free_living_growth_hpp */
+
+#endif /* free_living_growth_recovery_hpp */
