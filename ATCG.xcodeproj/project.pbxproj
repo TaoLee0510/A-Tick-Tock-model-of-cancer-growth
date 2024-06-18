@@ -280,7 +280,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = (
 					/usr/local/include,
-					/opt/homebrew/Cellar/freetype/2.12.0/include/freetype2,
+					/opt/homebrew/Cellar/freetype/2.13.2/include/freetype2,
 					/opt/homebrew/include,
 					/usr/local/include/freetype2,
 					/opt/homebrew/Cellar/libomp/18.1.5/include,
@@ -292,7 +292,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					/usr/local/lib,
 					/opt/homebrew/lib,
-					/opt/homebrew/Cellar/freetype/2.12.0/lib,
+					/opt/homebrew/Cellar/freetype/2.13.2/lib,
 					/usr/local/include/freetype2,
 					/opt/homebrew/Cellar/libomp/18.1.5/lib,
 					/opt/homebrew/opt/libomp/lib,
@@ -319,7 +319,7 @@
 				);
 				SDKROOT = macosx;
 				USER_HEADER_SEARCH_PATHS = (
-					/opt/homebrew/Cellar/freetype/2.12.0/include/freetype2,
+					/opt/homebrew/Cellar/freetype/2.13.2/include/freetype2,
 					/opt/homebrew/include,
 					/usr/local/include/freetype2,
 					/opt/homebrew/Cellar/libomp/18.1.5/include,
@@ -379,7 +379,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = (
 					/usr/local/include,
-					/opt/homebrew/Cellar/freetype/2.12.0/include/freetype2,
+					/opt/homebrew/Cellar/freetype/2.13.2/include/freetype2,
 					/opt/homebrew/include,
 					/usr/local/include/freetype2,
 					/opt/homebrew/Cellar/libomp/18.1.5/include,
@@ -389,7 +389,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					/usr/local/lib,
 					/opt/homebrew/lib,
-					/opt/homebrew/Cellar/freetype/2.12.0/lib,
+					/opt/homebrew/Cellar/freetype/2.13.2/lib,
 					/usr/local/include/freetype2,
 					/opt/homebrew/Cellar/libomp/18.1.5/lib,
 					/opt/homebrew/opt/libomp/lib,
@@ -416,7 +416,7 @@
 				);
 				SDKROOT = macosx;
 				USER_HEADER_SEARCH_PATHS = (
-					/opt/homebrew/Cellar/freetype/2.12.0/include/freetype2,
+					/opt/homebrew/Cellar/freetype/2.13.2/include/freetype2,
 					/opt/homebrew/include,
 					/usr/local/include/freetype2,
 					/opt/homebrew/Cellar/libomp/18.1.5/include,
