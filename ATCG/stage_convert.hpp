@@ -29,18 +29,22 @@
 #include <gsl/gsl_matrix.h>
 #include <blitz/blitz.h>
 #include <blitz/array.h>
+#include "stateless_rng.hpp"
 using namespace blitz;
-void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell_array, Array<long,3> &Visual_range, int &cell_label,int utralsmall)
+void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell_array, Array<long,3> &Visual_range, int &cell_label,int utralsmall,long rng_time_step)
 {
-    std::random_device r;
-    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
-    std::mt19937 RNG(seed);
     Range all = Range::all();
     int C00= cell_array.rows();
     for (int x=1; x<=C00; ++x)
     {
         int stage_cor[4]={0};
         int direction[8]={0};
+        long cell_rng_id = (long)cell_array(x,15);
+        if (cell_rng_id == 0)
+        {
+            cell_rng_id = x;
+        }
+        long rng_event = 100;
         if (cell_array(x,1)>=100 && cell_array(x,5) >=100  && cell_array(x,1)<=Visual_range_x+100 && cell_array(x,5)<=Visual_range_y+100)
         {
             if(cell_array(x,14)==1)
@@ -93,7 +97,7 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell
                             num=num+1;
                         }
                     }
-                    shuffle(stage_cor_1,stage_cor_1+num,RNG);
+                    stateless_shuffle(stage_cor_1,stage_cor_1+num,cell_rng_id,rng_time_step,rng_event++);
                     int scor=stage_cor_1[0];
                     
 
@@ -287,7 +291,7 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell
                     }
                     else if (length_dir>0)
                     {
-                        shuffle(direction1, direction1+new_loci,RNG);
+                        stateless_shuffle(direction1, direction1+new_loci,cell_rng_id,rng_time_step,rng_event++);
                         order=direction1[0];
                     }
                     if (order==1)
@@ -457,6 +461,12 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell
         for (int x=1; x<=C00; x++)
         {
             int stage_cor[4]={0};
+            long cell_rng_id = (long)cell_array(x,15);
+            if (cell_rng_id == 0)
+            {
+                cell_rng_id = x;
+            }
+            long rng_event = 1000;
             if (cell_array(x,1)>=100 && cell_array(x,5) >=100  && cell_array(x,1)<=Visual_range_x+100 && cell_array(x,5)<=Visual_range_y+100)
             {
                 if(cell_array(x,14)==1)
@@ -509,7 +519,7 @@ void stage_convert(int Visual_range_x, int Visual_range_y, Array<double,2> &cell
                                 num=num+1;
                             }
                         }
-                        shuffle(stage_cor_1,stage_cor_1+num,RNG);
+                        stateless_shuffle(stage_cor_1,stage_cor_1+num,cell_rng_id,rng_time_step,rng_event++);
                         int scor=stage_cor_1[0];
                         if (scor==1)
                         {

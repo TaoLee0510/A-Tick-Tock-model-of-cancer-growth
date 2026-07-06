@@ -15,20 +15,21 @@
 #include <ctime>
 #include <blitz/blitz.h>
 #include <blitz/array.h>
+#include "stateless_rng.hpp"
 
 using namespace blitz;
-void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, Array<double, 2> &cell_array,Array<long, 3> &sub_visual,Array<long,3> Visual_range)
+void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, Array<double, 2> &cell_array,Array<long, 3> &sub_visual,Array<long,3> Visual_range, long rng_time_step)
 {
     Range all = Range::all();
     int C0= cell_array.rows();
-    const gsl_rng_type *T3;
-    gsl_rng *r3;
-    gsl_rng_env_setup();
-    T3 = gsl_rng_ranlxs0;
-    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
-    r3 = gsl_rng_alloc(T3);
     for (int i=1; i<=C0; i++)
     {
+        long cell_rng_id = (long)cell_array(i,15);
+        if (cell_rng_id == 0)
+        {
+            cell_rng_id = i;
+        }
+        long rng_event = 100;
         sub_visual.resize(6,6,4);
         sub_visual=0;
         int cell_type=(int)cell_array(i,9);
@@ -119,7 +120,7 @@ void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, i
                         double undividing_time=0.9*expected_division_time;
                         double diving_time_range=0.1*expected_division_time;
                         double probability_of_division=1/diving_time_range;
-                        double expected_dividing_time=undividing_time+gsl_ran_geometric(r3, probability_of_division);;
+                        double expected_dividing_time=undividing_time+stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_of_division);;
                         cell_array(i,17)=expected_dividing_time;
                     }
                     cell_array(i,21)=1/cell_array(i,28);
@@ -212,7 +213,7 @@ void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, i
                         double undividing_time=0.9*expected_division_time;
                         double diving_time_range=0.1*expected_division_time;
                         double probability_of_division=1/diving_time_range;
-                        double expected_dividing_time=undividing_time+gsl_ran_geometric(r3, probability_of_division);;
+                        double expected_dividing_time=undividing_time+stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_of_division);;
                         cell_array(i,17)=expected_dividing_time;
                     }
                     cell_array(i,21)=1/cell_array(i,28);
@@ -221,6 +222,5 @@ void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, i
             }
         }
     }
-    gsl_rng_free(r3);
 }
 #endif /* density_growth_rate_calculation_1_hpp */

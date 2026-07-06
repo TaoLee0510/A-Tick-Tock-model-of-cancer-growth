@@ -31,14 +31,12 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "random_uniform.hpp"
+#include "stateless_rng.hpp"
 using namespace blitz;
 
 Array<double,2> outer_initiation_array_low_density(int N0, int Visual_range_x, int Visual_range_y, Array<int,2> A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K)
 {
-    std::random_device r;
-    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
-    std::mt19937 RNG(seed);
-    
+    const long rng_context = 10002;
     double initial_r_growth_rate[N0r];
     double initial_K_growth_rate[N0K];
     Array<double,2> cor(2,N0+1,FortranArray<2>());
@@ -64,7 +62,7 @@ Array<double,2> outer_initiation_array_low_density(int N0, int Visual_range_x, i
     {
         random_cor[x]=x+1;
     }
-    shuffle(random_cor, random_cor+N0,RNG);
+    stateless_shuffle(random_cor, random_cor+N0, rng_context, N0, 1);
     Array<double,2> cell_array_cor(2,N0,FortranArray<2>());
     for (int x=1; x<=N0; x++)
     {
@@ -73,14 +71,14 @@ Array<double,2> outer_initiation_array_low_density(int N0, int Visual_range_x, i
         cell_array_cor(2,x)=cor(2,seed);
     }
     Array<double,2> radom_number(1,N0,FortranArray<2>());
-    radom_number=random_uniform(N0);
+    radom_number=random_uniform(N0, rng_context, 0, 1000);
     double rangr2 = uniup_r - unilow_r;
     for (int x=1; x<=N0r; x++)
     {
         double rand1 = (radom_number(1,x)*rangr2)+unilow_r;
         initial_r_growth_rate[x-1]=gsl_cdf_gaussian_Pinv(rand1, sigmahatr) + muhatr;
     }
-    radom_number=random_uniform(N0);
+    radom_number=random_uniform(N0, rng_context, 0, 2000);
     
     double rangK2 = uniup_K - unilow_K;
     for (int x=1; x<=N0K; x++)

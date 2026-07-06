@@ -35,19 +35,18 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
+#include "stateless_rng.hpp"
 using namespace blitz;
-void random_migration(int i, double deltah,Array<double, 2> &cell_array, Array<long, 3> &Visual_range, Array<int,2> cor_big, Array<int, 2> area_square, Array<int, 2> sub_area_square, Array<int, 2> cor_small, Array<int, 2> area_square_s, Array<int, 2>  sub_area_square_s,double &migration_judgement)
+void random_migration(int i, double deltah,Array<double, 2> &cell_array, Array<long, 3> &Visual_range, Array<int,2> cor_big, Array<int, 2> area_square, Array<int, 2> sub_area_square, Array<int, 2> cor_small, Array<int, 2> area_square_s, Array<int, 2>  sub_area_square_s,double &migration_judgement, long rng_time_step, long rng_event_base)
 {
-    //    std::random_device r;
     //    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
-    //    std::mt19937 RNG(seed);
     Range all = Range::all();
-    const gsl_rng_type *T5;
-    gsl_rng *r5;
-    gsl_rng_env_setup();
-    T5 = gsl_rng_ranlxs0;
-    gsl_rng_default_seed = ((unsigned long)(time(NULL))+i);
-    r5 = gsl_rng_alloc(T5);
+    long cell_rng_id = (long)cell_array(i,15);
+    if (cell_rng_id == 0)
+    {
+        cell_rng_id = i;
+    }
+    long rng_event = rng_event_base + ((long)cell_array(i,14) * 100);
     int x1=cell_array(i,1);
     int y1=cell_array(i,5);
     if (cell_array(i,14)==0)
@@ -117,8 +116,7 @@ void random_migration(int i, double deltah,Array<double, 2> &cell_array, Array<l
             }
             else
             {
-                //                shuffle(direction1, direction1+new_loci,RNG);
-                gsl_ran_shuffle(r5, direction1, new_loci, sizeof (int));
+                stateless_shuffle(direction1, direction1 + new_loci, cell_rng_id, rng_time_step, rng_event++);
                 order=direction1[0];
             }
             
@@ -342,8 +340,7 @@ void random_migration(int i, double deltah,Array<double, 2> &cell_array, Array<l
             }
             else if (length_dir>0)
             {
-                //                shuffle(direction1, direction1+new_loci,RNG);
-                gsl_ran_shuffle(r5, direction1, new_loci, sizeof (int));
+                stateless_shuffle(direction1, direction1 + new_loci, cell_rng_id, rng_time_step, rng_event++);
                 order=direction1[0];
             }
             switch (order)
@@ -473,7 +470,6 @@ void random_migration(int i, double deltah,Array<double, 2> &cell_array, Array<l
         }
     }
     migration_judgement=migration_judgement+0.0001;
-    gsl_rng_free(r5);
 }
 
 #endif /* random_migration_hpp */

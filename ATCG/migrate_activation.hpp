@@ -36,19 +36,20 @@
 #include <blitz/array.h>
 #include "density_calculation.hpp"
 #include "deltah_calculation.hpp"
+#include "stateless_rng.hpp"
 
-void migrate_activation(Array<double, 2> &cell_array, double bunderD, Array<long, 3> sub_visual, Array<long,3> Visual_range,double migration_time_range, double migration_rate_r_mean_quia, double beta_distribution_alpha_for_normal_migration, double beta_distribution_beta_for_normal_migration, double beta_distribution_alpha_mig_time, double beta_distribution_beta_mig_time, int DDM)
+void migrate_activation(Array<double, 2> &cell_array, double bunderD, Array<long, 3> sub_visual, Array<long,3> Visual_range,double migration_time_range, double migration_rate_r_mean_quia, double beta_distribution_alpha_for_normal_migration, double beta_distribution_beta_for_normal_migration, double beta_distribution_alpha_mig_time, double beta_distribution_beta_mig_time, int DDM, long rng_time_step)
 {
-    const gsl_rng_type *T10;
-    gsl_rng *r10;
-    gsl_rng_env_setup();
-    T10 = gsl_rng_ranlxs0;
-    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
-    r10 = gsl_rng_alloc(T10);
     int i;
     int C= cell_array.rows();
     for(i=1;i<=C;i++)
     {
+        long cell_rng_id = (long)cell_array(i,15);
+        if (cell_rng_id == 0)
+        {
+            cell_rng_id = i;
+        }
+        long rng_event = 100;
         if (DDM==1)
         {
             double Dr=density_calculation(i, sub_visual, Visual_range, cell_array);
@@ -64,14 +65,11 @@ void migrate_activation(Array<double, 2> &cell_array, double bunderD, Array<long
                     cell_array(i,25)=1;
                     double inherent_migration_speed=(double)cell_array(i,12);
                     cell_array(i,28)=inherent_migration_speed;
-//                    cell_array(i,26)=gsl_ran_geometric(r10,probability_of_time);
-//                    double mig=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*migration_time_range;
-                    cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*(cell_array(i,17)-cell_array(i,16));
+                    cell_array(i,26)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*(cell_array(i,17)-cell_array(i,16));
 //                    double mig_low=migration_rate_r_mean_quia*10;
 ////                    double mig_threshold=migration_time_range*3/4;
 //                    if (mig<=mig_low)
 //                    {
-//                        cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*mig_low;
 //                    }
 //                    else
 //                    {
@@ -86,7 +84,7 @@ void migrate_activation(Array<double, 2> &cell_array, double bunderD, Array<long
                     {
                         case 1:
                         {
-                            cell_array(i,28)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
+                            cell_array(i,28)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
                             break;
                         }
                         default:
@@ -107,7 +105,7 @@ void migrate_activation(Array<double, 2> &cell_array, double bunderD, Array<long
             {
                 case 1:
                 {
-                    cell_array(i,28)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
+                    cell_array(i,28)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
                     break;
                 }
                 default:
@@ -119,6 +117,5 @@ void migrate_activation(Array<double, 2> &cell_array, double bunderD, Array<long
             }
         }
     }
-    gsl_rng_free(r10);
 }
 #endif /* migrate_activation_hpp */

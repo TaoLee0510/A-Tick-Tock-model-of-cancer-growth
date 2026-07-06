@@ -41,10 +41,13 @@ void SaveCellTraceArray(int T, double alpha, double beta, Array<long,2> cell_tra
     fclose(fid8);
 
     
-    char dirname2 [100] = {'\0'};
-    int tt=T-1;
-    sprintf(dirname2, "rm ./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,tt);
-    system(dirname2);
+    if (T > 0)
+    {
+        char filedir_prev [100] = {'\0'};
+        int tt=T-1;
+        sprintf(filedir_prev, "./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,tt);
+        remove(filedir_prev);
+    }
 }
 
 

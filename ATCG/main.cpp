@@ -316,6 +316,7 @@ int main(int argc, char *argv[])
                 else {
                     DynamicThreads = atoi(optarg);
                 }
+                break;
             case 'Y':
                 if(optarg == NULL){
                     RecoveryMode = 0;
@@ -323,6 +324,7 @@ int main(int argc, char *argv[])
                 else {
                     RecoveryMode = atoi(optarg);
                 }
+                break;
             case 'f':
                 if(optarg == NULL){
                     Cell_arry_file = "temp";
@@ -330,6 +332,7 @@ int main(int argc, char *argv[])
                 else {
                     Cell_arry_file = optarg;
                 }
+                break;
             case 'Z':
                 if(optarg == NULL){
                     Cell_trace_arry_file = "temp";
@@ -337,6 +340,7 @@ int main(int argc, char *argv[])
                 else {
                     Cell_trace_arry_file = optarg;
                 }
+                break;
             case 'W':
                 if(optarg == NULL){
                     Parameters = "temp";
@@ -344,6 +348,7 @@ int main(int argc, char *argv[])
                 else {
                     Parameters = optarg;
                 }
+                break;
             case 'H':
                 if(optarg == NULL){
                     Hours = 0;

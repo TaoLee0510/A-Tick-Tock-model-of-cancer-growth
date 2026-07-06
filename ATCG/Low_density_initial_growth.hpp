@@ -50,6 +50,7 @@
 #include "save_data.hpp"
 #include "random_migration.hpp"
 #include "migration.hpp"
+#include "stateless_rng.hpp"
 #include "division.hpp"
 #include "migrate_activation.hpp"
 #include "density_calculation.hpp"
@@ -103,18 +104,9 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     
     int Col=28;
     int borderx=Visual_range_x+100;
-    int bordery=Visual_range_x+100;
+    int bordery=Visual_range_y+100;
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    const gsl_rng_type *T00;
-    gsl_rng *r00;
-    gsl_rng_env_setup();
-    T00 = gsl_rng_ranlxs0;
-    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
-    r00 = gsl_rng_alloc(T00);
-    std::random_device r;
-    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
-    std::mt19937 RNG(seed);
-    std::uniform_real_distribution<> dis(0.05, 0.95);
+    const long rng_context = 20004;
     //////////////////////////////////////////////////////////////array definition///////////////////////////////////////////////////////////////////////
     Range all = Range::all();
     Array<long,3> Visual_range(Vx,Vy,4,FortranArray<3>());
@@ -185,7 +177,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     cell_array_out=0;
     Array<int,2> A(Visual_range_x/2,Visual_range_y/2,FortranArray<2>());
     A=0;
-    int NNy=2000*2000;
+    int NNy=Visual_range_x*Visual_range_y;
     Array<double,2> colorspace(NNy,4,FortranArray<2>());
     colorspace=0;
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -199,7 +191,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
             }
             else
             {
-                colorspace(i,j)=dis(RNG);
+                colorspace(i,j)=0.05 + (0.90 * stateless_uniform(rng_context, 0, 10000 + i * 10 + j));
             }
         }
     }
@@ -250,7 +242,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     Array<double,2> radom_number(1,N0,FortranArray<2>());
     for (int x=1;x<=N0r;x++)
     {
-        double mig=gsl_ran_beta(r00,beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
+        double mig=stateless_beta(rng_context, 0, 20000 + x, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
         if (mig<=migration_rate_r_mean_quia)
         {
             migration_rate_r[x-1]=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
@@ -262,7 +254,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     }
     for (int x=1;x<=N0K;x++)
     {
-        migration_rate_K[x-1]=gsl_ran_beta(r00,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
+        migration_rate_K[x-1]=stateless_beta(rng_context, 0, 21000 + x, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
     }
     //////////* Outer deltah calculation*///////////////////////////////////////////
     double deltah1=deltah_calculation(N0, migration_rate_r,N0r,MMR1,DDM);
@@ -288,7 +280,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     Array<double,2> radom_number1(1,N01,FortranArray<2>());
     for (int x=1;x<=N0r1;x++)
     {
-        double mig=gsl_ran_beta(r00,beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
+        double mig=stateless_beta(rng_context, 0, 22000 + x, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
         if (mig<=migration_rate_r_mean_quia)
         {
             migration_rate_r1[x-1]=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
@@ -300,7 +292,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     }
     for (int x=1;x<=N0K1;x++)
     {
-        migration_rate_K1[x-1]=gsl_ran_beta(r00,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
+        migration_rate_K1[x-1]=stateless_beta(rng_context, 0, 23000 + x, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
     }
     //////////* Inner deltah calculation*///////////////////////////////////////////
     double deltah2=deltah_calculation(N01, migration_rate_r1, N0r1,MMR2,DDM);
@@ -430,20 +422,14 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     cell_array.resize(N0,Col);
     cell_array=0;
     cell_array(all,all)=cell_array0(all,all);
-    migrate_activation(cell_array, bunderD, sub_visual, Visual_range,migration_time_range, migration_rate_r_mean_quia,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time,DDM);
-    density_growth_rate_calculation_1(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK,death_time_range_r,death_time_range_K,cell_array, sub_visual, Visual_range);
+    migrate_activation(cell_array, bunderD, sub_visual, Visual_range,migration_time_range, migration_rate_r_mean_quia,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time,DDM, 0);
+    density_growth_rate_calculation_1(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK,death_time_range_r,death_time_range_K,cell_array, sub_visual, Visual_range, 0);
     sortRow(cell_array,cell_array1,Col,17,threads);///sort time per generation
     double h=0;
     int T=0;
     double migration_judgement=0;
     for (int  H=0; H<1000000000; H++)
     {
-        const gsl_rng_type *T10;
-        gsl_rng *r10;
-        gsl_rng_env_setup();
-        T10 = gsl_rng_ranlxs0;
-        gsl_rng_default_seed = ((unsigned long)(time(NULL)));
-        r10 = gsl_rng_alloc(T10);
         if (h>time_interval)
         {
             break;
@@ -476,15 +462,21 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         ///
         int nthreads = 1;
-        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads);
+        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads,H);
         sortRow(cell_array, cell_array1,Col,9,threads);///sort cell type
-        stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall);
+        stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall,H);
         deltah_recalculation(deltah, cell_array, MMR, DDM);
         sortRow(cell_array,cell_array1,Col,16,threads);///sort time division
         save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng);
         int C1=cell_array.rows();
         for (int i=C1; i>=1; i--)
         {
+            long cell_rng_id = (long)cell_array(i,15);
+            if (cell_rng_id == 0)
+            {
+                cell_rng_id = i;
+            }
+            long rng_event = 100;
             if (cell_array(i,1)>=100 && cell_array(i,5) >=100 && cell_array(i,1)<=borderx && cell_array(i,5)<=bordery)
             {
                 if (cell_array(i,11)>deathjudge)
@@ -505,17 +497,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                                         cell_array(i,25)=1;
                                         double inherent_migration_speed=cell_array(i,12);
                                         cell_array(i,28)=inherent_migration_speed;
-//                                        double mig=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*migration_time_range;
-                                        cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*(cell_array(i,17)-cell_array(i,16));
-//                                        double mig_low=migration_rate_r_mean_quia*10;
-//                                        if (mig<=mig_low)
-//                                        {
-//                                            cell_array(i,26)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia*10;
-//                                        }
-//                                        else
-//                                        {
-//                                            cell_array(i,26)=mig;
-//                                        }
+                                        cell_array(i,26)=stateless_beta(cell_rng_id, H, rng_event++,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*(cell_array(i,17)-cell_array(i,16));
                                     }
                                     cell_array(i,21)=1/cell_array(i,28);
                                 }
@@ -525,7 +507,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                                 }
                                 if (cell_array(i,20)>=cell_array(i,21))
                                 {
-                                    random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                    random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 1000 + rng_event++);
                                 }
                                 else
                                 {
@@ -539,17 +521,17 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                                     cell_array(i,25)=0;
                                     cell_array(i,26)=0;
                                     cell_array(i,27)=0;
-                                    cell_array(i,28)=gsl_ran_beta(r10,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
+                                    cell_array(i,28)=stateless_beta(cell_rng_id, H, rng_event++,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
                                     cell_array(i,21)=1/cell_array(i,28);
                                     if (cell_array(i,20)>=cell_array(i,21))
                                     {
                                         if (chemotaxis==0)
                                         {
-                                            random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                            random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 1000 + rng_event++);
                                         }
                                         else
                                         {
-                                            migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                            migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 2000 + rng_event++);
                                         }
                                     }
                                     else
@@ -563,11 +545,11 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                                     {
                                         if (chemotaxis==0)
                                         {
-                                            random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                            random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 1000 + rng_event++);
                                         }
                                         else
                                         {
-                                            migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                            migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 2000 + rng_event++);
                                         }
                                     }
                                     else
@@ -585,7 +567,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                     }
                     else
                     {
-                        division(i, max_growth_rate_r, max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp,cell_label,deltah,utralsmall,Col);
+                        division(i, max_growth_rate_r, max_growth_rate_K, cell_array, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp,cell_label,deltah,utralsmall,Col, H);
                     }
                 }
                 else
@@ -607,17 +589,17 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                         {
                             if (chemotaxis==0)
                             {
-                                random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 1000 + rng_event++);
                             }
                             else
                             {
                                 if(cell_array(i,25)==0)
                                 {
-                                    random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                    random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 1000 + rng_event++);
                                 }
                                 else
                                 {
-                                    migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement);
+                                    migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 2000 + rng_event++);
                                 }
                             }
                         }
@@ -634,7 +616,6 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
             }
         }
         h=h+deltah;
-        gsl_rng_free(r10);
     }
 }
 #endif /* Low_density_initial_growth_hpp */

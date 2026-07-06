@@ -17,25 +17,23 @@
 #include <ctime>
 #include <blitz/blitz.h>
 #include <blitz/array.h>
+#include "stateless_rng.hpp"
 using namespace blitz;
-void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, Array<double, 2> &cell_array, Array<double,2> &cell_array_temp, Array<long, 3> sub_visual, Array<long,3> &Visual_range, double deathjudge, int Col,int nthreads)
+void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, Array<double, 2> &cell_array, Array<double,2> &cell_array_temp, Array<long, 3> sub_visual, Array<long,3> &Visual_range, double deathjudge, int Col,int nthreads,long rng_time_step)
 {
-    std::random_device r;
-    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
-    std::mt19937 RNG(seed);
     Range all = Range::all();
     int C= cell_array.rows();
-    const gsl_rng_type *T4;
-    gsl_rng *r4;
-    gsl_rng_env_setup();
-    T4 = gsl_rng_ranlxs0;
-    gsl_rng_default_seed = ((unsigned long)(time(NULL)));
-    r4 = gsl_rng_alloc(T4);
 //    omp_set_num_threads(nthreads);
 //    #pragma omp parallel for schedule(dynamic)
 //    {
         for (int rows=1; rows<=C; ++rows)
         {
+            long cell_rng_id = (long)cell_array(rows,15);
+            if (cell_rng_id == 0)
+            {
+                cell_rng_id = rows;
+            }
+            long rng_event = 100;
             if (cell_array(rows,11)>deathjudge)
             {
                 if (cell_array(rows,9)==1)
@@ -129,7 +127,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                             double undividing_time=0.9*expected_division_time;
                             double diving_time_range=0.1*expected_division_time;
                             double probability_of_division=1/diving_time_range;
-                            double expected_dividing_time=undividing_time+gsl_ran_geometric(r4, probability_of_division);;
+                            double expected_dividing_time=undividing_time+stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_of_division);;
                             cell_array(rows,17)=expected_dividing_time;
                         }
                         else
@@ -137,7 +135,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                             if (cell_array(rows,18)==0)
                             {
                                 double probability_to_death=1/death_time_range_r;
-                                cell_array(rows,18)=gsl_ran_geometric(r4,probability_to_death);
+                                cell_array(rows,18)=stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_to_death);
                             }
                             cell_array(rows,19)=cell_array(rows,19)+deltah;
                             cell_array(rows,17)=0;
@@ -240,7 +238,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                             double undividing_time=0.9*expected_division_time;
                             double diving_time_range=0.1*expected_division_time;
                             double probability_of_division=1/diving_time_range;
-                            double expected_dividing_time=undividing_time+gsl_ran_geometric(r4, probability_of_division);;
+                            double expected_dividing_time=undividing_time+stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_of_division);;
                             cell_array(rows,17)=expected_dividing_time;
                         }
                         else
@@ -248,7 +246,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                             if (cell_array(rows,18)==0)
                             {
                                 double probability_to_death=1/death_time_range_K;
-                                cell_array(rows,18)=gsl_ran_geometric(r4,probability_to_death);
+                                cell_array(rows,18)=stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_to_death);
                             }
                             cell_array(rows,19)=cell_array(rows,19)+deltah;
                             cell_array(rows,17)=0;
@@ -271,7 +269,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                     {
                         probability_to_death=1/death_time_range_K;
                     }
-                    cell_array(rows,18)=gsl_ran_geometric(r4,probability_to_death);
+                    cell_array(rows,18)=stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_to_death);
                 }
                 else
                 {
@@ -379,7 +377,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                                     double undividing_time=0.9*expected_division_time;
                                     double diving_time_range=0.1*expected_division_time;
                                     double probability_of_division=1/diving_time_range;
-                                    double expected_dividing_time=undividing_time+gsl_ran_geometric(r4, probability_of_division);;
+                                    double expected_dividing_time=undividing_time+stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_of_division);;
                                     cell_array(rows,17)=expected_dividing_time;
                                     cell_array(rows,18)=0;
                                     cell_array(rows,19)=0;
@@ -487,7 +485,7 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                                     double undividing_time=0.9*expected_division_time;
                                     double diving_time_range=0.1*expected_division_time;
                                     double probability_of_division=1/diving_time_range;
-                                    double expected_dividing_time=undividing_time+gsl_ran_geometric(r4, probability_of_division);;
+                                    double expected_dividing_time=undividing_time+stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_of_division);;
                                     cell_array(rows,17)=expected_dividing_time;
                                     cell_array(rows,18)=0;
                                     cell_array(rows,19)=0;
@@ -576,6 +574,5 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
     cell_array.resize(sum,Col);
     cell_array=0;
     cell_array(all,all)=cell_array_temp(all,all);
-    gsl_rng_free(r4);
 }
 #endif /* death_judgement_hpp */

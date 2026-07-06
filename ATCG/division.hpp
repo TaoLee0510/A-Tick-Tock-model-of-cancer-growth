@@ -35,17 +35,20 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
+#include "stateless_rng.hpp"
 #include <chrono>
 
 using std::chrono::high_resolution_clock;
 using namespace blitz;
-void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<double, 2> &cell_array, Array<double,2> cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall,int Col)
+void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<double, 2> &cell_array, Array<double,2> cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall,int Col, long rng_time_step)
 {
-    auto start = std::chrono::high_resolution_clock::now();
-    std::random_device r;
-    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
-    std::mt19937 RNG(seed);
     Range all = Range::all();
+    long cell_rng_id = (long)cell_array(i,15);
+    if (cell_rng_id == 0)
+    {
+        cell_rng_id = i;
+    }
+    long rng_event = 100;
     int pro_loci[8]={0};
     int pro_loci1[4]={0};
     int pro_loci2[4]={0};
@@ -131,21 +134,12 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
     cor_small_1(all,8)=C,b;
     int cor_temp1[16]={0};
     
-    const gsl_rng_type *T7;
-    gsl_rng *r7;
-    gsl_rng_env_setup();
-    T7 = gsl_rng_ranlxs0;
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
-    gsl_rng_default_seed = (duration.count());
-    r7 = gsl_rng_alloc(T7);
-    
     if (cell_array(i,14)==0)
     {
         double growth_rate_inherent=cell_array(i,10);
         double X1=growth_rate_inherent*(1-0.05);
         double X2=growth_rate_inherent*(1+0.05);
-        cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
+        cell_array(i,10)=(X2-X1)*stateless_uniform(cell_rng_id, rng_time_step, rng_event++)+X1;
         cell_temp(1,9)=cell_array(i,9);
         cell_temp(1,10)=cell_array(i,10);
         cell_temp(1,11)=cell_array(i,11);
@@ -189,8 +183,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
         if (loci_number>0)
         {
             cell_label=cell_label+1;
-            shuffle(cor_big_temp_1,cor_big_temp_1+size_big,RNG);
-//            gsl_ran_shuffle(r7, cor_big_temp_1, size_big, sizeof (int));
+            stateless_shuffle(cor_big_temp_1,cor_big_temp_1+size_big, cell_rng_id, rng_time_step, rng_event++);
             int loci=cor_big_temp_1[0];
             cell_temp(1,1)=cor_big_1(1,loci);
             cell_temp(1,2)=cor_big_1(1,loci);
@@ -334,8 +327,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
                 if (pro_loci_number1 > 1 && pro_loci_number2 >1)
                 {
                     int random_pro_loci[2]={1,2};
-                    shuffle(random_pro_loci,random_pro_loci+2,RNG);
-//                    gsl_ran_shuffle(r7, random_pro_loci, 2, sizeof (int));
+                    stateless_shuffle(random_pro_loci,random_pro_loci+2, cell_rng_id, rng_time_step, rng_event++);
                     if (random_pro_loci[0]==1)
                     {
                         int sizep1=num1;
@@ -344,8 +336,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
                         {
                             random_pro_loci1[aa]=pro_loci1_new[aa];
                         }
-                        shuffle(random_pro_loci1,random_pro_loci1+sizep1,RNG);
-//                        gsl_ran_shuffle(r7, random_pro_loci1, sizep1, sizeof (int));
+                        stateless_shuffle(random_pro_loci1,random_pro_loci1+sizep1, cell_rng_id, rng_time_step, rng_event++);
                         int proloci1=random_pro_loci1[0];
                         int proloci2=random_pro_loci1[1];
                         if (proloci1==1)
@@ -489,8 +480,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
                         {
                             random_pro_loci2[aa]=pro_loci2_new[aa];
                         }
-                        shuffle(random_pro_loci2,random_pro_loci2+sizep2,RNG);
-//                        gsl_ran_shuffle(r7, random_pro_loci2, sizep2, sizeof (int));
+                        stateless_shuffle(random_pro_loci2,random_pro_loci2+sizep2, cell_rng_id, rng_time_step, rng_event++);
                         int proloci1=random_pro_loci2[0];
                         int proloci2=random_pro_loci2[1];
                         if (proloci1==2)
@@ -627,8 +617,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
                     {
                         random_pro_loci1[aa]=pro_loci1_new[aa];
                     }
-                    shuffle(random_pro_loci1,random_pro_loci1+sizep1,RNG);
-//                    gsl_ran_shuffle(r7, random_pro_loci1, sizep1, sizeof (int));
+                    stateless_shuffle(random_pro_loci1,random_pro_loci1+sizep1, cell_rng_id, rng_time_step, rng_event++);
                     int proloci1=random_pro_loci1[0];
                     int proloci2=random_pro_loci1[1];
                     if (proloci1==1)
@@ -772,8 +761,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
                     {
                         random_pro_loci2[aa]=pro_loci2_new[aa];
                     }
-                    shuffle(random_pro_loci2,random_pro_loci2+sizep2,RNG);
-//                    gsl_ran_shuffle(r7, random_pro_loci2, sizep2, sizeof (int));
+                    stateless_shuffle(random_pro_loci2,random_pro_loci2+sizep2, cell_rng_id, rng_time_step, rng_event++);
                     int proloci1=random_pro_loci2[0];
                     int proloci2=random_pro_loci2[1];
                     if (proloci1==2)
@@ -907,8 +895,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
                     if (abs(pro_loci_number2-pro_loci_number1)>=2 && pro_loci_number2-pro_loci_number1!=7)
                     {
                         int random_pro_loci[2]={1,2};
-                        shuffle(random_pro_loci,random_pro_loci+2,RNG);
-//                        gsl_ran_shuffle(r7, random_pro_loci, 2, sizeof (int));
+                        stateless_shuffle(random_pro_loci,random_pro_loci+2, cell_rng_id, rng_time_step, rng_event++);
                         if (random_pro_loci[0]==1)
                         {
                             int proloci1=pro_loci1_new[0];
@@ -1225,8 +1212,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
                     {
                         random_pro_loci_1[cor_pro_1_1_nozero_locus]=cor_pro_1_1_nozero_locus+1;
                     }
-                    shuffle(random_pro_loci_1,random_pro_loci_1+cor_pro_1_length,RNG);
-//                    gsl_ran_shuffle(r7, random_pro_loci_1, cor_pro_1_length, sizeof (int));
+                    stateless_shuffle(random_pro_loci_1,random_pro_loci_1+cor_pro_1_length, cell_rng_id, rng_time_step, rng_event++);
                     Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
                     cell_temp(1,1)=(double)cor_pro_1(1,random_pro_loci_1[0]);
                     cell_temp(1,5)=(double)cor_pro_1(2,random_pro_loci_1[0]);
@@ -1310,8 +1296,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
                 {
                     random_pro_loci_1[pro_loci_small_nozero_locus]=pro_loci_small_nozero_locus+1;
                 }
-                shuffle(random_pro_loci_1,random_pro_loci_1+pro_loci_small_length,RNG);
-//                gsl_ran_shuffle(r7, random_pro_loci_1, pro_loci_small_length, sizeof (int));
+                stateless_shuffle(random_pro_loci_1,random_pro_loci_1+pro_loci_small_length, cell_rng_id, rng_time_step, rng_event++);
                 Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
                 cell_temp(1,1)=(double)pro_loci_small(1,random_pro_loci_1[0]);
                 cell_temp(1,5)=(double)pro_loci_small(2,random_pro_loci_1[0]);
@@ -1349,7 +1334,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
         double growth_rate_inherent=cell_array(i,10);
         double X1=growth_rate_inherent*(1-0.05);
         double X2=growth_rate_inherent*(1+0.05);
-        cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
+        cell_array(i,10)=(X2-X1)*stateless_uniform(cell_rng_id, rng_time_step, rng_event++)+X1;
         cell_temp(1,9)=cell_array(i,9);
         cell_temp(1,10)=cell_array(i,10);
         cell_temp(1,11)=cell_array(i,11);
@@ -1398,8 +1383,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
         {
             cell_label=cell_label+1;
             long cellstage=Visual_range(x,y,3);
-            shuffle(cor_temp, cor_temp+loci_number,RNG);
-//            gsl_ran_shuffle(r7, cor_temp, loci_number, sizeof (int));
+            stateless_shuffle(cor_temp, cor_temp+loci_number, cell_rng_id, rng_time_step, rng_event++);
             int loci=cor_temp_3[cor_temp[0]];
             cell_temp(1,1)=cor_small_1(1,loci);
             cell_temp(1,5)=cor_small_1(2,loci);
@@ -1511,6 +1495,5 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
         cell_array(current_size+1,all)=cell_temp(1,all);
         
     }
-    gsl_rng_free(r7);
 }
 #endif /* division_hpp */

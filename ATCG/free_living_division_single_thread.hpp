@@ -40,6 +40,7 @@
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
 #include "cell_type_transform.hpp"
+#include "stateless_rng.hpp"
 #include <chrono>
 #include <omp.h>
 
@@ -47,13 +48,15 @@
 using std::chrono::high_resolution_clock;
 using namespace std;
 using namespace blitz;
-void free_living_division_single_thread(int i, double max_growth_rate_r, double max_growth_rate_K, Array<double, 2> &cell_array, Array<double,2> cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<long,2> &cell_trace,Array<long,2> cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads)
+void free_living_division_single_thread(int i, double max_growth_rate_r, double max_growth_rate_K, Array<double, 2> &cell_array, Array<double,2> cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<long,2> &cell_trace,Array<long,2> cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads, long rng_time_step)
 {
-    auto start = std::chrono::high_resolution_clock::now();
-    std::random_device r;
-    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
-    std::mt19937 RNG(seed);
     Range all = Range::all();
+    long cell_rng_id = (long)cell_array(i,15);
+    if (cell_rng_id == 0)
+    {
+        cell_rng_id = i;
+    }
+    long rng_event = 100;
  
     int pro_loci[8]={0};
     int pro_loci1[4]={0};
@@ -140,15 +143,6 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
     cor_small_1(all,8)=C,b;
     int cor_temp1[16]={0};
     
-    const gsl_rng_type *T7;
-    gsl_rng *r7;
-    gsl_rng_env_setup();
-    T7 = gsl_rng_ranlxs0;
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
-    gsl_rng_default_seed = (duration.count());
-    r7 = gsl_rng_alloc(T7);
-    
     int cell_type=(int)cell_array(i,14);
     
     
@@ -163,7 +157,7 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
             double growth_rate_inherent=cell_array(i,10);
             double X1=growth_rate_inherent*(1-0.05);
             double X2=growth_rate_inherent*(1+0.05);
-            cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
+            cell_array(i,10)=(X2-X1)*stateless_uniform(cell_rng_id, rng_time_step, rng_event++)+X1;
             int division_times=(int)cell_array(i,Col);
             cell_array(i,Col)=division_times+1;
             
@@ -177,7 +171,7 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
             }
             
             
-            cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label,K_formation_rate);
+            cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label,K_formation_rate, cell_rng_id, rng_time_step, rng_event);
             
             cell_index=cell_index+1;
 //            generation=generation+1;
@@ -218,8 +212,7 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
             if (loci_number>0)
             {
                 cell_label=cell_label+1;
-                shuffle(cor_big_temp_1,cor_big_temp_1+size_big,RNG);
-                //            gsl_ran_shuffle(r7, cor_big_temp_1, size_big, sizeof (int));
+                stateless_shuffle(cor_big_temp_1,cor_big_temp_1+size_big, cell_rng_id, rng_time_step, rng_event++);
                 int loci=cor_big_temp_1[0];
                 cell_temp(1,1)=cor_big_1(1,loci);
                 cell_temp(1,2)=cor_big_1(1,loci);
@@ -363,8 +356,7 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
                     if (pro_loci_number1 > 1 && pro_loci_number2 > 1)
                     {
                         int random_pro_loci[2]={1,2};
-                        shuffle(random_pro_loci,random_pro_loci+2,RNG);
-                        //                    gsl_ran_shuffle(r7, random_pro_loci, 2, sizeof (int));
+                        stateless_shuffle(random_pro_loci,random_pro_loci+2, cell_rng_id, rng_time_step, rng_event++);
                         
                         int LociNumber=random_pro_loci[0];
                         switch (LociNumber)
@@ -377,8 +369,7 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
                                 {
                                     random_pro_loci1[aa]=pro_loci1_new[aa];
                                 }
-                                shuffle(random_pro_loci1,random_pro_loci1+sizep1,RNG);
-                                //                            gsl_ran_shuffle(r7, random_pro_loci1, sizep1, sizeof (int));
+                                stateless_shuffle(random_pro_loci1,random_pro_loci1+sizep1, cell_rng_id, rng_time_step, rng_event++);
                                 int proloci1=random_pro_loci1[0];
                                 int proloci2=random_pro_loci1[1];
                                 switch (proloci1)
@@ -537,8 +528,7 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
                                 {
                                     random_pro_loci2[aa]=pro_loci2_new[aa];
                                 }
-                                shuffle(random_pro_loci2,random_pro_loci2+sizep2,RNG);
-                                //                            gsl_ran_shuffle(r7, random_pro_loci2, sizep2, sizeof (int));
+                                stateless_shuffle(random_pro_loci2,random_pro_loci2+sizep2, cell_rng_id, rng_time_step, rng_event++);
                                 int proloci1=random_pro_loci2[0];
                                 int proloci2=random_pro_loci2[1];
                                 switch (proloci1)
@@ -691,8 +681,7 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
                         {
                             random_pro_loci1[aa]=pro_loci1_new[aa];
                         }
-                        shuffle(random_pro_loci1,random_pro_loci1+sizep1,RNG);
-                        //                    gsl_ran_shuffle(r7, random_pro_loci1, sizep1, sizeof (int));
+                        stateless_shuffle(random_pro_loci1,random_pro_loci1+sizep1, cell_rng_id, rng_time_step, rng_event++);
                         int proloci1=random_pro_loci1[0];
                         int proloci2=random_pro_loci1[1];
                         
@@ -852,8 +841,7 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
                         {
                             random_pro_loci2[aa]=pro_loci2_new[aa];
                         }
-                        shuffle(random_pro_loci2,random_pro_loci2+sizep2,RNG);
-                        //                    gsl_ran_shuffle(r7, random_pro_loci2, sizep2, sizeof (int));
+                        stateless_shuffle(random_pro_loci2,random_pro_loci2+sizep2, cell_rng_id, rng_time_step, rng_event++);
                         int proloci1=random_pro_loci2[0];
                         int proloci2=random_pro_loci2[1];
                         
@@ -1002,8 +990,7 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
                         if (abs(pro_loci_number2-pro_loci_number1)>=2 && pro_loci_number2-pro_loci_number1!=7)
                         {
                             int random_pro_loci[2]={1,2};
-                            shuffle(random_pro_loci,random_pro_loci+2,RNG);
-                            //                        gsl_ran_shuffle(r7, random_pro_loci, 2, sizeof (int));
+                            stateless_shuffle(random_pro_loci,random_pro_loci+2, cell_rng_id, rng_time_step, rng_event++);
                             int LociNumber=random_pro_loci[0];
                             switch (LociNumber)
                             {
@@ -1355,8 +1342,7 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
                         {
                             random_pro_loci_1[cor_pro_1_1_nozero_locus]=cor_pro_1_1_nozero_locus+1;
                         }
-                        shuffle(random_pro_loci_1,random_pro_loci_1+cor_pro_1_length,RNG);
-                        //                    gsl_ran_shuffle(r7, random_pro_loci_1, cor_pro_1_length, sizeof (int));
+                        stateless_shuffle(random_pro_loci_1,random_pro_loci_1+cor_pro_1_length, cell_rng_id, rng_time_step, rng_event++);
                         Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
                         cell_temp(1,1)=(double)cor_pro_1(1,random_pro_loci_1[0]);
                         cell_temp(1,5)=(double)cor_pro_1(2,random_pro_loci_1[0]);
@@ -1440,8 +1426,7 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
                     {
                         random_pro_loci_1[pro_loci_small_nozero_locus]=pro_loci_small_nozero_locus+1;
                     }
-                    shuffle(random_pro_loci_1,random_pro_loci_1+pro_loci_small_length,RNG);
-                    //                gsl_ran_shuffle(r7, random_pro_loci_1, pro_loci_small_length, sizeof (int));
+                    stateless_shuffle(random_pro_loci_1,random_pro_loci_1+pro_loci_small_length, cell_rng_id, rng_time_step, rng_event++);
                     Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
                     cell_temp(1,1)=(double)pro_loci_small(1,random_pro_loci_1[0]);
                     cell_temp(1,5)=(double)pro_loci_small(2,random_pro_loci_1[0]);
@@ -1512,7 +1497,7 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
                 double growth_rate_inherent=cell_array(i,10);
                 double X1=growth_rate_inherent*(1-0.05);
                 double X2=growth_rate_inherent*(1+0.05);
-                cell_array(i,10)=(X2-X1)*gsl_rng_uniform(r7)+X1;
+                cell_array(i,10)=(X2-X1)*stateless_uniform(cell_rng_id, rng_time_step, rng_event++)+X1;
                 
                 r_label=r_label+1;
                 K_label=K_label+1;
@@ -1524,7 +1509,7 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
                 {
                     cell_array(i,15)=K_label;
                 }
-                cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label, K_formation_rate);
+                cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label, K_formation_rate, cell_rng_id, rng_time_step, rng_event);
                 
                 cell_index=cell_index+1;
 //                generation=generation+1;
@@ -1537,8 +1522,7 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
                 
                 cell_label=cell_label+1;
                 long cellstage=Visual_range(x,y,3);
-                shuffle(cor_temp, cor_temp+loci_number,RNG);
-                //            gsl_ran_shuffle(r7, cor_temp, loci_number, sizeof (int));
+                stateless_shuffle(cor_temp, cor_temp+loci_number, cell_rng_id, rng_time_step, rng_event++);
                 int loci=cor_temp_3[cor_temp[0]];
                 cell_temp(1,1)=cor_small_1(1,loci);
                 cell_temp(1,5)=cor_small_1(2,loci);
@@ -1754,14 +1738,13 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
         cell_trace(current_size_trace+1,all)=cell_trace_temp(1,all);
         cell_trace(current_size_trace+2,all)=cell_trace_temp(2,all);
         
-        cell_temp(1,13)=gsl_rng_uniform(r7);
+        cell_temp(1,13)=stateless_uniform(cell_rng_id, rng_time_step, rng_event++);
         
         int current_size=cell_array.rows();
         cell_array.resizeAndPreserve(current_size+1,Col);
         cell_array(current_size+1,all)=cell_temp(1,all);
         
     }
-    gsl_rng_free(r7);
 }
 
 #endif /* free_living_division_hpp */

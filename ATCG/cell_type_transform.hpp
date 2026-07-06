@@ -35,54 +35,42 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "density_calculation.hpp"
+#include "random_uniform.hpp"
+#include "stateless_rng.hpp"
 #include <chrono>
 
 using std::chrono::high_resolution_clock;
 
-void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,int i,Array<long, 3> sub_visual, Array<long,3> Visual_range,Array<double, 2> &cell_array, double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,long &r_label,double K_formation_rate)
+void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,int i,Array<long, 3> sub_visual, Array<long,3> Visual_range,Array<double, 2> &cell_array, double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,long &r_label,double K_formation_rate, long cell_rng_id, long rng_time_step, long &rng_event)
 {
     double Dr1=density_calculation(i, sub_visual, Visual_range, cell_array);
     double initial_K_growth_rate1;
     double migration_rate_K2;
-    auto start = std::chrono::high_resolution_clock::now();
-    const gsl_rng_type *T78;
-    gsl_rng *r78;
-    gsl_rng_env_setup();
-    T78 = gsl_rng_ranlxs0;
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
-    gsl_rng_default_seed = (duration.count());
-    r78 = gsl_rng_alloc(T78);
+    if (cell_rng_id == 0)
+    {
+        cell_rng_id = i;
+    }
     if(cell_array(i,14)==0)
     {
         if (cell_array(i,9)==1)
         {
             if (Dr1>=0.5)
             {
-                std::random_device r;
-                std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
-                std::mt19937 RNG(seed);
-                const gsl_rng_type *T77;
-                gsl_rng *r77;
-                gsl_rng_env_setup();
-                T77 = gsl_rng_ranlxs0;
-                auto end = std::chrono::high_resolution_clock::now();
-                auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
-                gsl_rng_default_seed = (duration.count());
-                r77 = gsl_rng_alloc(T77);
-                double random_uni=gsl_rng_uniform(r77);
+                double random_uni=stateless_uniform(cell_rng_id, rng_time_step, rng_event++);
                 if(random_uni<=K_formation_rate)
                 {
                     K_label=K_label+1;
                     cell_temp(1,9)=2;//cell_array type
                     Array<double,2> radom_number(1,100,FortranArray<2>());
-                    radom_number=random_uniform(100);
+                    long random_uniform_event_base = rng_event;
+                    rng_event += 101;
+                    radom_number=random_uniform(100, cell_rng_id, rng_time_step, random_uniform_event_base);
                     double rangK2 = uniup_K - unilow_K;
                     double rand2 = (radom_number(1,50)*rangK2)+unilow_K;
                     initial_K_growth_rate1=gsl_cdf_gaussian_Pinv(rand2, sigmahatK) + muhatK;
                     cell_temp(1,10)=initial_K_growth_rate1;//    $10: inherent growth rate
                     cell_temp(1,11)=initial_K_growth_rate1;// $11: density growth rate
-                    migration_rate_K2=gsl_ran_beta(r77,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
+                    migration_rate_K2=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
                     cell_temp(1,12)=migration_rate_K2;// $12: inherent migration rate
 //                    cell_temp(1,13)=cell_array(i,13);// $13: mass absorb rate
                     cell_temp(1,14)=0;// $14: cell_array stage
@@ -105,7 +93,7 @@ void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_a
                     cell_temp(1,11)=cell_array(i,11);
                     
                     
-                    double mig=gsl_ran_beta(r77,beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
+                    double mig=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
                     if (mig<=migration_rate_r_mean_quia)
                     {
                         cell_array(i,12)=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
@@ -115,7 +103,7 @@ void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_a
                         cell_array(i,12)=mig;
                     }
                     
-                    double mig1=gsl_ran_beta(r77,beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
+                    double mig1=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
                     if (mig1<=migration_rate_r_mean_quia)
                     {
                         cell_temp(1,12)=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
@@ -138,7 +126,7 @@ void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_a
                     cell_temp(1,25)=cell_array(i,25);
                     cell_temp(1,26)=cell_array(i,26);
                     cell_temp(1,27)=cell_array(i,27);
-                    cell_temp(1,28)=gsl_ran_beta(r77,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
+                    cell_temp(1,28)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
                 }
             }
             else
@@ -148,7 +136,7 @@ void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_a
                 cell_temp(1,11)=cell_array(i,11);
                 
                 
-                double mig=gsl_ran_beta(r78,beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
+                double mig=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
                 if (mig<=migration_rate_r_mean_quia)
                 {
                     cell_array(i,12)=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
@@ -173,20 +161,20 @@ void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_a
                 cell_temp(1,25)=cell_array(i,25);
                 cell_temp(1,26)=cell_array(i,26);
                 cell_temp(1,27)=cell_array(i,27);
-                cell_temp(1,28)=gsl_ran_beta(r78,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
+                cell_temp(1,28)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
             }
         }
         else if (cell_array(i,9)==2)
         {
             K_label=K_label+1;
            
-            cell_array(i,12)=gsl_ran_beta(r78,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
+            cell_array(i,12)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
             
             cell_temp(1,9)=cell_array(i,9);
             cell_temp(1,10)=cell_array(i,10);
             cell_temp(1,11)=cell_array(i,11);
             
-            cell_temp(1,12)=cell_array(i,12)=gsl_ran_beta(r78,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
+            cell_temp(1,12)=cell_array(i,12)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
             
 //            cell_temp(1,13)=cell_array(i,13);
             cell_temp(1,15)=K_label;
@@ -210,30 +198,21 @@ void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_a
         {
             if(Dr1>=0.5)
             {
-                auto end = std::chrono::high_resolution_clock::now();
-                auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
-                std::random_device r;
-                std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
-                std::mt19937 RNG(seed);
-                const gsl_rng_type *T77;
-                gsl_rng *r77;
-                gsl_rng_env_setup();
-                T77 = gsl_rng_ranlxs0;
-                gsl_rng_default_seed = (duration.count());
-                r77 = gsl_rng_alloc(T77);
-                double random_uni=gsl_rng_uniform(r77);
+                double random_uni=stateless_uniform(cell_rng_id, rng_time_step, rng_event++);
                 if(random_uni<=K_formation_rate)
                 {
                     K_label=K_label+1;
                     cell_temp(1,9)=2;//cell_array type
                     Array<double,2> radom_number(1,100,FortranArray<2>());
-                    radom_number=random_uniform(100);
+                    long random_uniform_event_base = rng_event;
+                    rng_event += 101;
+                    radom_number=random_uniform(100, cell_rng_id, rng_time_step, random_uniform_event_base);
                     double rangK2 = uniup_K - unilow_K;
                     double rand2 = (radom_number(1,50)*rangK2)+unilow_K;
                     initial_K_growth_rate1=gsl_cdf_gaussian_Pinv(rand2, sigmahatK) + muhatK;
                     cell_temp(1,10)=initial_K_growth_rate1;//    $10: inherent growth rate
                     cell_temp(1,11)=initial_K_growth_rate1;// $11: density growth rate
-                    migration_rate_K2=gsl_ran_beta(r77,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
+                    migration_rate_K2=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
                     cell_temp(1,12)=migration_rate_K2;// $12: inherent migration rate
 //                    cell_temp(1,13)=cell_array(i,13);// $13: mass absorb rate
                     cell_temp(1,15)=K_label;// $15: cell_array index
@@ -253,7 +232,7 @@ void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_a
                     cell_temp(1,10)=cell_array(i,10);
                     cell_temp(1,11)=cell_array(i,11);
                     
-                    double mig=gsl_ran_beta(r77,beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
+                    double mig=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
                     if (mig<=migration_rate_r_mean_quia)
                     {
                         cell_array(i,12)=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
@@ -263,7 +242,7 @@ void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_a
                         cell_array(i,12)=mig;
                     }
                     
-                    double mig1=gsl_ran_beta(r77,beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
+                    double mig1=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
                     if (mig1<=migration_rate_r_mean_quia)
                     {
                         cell_temp(1,12)=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
@@ -282,7 +261,7 @@ void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_a
                     cell_temp(1,25)=cell_array(i,25);
                     cell_temp(1,26)=cell_array(i,26);
                     cell_temp(1,27)=cell_array(i,27);
-                    cell_temp(1,28)=gsl_ran_beta(r77,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
+                    cell_temp(1,28)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
                 }
             }
             else
@@ -291,7 +270,7 @@ void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_a
                 cell_temp(1,10)=cell_array(i,10);
                 cell_temp(1,11)=cell_array(i,11);
                 
-                double mig=gsl_ran_beta(r78,beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
+                double mig=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
                 if (mig<=migration_rate_r_mean_quia)
                 {
                     cell_array(i,12)=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
@@ -301,7 +280,7 @@ void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_a
                     cell_array(i,12)=mig;
                 }
                 
-                double mig1=gsl_ran_beta(r78,beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
+                double mig1=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
                 if (mig1<=migration_rate_r_mean_quia)
                 {
                     cell_temp(1,12)=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
@@ -320,20 +299,20 @@ void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_a
                 cell_temp(1,25)=cell_array(i,25);
                 cell_temp(1,26)=cell_array(i,26);
                 cell_temp(1,27)=cell_array(i,27);
-                cell_temp(1,28)=gsl_ran_beta(r78,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
+                cell_temp(1,28)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
             }
         }
         else if (cell_array(i,9)==2)
         {
             K_label=K_label+1;
          
-            cell_array(i,12)=gsl_ran_beta(r78,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
+            cell_array(i,12)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
             
             cell_temp(1,9)=cell_array(i,9);
             cell_temp(1,10)=cell_array(i,10);
             cell_temp(1,11)=cell_array(i,11);
             
-            cell_temp(1,12)=gsl_ran_beta(r78,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
+            cell_temp(1,12)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
 //            cell_temp(1,13)=cell_array(i,13);
             cell_temp(1,15)=K_label;
             cell_temp(1,18)=0;

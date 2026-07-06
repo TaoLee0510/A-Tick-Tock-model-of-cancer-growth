@@ -101,22 +101,25 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
         {
             for(int co=1;co<=150;co++)
             {
-                if(co<1000)
+                if(co<150)
                 {
-                    fprintf(fid8,"%d\t",cell_trace(i,co));
+                    fprintf(fid8,"%ld\t",cell_trace(i,co));
                 }
                 else
                 {
-                    fprintf(fid8,"%d\n",cell_trace(i,co));
+                    fprintf(fid8,"%ld\n",cell_trace(i,co));
                 }
             }
         }
         fclose(fid8);
 
-        char dirname2 [100] = {'\0'};
-        int tt=T-1;
-        sprintf(dirname2, "rm ./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,tt);
-        system(dirname2);
+        if (T > 0)
+        {
+            char filedir_prev [100] = {'\0'};
+            int tt=T-1;
+            sprintf(filedir_prev, "./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,tt);
+            remove(filedir_prev);
+        }
         
         T++;
         

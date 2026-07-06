@@ -31,12 +31,11 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "random_uniform.hpp"
+#include "stateless_rng.hpp"
 using namespace blitz;
 void inner_initiation_array(int N0,int N01,int R0,int Visual_range_x, int Visual_range_y, Array<double,2> &cell_array_inner, Array<long,3> Visual_range, double uniup_r1, double unilow_r1, double sigmahatr,double muhatr, double uniup_K1, double unilow_K1, double sigmahatK,double muhatK, int N0r1,int N0K1, double *migration_rate_r1, double *migration_rate_K1)
 {
-    std::random_device r;
-    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
-    std::mt19937 RNG(seed);
+    const long rng_context = 10003;
     double initial_r_growth_rate[N0r1];
     double initial_K_growth_rate[N0K1];
     Array<double,2> cor(2,N01+1,FortranArray<2>());
@@ -62,7 +61,7 @@ void inner_initiation_array(int N0,int N01,int R0,int Visual_range_x, int Visual
     {
         random_cor[x]=x+1;
     }
-    shuffle(random_cor, random_cor+N01,RNG);
+    stateless_shuffle(random_cor, random_cor+N01, rng_context, N01, 1);
     Array<double,2> cell_array_cor(2,N01,FortranArray<2>());
     for (int x=1; x<=N01; x++)
     {
@@ -71,14 +70,14 @@ void inner_initiation_array(int N0,int N01,int R0,int Visual_range_x, int Visual
         cell_array_cor(2,x)=cor(2,seed);
     }
     Array<double,2> radom_number(1,N01,FortranArray<2>());
-    radom_number=random_uniform(N01);
+    radom_number=random_uniform(N01, rng_context, 0, 1000);
     double rangr2 = uniup_r1 - unilow_r1;
     for (int x=1; x<=N0r1; x++)
     {
         double rand1 = (radom_number(1,x)*rangr2)+unilow_r1;
         initial_r_growth_rate[x-1]=gsl_cdf_gaussian_Pinv(rand1, sigmahatr) + muhatr;
     }
-    radom_number=random_uniform(N01);
+    radom_number=random_uniform(N01, rng_context, 0, 2000);
     
     double rangK2 = uniup_K1 - unilow_K1;
     for (int x=1; x<=N0K1; x++)
@@ -124,4 +123,3 @@ void inner_initiation_array(int N0,int N01,int R0,int Visual_range_x, int Visual
 }
 
 #endif /* inner_initiation_array_hpp */
-

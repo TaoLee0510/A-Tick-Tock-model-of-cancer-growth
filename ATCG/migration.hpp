@@ -54,24 +54,22 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
+#include "stateless_rng.hpp"
 #include <chrono>
 
 using std::chrono::high_resolution_clock;
 using namespace blitz;
-void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3> &Visual_range, Array<int,2> cor_big, Array<int, 2> area_square, Array<int, 2> sub_area_square, Array<int, 2> cor_small, Array<int, 2> area_square_s, Array<int, 2>  sub_area_square_s,double &migration_judgement)
+void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3> &Visual_range, Array<int,2> cor_big, Array<int, 2> area_square, Array<int, 2> sub_area_square, Array<int, 2> cor_small, Array<int, 2> area_square_s, Array<int, 2>  sub_area_square_s,double &migration_judgement, long rng_time_step, long rng_event_base)
 {
-    auto start = std::chrono::high_resolution_clock::now();
     Range all = Range::all();
     int x1=cell_array(i,1);
     int y1=cell_array(i,5);
-    const gsl_rng_type *T6;
-    gsl_rng *r6;
-    gsl_rng_env_setup();
-    T6 = gsl_rng_ranlxs0;
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
-    gsl_rng_default_seed = (duration.count());
-    r6 = gsl_rng_alloc(T6);
+    long cell_rng_id = (long)cell_array(i,15);
+    if (cell_rng_id == 0)
+    {
+        cell_rng_id = i;
+    }
+    long rng_event = rng_event_base + ((long)cell_array(i,9) * 10000) + ((long)cell_array(i,14) * 1000);
     int cell_type=(int)cell_array(i,9);
     switch (cell_type)
     {
@@ -446,7 +444,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                     }
                                     if (locinumber>0)
                                     {
-                                        gsl_ran_shuffle(r6, new_loci_for_migration, locinumber, sizeof (int));
+                                        stateless_shuffle(new_loci_for_migration, new_loci_for_migration + locinumber, cell_rng_id, rng_time_step, rng_event++);
                                         order=new_loci_for_migration[0];
                                     }
                                     delete[] new_direction_for_migration;
@@ -491,28 +489,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={8,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={2,8};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={1,2,1,1,1,1,1,1,1,1};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={1,8,1,1,1,1,1,1,1,1};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -533,7 +531,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={3,7};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -583,28 +581,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={7,8,1,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={7,1};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={7,8,8,8,8,8,8,8,8,8};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={1,8,8,8,8,8,8,8,8,8};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -625,7 +623,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={2,6};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -675,28 +673,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={1,2,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={1,3};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={1,2,2,2,2,2,2,2,2,2};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={3,2,2,2,2,2,2,2,2,2};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -717,7 +715,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={8,4};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -767,28 +765,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={2,3,4,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={2,4};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={2,3,3,3,3,3,3,3,3,3};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={4,3,3,3,3,3,3,3,3,3};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -810,7 +808,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={1,5};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -860,28 +858,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={3,4,5,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={3,5};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={3,4,4,4,4,4,4,4,4,4};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={5,4,4,4,4,4,4,4,4,4};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -902,7 +900,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={2,6};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -952,28 +950,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={4,5,6,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={4,6};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={4,5,5,5,5,5,5,5,5,5};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={6,5,5,5,5,5,5,5,5,5};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -995,7 +993,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={3,7};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -1045,28 +1043,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={5,6,7,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={5,7};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={5,6,6,6,6,6,6,6,6,6};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={7,6,6,6,6,6,6,6,6,6};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -1087,7 +1085,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={4,8};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -1137,28 +1135,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={6,7,8,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={6,8};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={6,7,7,7,7,7,7,7,7,7};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={8,7,7,7,7,7,7,7,7,7};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -1179,7 +1177,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={1,5};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -1744,7 +1742,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                     }
                                     if (locinumber>0)
                                     {
-                                        gsl_ran_shuffle(r6, new_loci_for_migration, locinumber, sizeof (int));
+                                        stateless_shuffle(new_loci_for_migration, new_loci_for_migration + locinumber, cell_rng_id, rng_time_step, rng_event++);
                                         
                                         order=new_loci_for_migration[0];
                                     }
@@ -1790,28 +1788,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={8,1,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={2,8};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={1,8,1,1,1,1,1,1,1,1};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={1,2,1,1,1,1,1,1,1,1};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -1832,7 +1830,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={3,7};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -1882,28 +1880,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={7,8,1,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={7,1};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={7,8,8,8,8,8,8,8,8,8};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={1,8,8,8,8,8,8,8,8,8};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -1924,7 +1922,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={2,6};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -1974,28 +1972,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={1,2,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={1,3};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={1,2,2,2,2,2,2,2,2,2};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={3,2,2,2,2,2,2,2,2,2};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -2016,7 +2014,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={8,4};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -2066,28 +2064,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={2,3,4,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={2,4};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={2,3,3,3,3,3,3,3,3,3};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={4,3,3,3,3,3,3,3,3,3};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -2109,7 +2107,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={1,5};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -2159,28 +2157,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={3,4,5,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={3,5};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={3,4,4,4,4,4,4,4,4,4};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={5,4,4,4,4,4,4,4,4,4};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -2201,7 +2199,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={2,6};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -2251,28 +2249,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={4,5,6,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={4,6};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={4,5,5,5,5,5,5,5,5,5};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={6,5,5,5,5,5,5,5,5,5};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -2294,7 +2292,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={3,7};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -2344,28 +2342,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={5,6,7,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={5,7};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={5,6,6,6,6,6,6,6,6,6};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={7,6,6,6,6,6,6,6,6,6};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -2386,7 +2384,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={4,8};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -2436,28 +2434,28 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                                 {
                                     int order_loci[20]={6,7,8,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7};
                                     int n=20;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==1 && pro_loci_mid==0)
                                 {
                                     int order_loci[2]={6,8};
                                     int n=2;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_mid==1 && pro_loci_right==0)
                                 {
                                     int order_loci[10]={6,7,7,7,7,7,7,7,7,7};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_right==1 && pro_loci_mid==1 && pro_loci_left==0)
                                 {
                                     int order_loci[10]={8,7,7,7,7,7,7,7,7,7};
                                     int n=10;
-                                    gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+                                    stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
                                     order=order_loci[0];
                                 }
                                 else if (pro_loci_left==1 && pro_loci_right==0 && pro_loci_mid==0)
@@ -2478,7 +2476,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
 //                                    {
 //                                        int order_loci[2]={1,5};
 //                                        int n=2;
-//                                        gsl_ran_shuffle(r6, order_loci, n, sizeof (int));
+//                                        stateless_shuffle(order_loci, order_loci + n, cell_rng_id, rng_time_step, rng_event++);
 //                                        order=order_loci[0];
 //                                    }
 //                                    else if(pro_loci_right_riht==1 && pro_loci_left_left==0)
@@ -2701,7 +2699,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                         }
                         else
                         {
-                            gsl_ran_shuffle(r6, direction1, new_loci, sizeof (int));
+                            stateless_shuffle(direction1, direction1 + new_loci, cell_rng_id, rng_time_step, rng_event++);
                             
                             order=direction1[0];
                         }
@@ -2931,7 +2929,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                         }
                         else if (length_dir>0)
                         {
-                            gsl_ran_shuffle(r6, direction1, new_loci, sizeof (int));
+                            stateless_shuffle(direction1, direction1 + new_loci, cell_rng_id, rng_time_step, rng_event++);
                             
                             order=direction1[0];
                         }
@@ -3071,6 +3069,5 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
         }
     }
     migration_judgement=migration_judgement+1;
-    gsl_rng_free(r6);
 }
 #endif /* migration_hpp */

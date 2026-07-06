@@ -280,22 +280,20 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = (
 					/usr/local/include,
-					/opt/homebrew/Cellar/freetype/2.13.2/include/freetype2,
+					/opt/homebrew/opt/freetype/include/freetype2,
 					/opt/homebrew/include,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/18.1.5/include,
 					/opt/homebrew/opt/libomp/include,
 				);
 				"HEADER_SEARCH_PATHS[arch=*]" = "";
 				"INFOPLIST_FILE[sdk=*]" = "";
 				LD_RUNPATH_SEARCH_PATHS = /opt/homebrew/opt/libomp/lib;
 				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/opt/libomp/lib,
+					/opt/homebrew/opt/freetype/lib,
 					/usr/local/lib,
 					/opt/homebrew/lib,
-					/opt/homebrew/Cellar/freetype/2.13.2/lib,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/18.1.5/lib,
-					/opt/homebrew/opt/libomp/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.1;
 				MTL_ENABLE_DEBUG_INFO = YES;
@@ -319,10 +317,9 @@
 				);
 				SDKROOT = macosx;
 				USER_HEADER_SEARCH_PATHS = (
-					/opt/homebrew/Cellar/freetype/2.13.2/include/freetype2,
+					/opt/homebrew/opt/freetype/include/freetype2,
 					/opt/homebrew/include,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/18.1.5/include,
 					/opt/homebrew/opt/libomp/include,
 				);
 			};
@@ -379,20 +376,18 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = (
 					/usr/local/include,
-					/opt/homebrew/Cellar/freetype/2.13.2/include/freetype2,
+					/opt/homebrew/opt/freetype/include/freetype2,
 					/opt/homebrew/include,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/18.1.5/include,
 					/opt/homebrew/opt/libomp/include,
 				);
 				LD_RUNPATH_SEARCH_PATHS = /opt/homebrew/opt/libomp/lib;
 				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/opt/libomp/lib,
+					/opt/homebrew/opt/freetype/lib,
 					/usr/local/lib,
 					/opt/homebrew/lib,
-					/opt/homebrew/Cellar/freetype/2.13.2/lib,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/18.1.5/lib,
-					/opt/homebrew/opt/libomp/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
@@ -416,10 +411,9 @@
 				);
 				SDKROOT = macosx;
 				USER_HEADER_SEARCH_PATHS = (
-					/opt/homebrew/Cellar/freetype/2.13.2/include/freetype2,
+					/opt/homebrew/opt/freetype/include/freetype2,
 					/opt/homebrew/include,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/18.1.5/include,
 					/opt/homebrew/opt/libomp/include,
 				);
 			};
@@ -438,17 +432,18 @@
 				GCC_OPTIMIZATION_LEVEL = 3;
 				HEADER_SEARCH_PATHS = (
 					/usr/local/include,
-					/opt/homebrew/Cellar/freetype/2.12.0/include/freetype2,
+					/opt/homebrew/opt/freetype/include/freetype2,
 					/opt/homebrew/include,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/15.0.6/include,
+					/opt/homebrew/opt/libomp/include,
 				);
+				LD_RUNPATH_SEARCH_PATHS = /opt/homebrew/opt/libomp/lib;
 				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/opt/libomp/lib,
+					/opt/homebrew/opt/freetype/lib,
 					/usr/local/lib,
 					/opt/homebrew/lib,
-					/opt/homebrew/Cellar/freetype/2.12.0/lib,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/15.0.6/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				OTHER_CFLAGS = "";
@@ -487,17 +482,18 @@
 				GCC_OPTIMIZATION_LEVEL = 3;
 				HEADER_SEARCH_PATHS = (
 					/usr/local/include,
-					/opt/homebrew/Cellar/freetype/2.12.0/include/freetype2,
+					/opt/homebrew/opt/freetype/include/freetype2,
 					/opt/homebrew/include,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/15.0.6/include,
+					/opt/homebrew/opt/libomp/include,
 				);
+				LD_RUNPATH_SEARCH_PATHS = /opt/homebrew/opt/libomp/lib;
 				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/opt/libomp/lib,
+					/opt/homebrew/opt/freetype/lib,
 					/usr/local/lib,
 					/opt/homebrew/lib,
-					/opt/homebrew/Cellar/freetype/2.12.0/lib,
 					/usr/local/include/freetype2,
-					/opt/homebrew/Cellar/libomp/15.0.6/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				OTHER_CFLAGS = "";
