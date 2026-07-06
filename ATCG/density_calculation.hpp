@@ -34,9 +34,11 @@
 #define BZ_THREADSAFE_USE_OPENMP
 #include <blitz/blitz.h>
 #include <blitz/array.h>
+#include "cell_columns.hpp"
+#include "cell_store.hpp"
 #include "deltah_calculation.hpp"
 
-double density_calculation(int i, Array<long, 3> sub_visual, Array<long,3> Visual_range,Array<double, 2> cell_array)
+inline double density_calculation_from_position(int x1, int y1, int cell_stage, Array<long, 3> &sub_visual, const Array<long,3> &Visual_range)
 {
     Range all = Range::all();
     int ar=70;
@@ -48,7 +50,7 @@ double density_calculation(int i, Array<long, 3> sub_visual, Array<long,3> Visua
     int cell_big=cell_small*0.25;
     sub_visual.resize(ar,ar,4);
     sub_visual=0;
-    sub_visual(all,all,4)=Visual_range(Range(cell_array(i,1)-xar,cell_array(i,1)+yar),Range(cell_array(i,5)-xar,cell_array(i,5)+yar),4);
+    sub_visual(all,all,4)=Visual_range(Range(x1-xar,x1+yar),Range(y1-xar,y1+yar),4);
     long cell_count[cell_number_limit];////********
     int cc=0;
     for (int cx=0; cx<ar; cx++)
@@ -84,7 +86,7 @@ double density_calculation(int i, Array<long, 3> sub_visual, Array<long,3> Visua
     double density;
 //    double density=cell_number_final/(double)cell_number_limit;
     
-    if (cell_array(i,14)==0)
+    if (cell_stage==0)
     {
         density=cell_number_final/(double)cell_big;
     }
@@ -93,5 +95,22 @@ double density_calculation(int i, Array<long, 3> sub_visual, Array<long,3> Visua
         density=cell_number_final/(double)cell_small;
     }
     return density;
+}
+
+inline double density_calculation(int i, Array<long, 3> &sub_visual, const Array<long,3> &Visual_range, const Array<double, 2> &cell_array)
+{
+    int x1 = (int)cell_array(i,cell_col::kX1);
+    int y1 = (int)cell_array(i,cell_col::kY1);
+    int cell_stage = (int)cell_array(i,cell_col::kStage);
+    return density_calculation_from_position(x1, y1, cell_stage, sub_visual, Visual_range);
+}
+
+inline double density_calculation(int i, Array<long, 3> &sub_visual, const Array<long,3> &Visual_range, const CellStore &cells)
+{
+    int row = i - 1;
+    int x1 = (int)cells.x1()[row];
+    int y1 = (int)cells.y1()[row];
+    int cell_stage = (int)cells.stage()[row];
+    return density_calculation_from_position(x1, y1, cell_stage, sub_visual, Visual_range);
 }
 #endif /* density_calculation_hpp */
