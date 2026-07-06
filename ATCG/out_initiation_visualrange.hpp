@@ -13,7 +13,7 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 using namespace blitz;
-Array<long,3> outer_initiation_visualrange(Array<double,2> cell_array0,int N0,int Vx,int Vy,int &cell_label)
+Array<long,3> outer_initiation_visualrange(const Array<double,2> &cell_array0,int N0,int Vx,int Vy,int &cell_label)
 {
     Range all = Range::all();
     Array<long,3> Visual_range(Vx,Vy,4,FortranArray<3>());

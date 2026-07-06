@@ -16,7 +16,7 @@
 #include <cmath>
 
 using namespace blitz;
-void SaveCellArray(int &T, double alpha, double beta, Array<double,2> cell_array ,int Col)
+void SaveCellArray(int &T, double alpha, double beta, const Array<double,2> &cell_array ,int Col)
 {
     if(Col>28)
     {
