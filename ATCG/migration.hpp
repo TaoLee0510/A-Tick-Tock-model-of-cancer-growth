@@ -54,6 +54,7 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
+#include "cell_motion.hpp"
 #include "stateless_rng.hpp"
 #include <chrono>
 
