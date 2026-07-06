@@ -32,8 +32,9 @@
 #include <blitz/array.h>
 #include "random_uniform.hpp"
 #include "stateless_rng.hpp"
+#include "cell_store.hpp"
 using namespace blitz;
-void inner_initiation_array(int N0,int N01,int R0,int Visual_range_x, int Visual_range_y, Array<double,2> &cell_array_inner, Array<long,3> Visual_range, double uniup_r1, double unilow_r1, double sigmahatr,double muhatr, double uniup_K1, double unilow_K1, double sigmahatK,double muhatK, int N0r1,int N0K1, double *migration_rate_r1, double *migration_rate_K1)
+void inner_initiation_array(int N0,int N01,int R0,int Visual_range_x, int Visual_range_y, Array<double,2> &cell_array_inner, const Array<long,3> &Visual_range, double uniup_r1, double unilow_r1, double sigmahatr,double muhatr, double uniup_K1, double unilow_K1, double sigmahatK,double muhatK, int N0r1,int N0K1, double *migration_rate_r1, double *migration_rate_K1)
 {
     const long rng_context = 10003;
     double initial_r_growth_rate[N0r1];
@@ -120,6 +121,14 @@ void inner_initiation_array(int N0,int N01,int R0,int Visual_range_x, int Visual
             a=a+1;
         }
     }
+}
+
+inline CellStore inner_initiation_cell_store(int N0,int N01,int R0,int Visual_range_x, int Visual_range_y, const Array<long,3> &Visual_range, double uniup_r1, double unilow_r1, double sigmahatr,double muhatr, double uniup_K1, double unilow_K1, double sigmahatK,double muhatK, int N0r1,int N0K1, double *migration_rate_r1, double *migration_rate_K1, int Col)
+{
+    Array<double,2> cell_array_inner(N01, Col, FortranArray<2>());
+    cell_array_inner = 0;
+    inner_initiation_array(N0, N01, R0, Visual_range_x, Visual_range_y, cell_array_inner, Visual_range, uniup_r1, unilow_r1, sigmahatr, muhatr, uniup_K1, unilow_K1, sigmahatK, muhatK, N0r1, N0K1, migration_rate_r1, migration_rate_K1);
+    return cell_store_from_array(cell_array_inner, Col);
 }
 
 #endif /* inner_initiation_array_hpp */

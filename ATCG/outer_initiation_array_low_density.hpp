@@ -32,9 +32,10 @@
 #include <blitz/array.h>
 #include "random_uniform.hpp"
 #include "stateless_rng.hpp"
+#include "cell_store.hpp"
 using namespace blitz;
 
-Array<double,2> outer_initiation_array_low_density(int N0, int Visual_range_x, int Visual_range_y, Array<int,2> A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K)
+Array<double,2> outer_initiation_array_low_density(int N0, int Visual_range_x, int Visual_range_y, const Array<int,2> &A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K)
 {
     const long rng_context = 10002;
     double initial_r_growth_rate[N0r];
@@ -146,6 +147,12 @@ Array<double,2> outer_initiation_array_low_density(int N0, int Visual_range_x, i
         }
     }
     return cell_array_out_1;
+}
+
+inline CellStore outer_initiation_low_density_cell_store(int N0, int Visual_range_x, int Visual_range_y, const Array<int,2> &A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K)
+{
+    Array<double,2> cell_array_out = outer_initiation_array_low_density(N0, Visual_range_x, Visual_range_y, A, uniup_r, unilow_r, sigmahatr, muhatr, uniup_K, unilow_K, sigmahatK, muhatK, N0r, N0K, migration_rate_r, migration_rate_K);
+    return cell_store_from_array(cell_array_out, cell_col::kStandardColumnCount);
 }
 
 #endif /* outer_initiation_array_low_density_hpp */
