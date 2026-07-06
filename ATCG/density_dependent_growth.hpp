@@ -36,6 +36,7 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "random_uniform.hpp"
+#include "cell_columns.hpp"
 #include "outer_corr.hpp"
 #include "outer_cell_count.hpp"
 #include "deltah_calculation.hpp"
@@ -107,7 +108,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     int MMR1=0;
     int MMR2=0;
     int cell_label=(Visual_range_x+200)*(Visual_range_y+200)+1;
-    int Col=28;
+    int Col=cell_col::kStandardColumnCount;
     int borderx=Visual_range_x+100;
     int bordery=Visual_range_y+100;
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

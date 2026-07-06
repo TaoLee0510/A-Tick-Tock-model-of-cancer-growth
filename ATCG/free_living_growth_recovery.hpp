@@ -39,6 +39,7 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "random_uniform.hpp"
+#include "cell_columns.hpp"
 #include "outer_corr.hpp"
 #include "outer_cell_count.hpp"
 #include "deltah_calculation.hpp"
@@ -120,7 +121,7 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     long cell_index=0;
   //int generation=0;
     
-    int Col=31;
+    int Col=cell_col::kFreeLivingColumnCount;
     
     int borderx=Visual_range_x+100;
     int bordery=Visual_range_y+100;
