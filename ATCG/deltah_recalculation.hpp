@@ -10,29 +10,53 @@
 #define deltah_recalculation_hpp
 
 #include <stdio.h>
+#include <algorithm>
+#include <cmath>
 #include <blitz/blitz.h>
 #include <blitz/array.h>
+#include "cell_columns.hpp"
+#include "cell_store.hpp"
 
+inline void set_deltah_from_max_migration_rate(double &deltah, int &MMR, double max_mig_r)
+{
+    double aT=1;
+    MMR=(int)ceil(max_mig_r);
+    if (MMR <= 0)
+    {
+        MMR = 1;
+    }
+    deltah = aT/(double)MMR;
+    if (deltah>0.1)
+    {
+        deltah=0.1;
+    }
+}
 
-void deltah_recalculation(double &deltah, Array<double,2> cell_array, int &MMR, int DDM)
+void deltah_recalculation(double &deltah, const Array<double,2> &cell_array, int &MMR, int DDM)
 {
     if (DDM==1)
     {
-        int C_12= cell_array.rows();
-        double cell_array_12[C_12];
-        for (int CN=0; CN<C_12; CN++)
+        int row_count= cell_array.rows();
+        double max_mig_r=0.0;
+        for (int row=1; row<=row_count; row++)
         {
-            cell_array_12[CN]=cell_array(CN+1,12);
+            max_mig_r=std::max(max_mig_r, cell_array(row,cell_col::kMigrationRateBase));
         }
-        qsort(cell_array_12,C_12,sizeof(cell_array_12[0]),cmp);
-        double max_mig_r=cell_array_12[C_12-1];
-        double aT=1;
-        MMR=(int)ceil(max_mig_r);
-        deltah = aT/(double)MMR;
-        if (deltah>0.1)
+        set_deltah_from_max_migration_rate(deltah, MMR, max_mig_r);
+    }
+}
+
+void deltah_recalculation(double &deltah, const CellStore &cells, int &MMR, int DDM)
+{
+    if (DDM==1)
+    {
+        const CellStore::Column &migration_rates = cells.migration_rate_base();
+        if (migration_rates.empty())
         {
-            deltah=0.1;
+            return;
         }
+        double max_mig_r=*std::max_element(migration_rates.begin(), migration_rates.end());
+        set_deltah_from_max_migration_rate(deltah, MMR, max_mig_r);
     }
 }
 #endif /* deltah_recalculation_hpp */

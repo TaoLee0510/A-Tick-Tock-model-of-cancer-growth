@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <initializer_list>
 #include <vector>
 #include <blitz/blitz.h>
 #include <blitz/array.h>
@@ -21,7 +22,7 @@ public:
     using Column = std::vector<double>;
 
     explicit CellStore(int column_count = cell_col::kMaxColumnCount)
-    : column_count_(column_count), columns_(column_count + 1)
+    : column_count_(column_count), row_count_(0), columns_(column_count + 1)
     {
     }
 
@@ -32,11 +33,12 @@ public:
 
     int rows() const
     {
-        return columns_.size() > 1 ? static_cast<int>(columns_[1].size()) : 0;
+        return row_count_;
     }
 
     void resize(int row_count)
     {
+        row_count_ = row_count;
         for (int col = 1; col <= column_count_; ++col)
         {
             columns_[col].resize(row_count);
@@ -53,6 +55,7 @@ public:
 
     void push_empty()
     {
+        ++row_count_;
         for (int col = 1; col <= column_count_; ++col)
         {
             columns_[col].push_back(0.0);
@@ -113,6 +116,7 @@ public:
 
 private:
     int column_count_;
+    int row_count_;
     std::vector<Column> columns_;
 };
 
@@ -124,6 +128,24 @@ inline CellStore cell_store_from_array(const Array<double, 2> &cell_array, int c
     cells.resize(row_count);
 
     for (int col = 1; col <= cols; ++col)
+    {
+        CellStore::Column &target = cells.column(col);
+        for (int row = 1; row <= row_count; ++row)
+        {
+            target[row - 1] = cell_array(row, col);
+        }
+    }
+
+    return cells;
+}
+
+inline CellStore cell_store_from_array_columns(const Array<double, 2> &cell_array, int column_count, std::initializer_list<int> selected_columns)
+{
+    CellStore cells(column_count);
+    int row_count = cell_array.rows();
+    cells.resize(row_count);
+
+    for (int col : selected_columns)
     {
         CellStore::Column &target = cells.column(col);
         for (int row = 1; row <= row_count; ++row)

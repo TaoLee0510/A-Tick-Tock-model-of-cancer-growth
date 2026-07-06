@@ -38,6 +38,7 @@
 #include <blitz/array.h>
 #include "random_uniform.hpp"
 #include "cell_columns.hpp"
+#include "cell_store.hpp"
 #include "outer_corr.hpp"
 #include "outer_cell_count.hpp"
 #include "deltah_calculation.hpp"
@@ -466,7 +467,8 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
         death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads,H);
         sortRow(cell_array, cell_array1,Col,9,threads);///sort cell type
         stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall,H);
-        deltah_recalculation(deltah, cell_array, MMR, DDM);
+        CellStore deltah_cells = cell_store_from_array_columns(cell_array, Col, {cell_col::kMigrationRateBase});
+        deltah_recalculation(deltah, deltah_cells, MMR, DDM);
         sortRow(cell_array,cell_array1,Col,16,threads);///sort time division
         save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng);
         int C1=cell_array.rows();
