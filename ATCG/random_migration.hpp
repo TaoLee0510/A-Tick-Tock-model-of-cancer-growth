@@ -34,28 +34,22 @@
 #define BZ_THREADSAFE_USE_OPENMP
 #include <blitz/blitz.h>
 #include <blitz/array.h>
+#include "cell_columns.hpp"
+#include "cell_store.hpp"
 #include "deltah_calculation.hpp"
 #include "cell_motion.hpp"
 #include "stateless_rng.hpp"
 using namespace blitz;
-void random_migration(int i, double deltah,Array<double, 2> &cell_array, Array<long, 3> &Visual_range, Array<int,2> cor_big, Array<int, 2> area_square, Array<int, 2> sub_area_square, Array<int, 2> cor_small, Array<int, 2> area_square_s, Array<int, 2>  sub_area_square_s,double &migration_judgement, long rng_time_step, long rng_event_base)
+
+inline int select_random_migration_direction(int x1, int y1, int cell_stage, Array<long, 3> &Visual_range, Array<int,2> &cor_big, Array<int, 2> &cor_small, long cell_rng_id, long rng_time_step, long rng_event)
 {
-    //    std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
     Range all = Range::all();
-    long cell_rng_id = (long)cell_array(i,15);
-    if (cell_rng_id == 0)
-    {
-        cell_rng_id = i;
-    }
-    long rng_event = rng_event_base + ((long)cell_array(i,14) * 100);
-    int x1=cell_array(i,1);
-    int y1=cell_array(i,5);
-    if (cell_array(i,14)==0)
+    int direction[8]={0};
+    if (cell_stage==0)
     {
         cor_big.resize(4,4);
         cor_big=0;
         cor_big(all,all)=Visual_range(Range(x1-1,x1+2),Range(y1-1,y1+2),1);
-        int direction[8]={0};
         if (cor_big(2,1)==0 && cor_big(1,1)==0 && cor_big(1,2)==0)
         {
             direction[0]=1;
@@ -88,52 +82,12 @@ void random_migration(int i, double deltah,Array<double, 2> &cell_array, Array<l
         {
             direction[7]=8;
         }
-        int mloci=0;
-        for (int mlo=0; mlo<8; mlo++)
-        {
-            if (direction[mlo]!=0)
-            {
-                mloci++;
-            }
-        }
-        
-        if (mloci>0)
-        {
-            int *direction1=new int[mloci];
-            int new_loci=0;
-            for (int loci=0; loci<8; loci++)
-            {
-                if (direction[loci]!=0)
-                {
-                    direction1[new_loci]=direction[loci];
-                    new_loci++;
-                }
-            }
-            int order=0;
-            long length_dir=new_loci;
-            if (length_dir==0)
-            {
-                order=direction1[0];
-            }
-            else
-            {
-                stateless_shuffle(direction1, direction1 + new_loci, cell_rng_id, rng_time_step, rng_event++);
-                order=direction1[0];
-            }
-            
-            move_cell_array(i, cell_array, Visual_range, order);
-            delete[] direction1;
-            direction1 = NULL;
-            cell_array(i,20)=0;
-            cell_array(i,24)=1;
-        }
     }
     else //small stage
     {
         cor_small.resize(3, 3);
         cor_small=0;
         cor_small(all,all)=Visual_range(Range(x1-1,x1+1),Range(y1-1,y1+1),1);
-        int direction[8]={0};
         if (cor_small(1,1)==0)
         {
             direction[0]=1;
@@ -166,43 +120,78 @@ void random_migration(int i, double deltah,Array<double, 2> &cell_array, Array<l
         {
             direction[7]=8;
         }
-        int mloci=0;
-        for (int mlo=0; mlo<8; mlo++)
+    }
+
+    int candidates[8]={0};
+    int candidate_count=0;
+    for (int loci=0; loci<8; loci++)
+    {
+        if (direction[loci]!=0)
         {
-            if (direction[mlo]!=0)
-            {
-                mloci++;
-            }
+            candidates[candidate_count]=direction[loci];
+            candidate_count++;
         }
-        if (mloci>0)
-        {
-            int *direction1=new int[mloci];
-            int new_loci=0;
-            for (int loci=0; loci<8; loci++)
-            {
-                if (direction[loci]!=0)
-                {
-                    direction1[new_loci]=direction[loci];
-                    new_loci++;
-                }
-            }
-            int order=0;
-            long length_dir=new_loci;
-            if (length_dir==0)
-            {
-                order=direction1[0];
-            }
-            else if (length_dir>0)
-            {
-                stateless_shuffle(direction1, direction1 + new_loci, cell_rng_id, rng_time_step, rng_event++);
-                order=direction1[0];
-            }
-            move_cell_array(i, cell_array, Visual_range, order);
-            delete[] direction1;
-            direction1 = NULL;
-            cell_array(i,20)=0;
-            cell_array(i,24)=1;
-        }
+    }
+    if (candidate_count==0)
+    {
+        return 0;
+    }
+
+    stateless_shuffle(candidates, candidates + candidate_count, cell_rng_id, rng_time_step, rng_event);
+    return candidates[0];
+}
+
+inline void random_migration(int i, double deltah,Array<double, 2> &cell_array, Array<long, 3> &Visual_range, Array<int,2> &cor_big, Array<int, 2> &area_square, Array<int, 2> &sub_area_square, Array<int, 2> &cor_small, Array<int, 2> &area_square_s, Array<int, 2>  &sub_area_square_s,double &migration_judgement, long rng_time_step, long rng_event_base)
+{
+    (void)deltah;
+    (void)area_square;
+    (void)sub_area_square;
+    (void)area_square_s;
+    (void)sub_area_square_s;
+
+    long cell_rng_id = (long)cell_array(i,cell_col::kId);
+    if (cell_rng_id == 0)
+    {
+        cell_rng_id = i;
+    }
+    int cell_stage=(int)cell_array(i,cell_col::kStage);
+    long rng_event = rng_event_base + ((long)cell_stage * 100);
+    int x1=(int)cell_array(i,cell_col::kX1);
+    int y1=(int)cell_array(i,cell_col::kY1);
+    int order = select_random_migration_direction(x1, y1, cell_stage, Visual_range, cor_big, cor_small, cell_rng_id, rng_time_step, rng_event);
+    if (order!=0)
+    {
+        move_cell_array(i, cell_array, Visual_range, order);
+        cell_array(i,cell_col::kMigrationElapsed)=0;
+        cell_array(i,cell_col::kMigrationFollowFlag)=1;
+    }
+    migration_judgement=migration_judgement+0.0001;
+}
+
+inline void random_migration(int i, double deltah, CellStore &cells, Array<long, 3> &Visual_range, Array<int,2> &cor_big, Array<int, 2> &area_square, Array<int, 2> &sub_area_square, Array<int, 2> &cor_small, Array<int, 2> &area_square_s, Array<int, 2>  &sub_area_square_s,double &migration_judgement, long rng_time_step, long rng_event_base)
+{
+    (void)deltah;
+    (void)area_square;
+    (void)sub_area_square;
+    (void)area_square_s;
+    (void)sub_area_square_s;
+
+    int row = i - 1;
+    long cell_rng_id = (long)cells.id()[row];
+    if (cell_rng_id == 0)
+    {
+        cell_rng_id = i;
+    }
+    int cell_stage=(int)cells.stage()[row];
+    long rng_event = rng_event_base + ((long)cell_stage * 100);
+    int x1=(int)cells.x1()[row];
+    int y1=(int)cells.y1()[row];
+    int order = select_random_migration_direction(x1, y1, cell_stage, Visual_range, cor_big, cor_small, cell_rng_id, rng_time_step, rng_event);
+    if (order!=0)
+    {
+        move_cell_store(i, cells, Visual_range, order);
+        cells.migration_elapsed()[row]=0;
+        cells.migration_follow_flag()[row]=1;
     }
     migration_judgement=migration_judgement+0.0001;
 }
