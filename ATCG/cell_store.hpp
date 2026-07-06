@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <initializer_list>
+#include <numeric>
+#include <stdexcept>
 #include <vector>
 #include <blitz/blitz.h>
 #include <blitz/array.h>
@@ -62,6 +64,89 @@ public:
         }
     }
 
+    void clear_row(int row)
+    {
+        for (int col = 1; col <= column_count_; ++col)
+        {
+            columns_[col][row - 1] = 0.0;
+        }
+    }
+
+    void append_row_from(const CellStore &source, int source_row)
+    {
+        push_empty();
+        int copied_cols = std::min(column_count_, source.column_count());
+        for (int col = 1; col <= copied_cols; ++col)
+        {
+            (*this)(row_count_, col) = source(source_row, col);
+        }
+    }
+
+    void append_from(const CellStore &source)
+    {
+        reserve(row_count_ + source.rows());
+        for (int row = 1; row <= source.rows(); ++row)
+        {
+            append_row_from(source, row);
+        }
+    }
+
+    bool has_consistent_row_count() const
+    {
+        for (int col = 1; col <= column_count_; ++col)
+        {
+            if ((int)columns_[col].size() != row_count_)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    void validate_row_count() const
+    {
+        if (!has_consistent_row_count())
+        {
+            throw std::runtime_error("CellStore column row counts are inconsistent");
+        }
+    }
+
+    void apply_permutation(const std::vector<int> &zero_based_order)
+    {
+        if ((int)zero_based_order.size() != row_count_)
+        {
+            throw std::runtime_error("CellStore permutation size does not match row count");
+        }
+
+        for (int col = 1; col <= column_count_; ++col)
+        {
+            Column reordered(row_count_);
+            const Column &source = columns_[col];
+            for (int new_row = 0; new_row < row_count_; ++new_row)
+            {
+                reordered[new_row] = source[zero_based_order[new_row]];
+            }
+            columns_[col].swap(reordered);
+        }
+    }
+
+    void sort_by_column(int col, bool descending = false)
+    {
+        std::vector<int> order(row_count_);
+        std::iota(order.begin(), order.end(), 0);
+
+        const Column &sort_values = column(col);
+        std::sort(order.begin(), order.end(), [&](int lhs, int rhs) {
+            if (descending)
+            {
+                return sort_values[lhs] > sort_values[rhs];
+            }
+            return sort_values[lhs] < sort_values[rhs];
+        });
+
+        apply_permutation(order);
+    }
+
     double &operator()(int row, int col)
     {
         return columns_[col][row - 1];
@@ -83,36 +168,70 @@ public:
     }
 
     Column &x1() { return column(cell_col::kX1); }
+    Column &x2() { return column(cell_col::kX2); }
+    Column &x3() { return column(cell_col::kX3); }
+    Column &x4() { return column(cell_col::kX4); }
     Column &y1() { return column(cell_col::kY1); }
+    Column &y2() { return column(cell_col::kY2); }
+    Column &y3() { return column(cell_col::kY3); }
+    Column &y4() { return column(cell_col::kY4); }
     Column &type() { return column(cell_col::kType); }
     Column &growth_rate() { return column(cell_col::kGrowthRate); }
     Column &density_growth_rate() { return column(cell_col::kDensityGrowthRate); }
     Column &migration_rate_base() { return column(cell_col::kMigrationRateBase); }
+    Column &random_label() { return column(cell_col::kRandomLabel); }
     Column &stage() { return column(cell_col::kStage); }
     Column &id() { return column(cell_col::kId); }
     Column &division_elapsed() { return column(cell_col::kDivisionElapsed); }
     Column &division_time() { return column(cell_col::kDivisionTime); }
+    Column &death_time() { return column(cell_col::kDeathTime); }
+    Column &death_elapsed() { return column(cell_col::kDeathElapsed); }
     Column &migration_elapsed() { return column(cell_col::kMigrationElapsed); }
     Column &migration_interval() { return column(cell_col::kMigrationInterval); }
     Column &viability() { return column(cell_col::kViability); }
     Column &migration_direction() { return column(cell_col::kMigrationDirection); }
+    Column &migration_follow_flag() { return column(cell_col::kMigrationFollowFlag); }
+    Column &migration_active() { return column(cell_col::kMigrationActive); }
+    Column &migration_duration() { return column(cell_col::kMigrationDuration); }
+    Column &migration_passed() { return column(cell_col::kMigrationPassed); }
     Column &migration_rate() { return column(cell_col::kMigrationRate); }
+    Column &cell_trace_label() { return column(cell_col::kCellTraceLabel); }
+    Column &parent_trace_label() { return column(cell_col::kParentTraceLabel); }
+    Column &division_count() { return column(cell_col::kDivisionCount); }
+    Column &division_marker() { return column(cell_col::kDivisionMarker); }
 
     const Column &x1() const { return column(cell_col::kX1); }
+    const Column &x2() const { return column(cell_col::kX2); }
+    const Column &x3() const { return column(cell_col::kX3); }
+    const Column &x4() const { return column(cell_col::kX4); }
     const Column &y1() const { return column(cell_col::kY1); }
+    const Column &y2() const { return column(cell_col::kY2); }
+    const Column &y3() const { return column(cell_col::kY3); }
+    const Column &y4() const { return column(cell_col::kY4); }
     const Column &type() const { return column(cell_col::kType); }
     const Column &growth_rate() const { return column(cell_col::kGrowthRate); }
     const Column &density_growth_rate() const { return column(cell_col::kDensityGrowthRate); }
     const Column &migration_rate_base() const { return column(cell_col::kMigrationRateBase); }
+    const Column &random_label() const { return column(cell_col::kRandomLabel); }
     const Column &stage() const { return column(cell_col::kStage); }
     const Column &id() const { return column(cell_col::kId); }
     const Column &division_elapsed() const { return column(cell_col::kDivisionElapsed); }
     const Column &division_time() const { return column(cell_col::kDivisionTime); }
+    const Column &death_time() const { return column(cell_col::kDeathTime); }
+    const Column &death_elapsed() const { return column(cell_col::kDeathElapsed); }
     const Column &migration_elapsed() const { return column(cell_col::kMigrationElapsed); }
     const Column &migration_interval() const { return column(cell_col::kMigrationInterval); }
     const Column &viability() const { return column(cell_col::kViability); }
     const Column &migration_direction() const { return column(cell_col::kMigrationDirection); }
+    const Column &migration_follow_flag() const { return column(cell_col::kMigrationFollowFlag); }
+    const Column &migration_active() const { return column(cell_col::kMigrationActive); }
+    const Column &migration_duration() const { return column(cell_col::kMigrationDuration); }
+    const Column &migration_passed() const { return column(cell_col::kMigrationPassed); }
     const Column &migration_rate() const { return column(cell_col::kMigrationRate); }
+    const Column &cell_trace_label() const { return column(cell_col::kCellTraceLabel); }
+    const Column &parent_trace_label() const { return column(cell_col::kParentTraceLabel); }
+    const Column &division_count() const { return column(cell_col::kDivisionCount); }
+    const Column &division_marker() const { return column(cell_col::kDivisionMarker); }
 
 private:
     int column_count_;
