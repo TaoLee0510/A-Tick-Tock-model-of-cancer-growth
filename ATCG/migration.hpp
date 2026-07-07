@@ -61,7 +61,8 @@
 
 using std::chrono::high_resolution_clock;
 using namespace blitz;
-inline void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3> &Visual_range, Array<int,2> &cor_big, Array<int, 2> &area_square, Array<int, 2> &sub_area_square, Array<int, 2> &cor_small, Array<int, 2> &area_square_s, Array<int, 2>  &sub_area_square_s,double &migration_judgement, long rng_time_step, long rng_event_base)
+template <typename CellArray>
+inline void migration(int i, double deltah, CellArray &cell_array, Array<long, 3> &Visual_range, Array<int,2> &cor_big, Array<int, 2> &area_square, Array<int, 2> &sub_area_square, Array<int, 2> &cor_small, Array<int, 2> &area_square_s, Array<int, 2>  &sub_area_square_s,double &migration_judgement, long rng_time_step, long rng_event_base)
 {
     (void)deltah;
     Range all = Range::all();
