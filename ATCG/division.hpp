@@ -62,10 +62,15 @@ inline void append_cell(CellStore &cells, const Array<double, 2> &cell_temp, int
         cells(row, col) = cell_temp(1, col);
     }
 }
+
+inline void append_cell(CellStore &cells, const CellRowBuffer &cell_temp, int Col)
+{
+    cell_store_append_row_from_array(cells, cell_temp, 1, Col);
+}
 }
 
 template <typename CellArray>
-inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<long, 3> &Visual_range, Array<int,2> &cor_big_1, Array<int, 2> &cor_big_1_change_shape, Array<int, 2> &cor_small_1, Array<int, 2> &proliferation_loci, Array<double, 2> &cell_temp,int &cell_label, double &deltah,int utralsmall,int Col, long rng_time_step)
+inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<long, 3> &Visual_range, Array<int,2> &cor_big_1, Array<int, 2> &cor_big_1_change_shape, Array<int, 2> &cor_small_1, Array<int, 2> &proliferation_loci, CellRowBuffer &cell_temp,int &cell_label, double &deltah,int utralsmall,int Col, long rng_time_step)
 {
     Range all = Range::all();
     long cell_rng_id = (long)cell_array(i,15);

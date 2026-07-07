@@ -47,7 +47,7 @@ using std::chrono::high_resolution_clock;
 using namespace std;
 using namespace blitz;
 template <typename CellArray>
-inline void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<long,2> &cell_trace,Array<long,2> cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads,Array<long,2> &cell_trace_ndcells,int &ndcells,Array<double,2> &cell_array_ndcells, long rng_time_step)
+inline void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, CellRowBuffer cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<long,2> &cell_trace,Array<long,2> cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads,Array<long,2> &cell_trace_ndcells,int &ndcells,Array<double,2> &cell_array_ndcells, long rng_time_step)
 {
     Range all = Range::all();
     long cell_rng_id = (long)cell_array(i,15);
@@ -1757,9 +1757,7 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
         }
         
         cell_temp(1,13)=stateless_uniform(cell_rng_id, rng_time_step, rng_event++);
-        int cell_array_ndcells_number=cell_array_ndcells.rows();
-        cell_array_ndcells.resizeAndPreserve(cell_array_ndcells_number+1,Col);
-        cell_array_ndcells(cell_array_ndcells_number+1,all)=cell_temp(1,all);
+        cell_store_append_row_from_array(cell_array_ndcells, cell_temp, 1, Col);
         
         
         

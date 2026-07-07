@@ -157,8 +157,7 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     cor_small_1=0;
     Array<int, 2> proliferation_loci(1,4,FortranArray<2>());
     proliferation_loci=0;
-    Array<double, 2> cell_temp(1,Col,FortranArray<2>());
-    cell_temp=0;
+    CellRowBuffer cell_temp(2, Col);
     Array<long, 3> sub_visual(3,3,4,FortranArray<3>());
     sub_visual=0;
     Array<int,2> A(Visual_range_x/2,Visual_range_y/2,FortranArray<2>());
