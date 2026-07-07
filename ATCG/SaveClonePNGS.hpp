@@ -16,7 +16,8 @@
 #include <cmath>
 
 using namespace blitz;
-void SaveClonePNGS(int Visual_range_x, int Visual_range_y, int &T, double alpha, double beta, const Array<double,2> &cell_array, const Array<double,2> &colorspace)
+template <typename CellArray>
+inline void SaveClonePNGS(int Visual_range_x, int Visual_range_y, int &T, double alpha, double beta, const CellArray &cell_array, const Array<double,2> &colorspace)
 {
     char filedir10 [100] = {'\0'};
     sprintf(filedir10, "./a_%.1f_b_%.1f_clonepics/%.1d.png",alpha,beta,T);

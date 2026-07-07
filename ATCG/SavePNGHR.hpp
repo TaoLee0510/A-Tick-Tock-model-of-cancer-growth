@@ -16,7 +16,8 @@
 #include <cmath>
 
 using namespace blitz;
-void SavePNGHR(int Visual_range_x, int Visual_range_y, const Array<double,2> &cell_array, int H, int &T, double alpha, double beta,double deltah)
+template <typename CellArray>
+inline void SavePNGHR(int Visual_range_x, int Visual_range_y, const CellArray &cell_array, int H, int &T, double alpha, double beta,double deltah)
 {
     
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

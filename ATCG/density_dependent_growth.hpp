@@ -575,11 +575,6 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                 
                 cells.sort_by_column(cell_col::kDivisionElapsed);///sort time division
                 start05=omp_get_wtime();
-                Array<double,2> cell_array_snapshot(1,Col,FortranArray<2>());
-                if (H%MMR==0 || allpng==1)
-                {
-                    cell_array_snapshot = cell_array_from_store(cells, Col);
-                }
                 #pragma omp parallel
                 {
                     #pragma omp sections
@@ -588,35 +583,35 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                         {
                             if (H%MMR==0)
                             {
-                                SavePNGS(Visual_range_x, Visual_range_y, T, alpha, beta, cell_array_snapshot);
+                                SavePNGS(Visual_range_x, Visual_range_y, T, alpha, beta, cells);
                             }
                         }
                         #pragma omp section
                         {
                             if (H%MMR==0)
                             {
-                                SaveClonePNGS(Visual_range_x, Visual_range_y, T, alpha, beta, cell_array_snapshot, colorspace);
+                                SaveClonePNGS(Visual_range_x, Visual_range_y, T, alpha, beta, cells, colorspace);
                             }
                         }
                         #pragma omp section
                         {
                             if (H%MMR==0)
                             {
-                                SaveCellArray(T, alpha, beta, cell_array_snapshot , Col);
+                                SaveCellArray(T, alpha, beta, cells , Col);
                             }
                         }
                         #pragma omp section
                         {
                             if (allpng==1)
                             {
-                                SavePNGHR( Visual_range_x,  Visual_range_y, cell_array_snapshot,  H,  T,  alpha,  beta, deltah);
+                                SavePNGHR( Visual_range_x,  Visual_range_y, cells,  H,  T,  alpha,  beta, deltah);
                             }
                         }
                         #pragma omp section
                         {
                             if (allpng==1)
                             {
-                                SaveClonePNGHR( Visual_range_x,  Visual_range_y, cell_array_snapshot,  H,  T,  alpha,  beta, deltah,colorspace);
+                                SaveClonePNGHR( Visual_range_x,  Visual_range_y, cells,  H,  T,  alpha,  beta, deltah,colorspace);
                             }
                         }
                     }
