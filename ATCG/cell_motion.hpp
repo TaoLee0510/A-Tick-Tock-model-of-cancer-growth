@@ -10,6 +10,7 @@
 #include <blitz/array.h>
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
+#include "visual_range.hpp"
 
 using namespace blitz;
 
@@ -47,7 +48,7 @@ inline int migration_direction_dy(int direction)
     }
 }
 
-inline void write_big_cell_to_visual_range(Array<long, 3> &Visual_range, int x1, int y1, long cell_id, long cell_stage, long cell_label)
+inline void write_big_cell_to_visual_range(VisualRange &Visual_range, int x1, int y1, long cell_id, long cell_stage, long cell_label)
 {
     Visual_range(Range(x1,x1+1),Range(y1,y1+1),1)=1;
     Visual_range(Range(x1,x1+1),Range(y1,y1+1),2)=cell_id;
@@ -55,7 +56,7 @@ inline void write_big_cell_to_visual_range(Array<long, 3> &Visual_range, int x1,
     Visual_range(Range(x1,x1+1),Range(y1,y1+1),4)=cell_label;
 }
 
-inline void write_small_cell_to_visual_range(Array<long, 3> &Visual_range, int x1, int y1, long cell_id, long cell_stage, long cell_label)
+inline void write_small_cell_to_visual_range(VisualRange &Visual_range, int x1, int y1, long cell_id, long cell_stage, long cell_label)
 {
     Visual_range(x1,y1,1)=1;
     Visual_range(x1,y1,2)=cell_id;
@@ -63,7 +64,7 @@ inline void write_small_cell_to_visual_range(Array<long, 3> &Visual_range, int x
     Visual_range(x1,y1,4)=cell_label;
 }
 
-inline void move_cell_store(int i, CellStore &cells, Array<long, 3> &Visual_range, int direction)
+inline void move_cell_store(int i, CellStore &cells, VisualRange &Visual_range, int direction)
 {
     Range all = Range::all();
     int dx = migration_direction_dx(direction);

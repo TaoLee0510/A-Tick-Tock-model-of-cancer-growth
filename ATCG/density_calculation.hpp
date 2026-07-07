@@ -36,9 +36,10 @@
 #include <blitz/array.h>
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
+#include "visual_range.hpp"
 #include "deltah_calculation.hpp"
 
-inline double density_calculation_from_position(int x1, int y1, int cell_stage, const Array<long,3> &Visual_range)
+inline double density_calculation_from_position(int x1, int y1, int cell_stage, const VisualRange &Visual_range)
 {
     int ar=70;
 //    int ar=30;
@@ -93,7 +94,7 @@ inline double density_calculation_from_position(int x1, int y1, int cell_stage, 
     return density;
 }
 
-inline double density_calculation(int i, const Array<long,3> &Visual_range, const CellStore &cells)
+inline double density_calculation(int i, const VisualRange &Visual_range, const CellStore &cells)
 {
     int row = i - 1;
     int x1 = (int)cells.x1()[row];

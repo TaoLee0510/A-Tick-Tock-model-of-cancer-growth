@@ -31,6 +31,7 @@
 #include <blitz/array.h>
 #include "stateless_rng.hpp"
 #include "cell_store.hpp"
+#include "visual_range.hpp"
 using namespace blitz;
 namespace stage_convert_detail
 {
@@ -39,7 +40,7 @@ inline bool within_visual_range(int x, int y, int Visual_range_x, int Visual_ran
     return x >= 100 && y >= 100 && x <= Visual_range_x + 100 && y <= Visual_range_y + 100;
 }
 
-inline int choose_large_stage_square(int x1, int y1, const Array<long,3> &Visual_range, long cell_rng_id, long rng_time_step, long &rng_event)
+inline int choose_large_stage_square(int x1, int y1, const VisualRange &Visual_range, long cell_rng_id, long rng_time_step, long &rng_event)
 {
     int candidates[4] = {0};
     int count = 0;
@@ -103,7 +104,7 @@ inline void square_loci(int stage_square, int x1, int y1, int xs[4], int ys[4])
     }
 }
 
-inline void apply_large_stage_square(int row, CellStore &cells, Array<long,3> &Visual_range, int stage_square, int x1, int y1)
+inline void apply_large_stage_square(int row, CellStore &cells, VisualRange &Visual_range, int stage_square, int x1, int y1)
 {
     int xs[4] = {0};
     int ys[4] = {0};
@@ -130,7 +131,7 @@ inline void apply_large_stage_square(int row, CellStore &cells, Array<long,3> &V
     }
 }
 
-inline int choose_small_stage_direction(int x1, int y1, const Array<long,3> &Visual_range, long cell_rng_id, long rng_time_step, long &rng_event)
+inline int choose_small_stage_direction(int x1, int y1, const VisualRange &Visual_range, long cell_rng_id, long rng_time_step, long &rng_event)
 {
     int candidates[8] = {0};
     int count = 0;
@@ -159,7 +160,7 @@ inline void direction_locus(int direction, int x1, int y1, int &x2, int &y2)
     y2 = y1 + dy[direction];
 }
 
-inline void apply_small_stage_direction(int row, CellStore &cells, Array<long,3> &Visual_range, int &cell_label, int direction, int x1, int y1)
+inline void apply_small_stage_direction(int row, CellStore &cells, VisualRange &Visual_range, int &cell_label, int direction, int x1, int y1)
 {
     int x2 = x1;
     int y2 = y1;
@@ -190,7 +191,7 @@ inline void apply_small_stage_direction(int row, CellStore &cells, Array<long,3>
 }
 }
 
-inline void stage_convert(int Visual_range_x, int Visual_range_y, CellStore &cells, Array<long,3> &Visual_range, int &cell_label,int utralsmall,long rng_time_step)
+inline void stage_convert(int Visual_range_x, int Visual_range_y, CellStore &cells, VisualRange &Visual_range, int &cell_label,int utralsmall,long rng_time_step)
 {
     const int row_count = cells.rows();
     for (int row = 1; row <= row_count; ++row)

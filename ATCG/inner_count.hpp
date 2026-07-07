@@ -12,8 +12,9 @@
 #include <stdio.h>
 #include <blitz/blitz.h>
 #include <blitz/array.h>
+#include "visual_range.hpp"
 using namespace blitz;
-int inner_count(int Visual_range_x, int Visual_range_y, Array<long,3> Visual_range, int N01, double R0)
+int inner_count(int Visual_range_x, int Visual_range_y, const VisualRange &Visual_range, int N01, double R0)
 {
     for (int x=1;x<=Visual_range_x;x++)
     {

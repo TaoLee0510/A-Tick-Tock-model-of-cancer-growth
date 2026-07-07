@@ -14,9 +14,10 @@
 #include <blitz/array.h>
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
+#include "visual_range.hpp"
 using namespace blitz;
 
-inline void set_outer_visual_range_row(Array<long,3> &Visual_range, int x1, int y1, int x2, int y2, int x3, int y3, int x4, int y4, int cell_array_index, int cell_array_stage, int cell_label)
+inline void set_outer_visual_range_row(VisualRange &Visual_range, int x1, int y1, int x2, int y2, int x3, int y3, int x4, int y4, int cell_array_index, int cell_array_stage, int cell_label)
 {
     Visual_range(x1,y1,1)=1;
     Visual_range(x1,y1,2)=cell_array_index;
@@ -36,10 +37,10 @@ inline void set_outer_visual_range_row(Array<long,3> &Visual_range, int x1, int 
     Visual_range(x4,y4,4)=cell_label;
 }
 
-inline Array<long,3> outer_initiation_visualrange(const CellStore &cells,int N0,int Vx,int Vy,int &cell_label)
+inline VisualRange outer_initiation_visualrange(const CellStore &cells,int N0,int Vx,int Vy,int &cell_label)
 {
     Range all = Range::all();
-    Array<long,3> Visual_range(Vx,Vy,4,FortranArray<3>());
+    VisualRange Visual_range(Vx,Vy,4,FortranArray<3>());
     Visual_range(all,all,all)=0;
     N0=cells.rows();
     for (int x=1; x<=N0; x++)

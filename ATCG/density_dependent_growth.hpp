@@ -37,6 +37,7 @@
 #include <blitz/array.h>
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
+#include "visual_range.hpp"
 #include "outer_corr.hpp"
 #include "outer_cell_count.hpp"
 #include "deltah_calculation.hpp"
@@ -115,7 +116,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     const long rng_context = 20003;
     //////////////////////////////////////////////////////////////array definition///////////////////////////////////////////////////////////////////////
     Range all = Range::all();
-    Array<long,3> Visual_range(Vx,Vy,4,FortranArray<3>());
+    VisualRange Visual_range(Vx,Vy,4,FortranArray<3>());
     Visual_range(all,all,all)=0;
     //    $9: cell_array type
     //    $10: inherent growth rate

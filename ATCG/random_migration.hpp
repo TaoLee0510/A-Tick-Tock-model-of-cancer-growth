@@ -36,12 +36,13 @@
 #include <blitz/array.h>
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
+#include "visual_range.hpp"
 #include "deltah_calculation.hpp"
 #include "cell_motion.hpp"
 #include "stateless_rng.hpp"
 using namespace blitz;
 
-inline int select_random_migration_direction(int x1, int y1, int cell_stage, const Array<long, 3> &Visual_range, long cell_rng_id, long rng_time_step, long rng_event)
+inline int select_random_migration_direction(int x1, int y1, int cell_stage, const VisualRange &Visual_range, long cell_rng_id, long rng_time_step, long rng_event)
 {
     int direction[8]={0};
     auto is_empty = [&](int dx, int dy) {
@@ -137,7 +138,7 @@ inline int select_random_migration_direction(int x1, int y1, int cell_stage, con
     return candidates[0];
 }
 
-inline void random_migration(int i, double deltah, CellStore &cells, Array<long, 3> &Visual_range, double &migration_judgement, long rng_time_step, long rng_event_base)
+inline void random_migration(int i, double deltah, CellStore &cells, VisualRange &Visual_range, double &migration_judgement, long rng_time_step, long rng_event_base)
 {
     (void)deltah;
 

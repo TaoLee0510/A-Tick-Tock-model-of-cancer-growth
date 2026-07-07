@@ -19,6 +19,7 @@
 #include <blitz/array.h>
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
+#include "visual_range.hpp"
 #include "stateless_rng.hpp"
 
 using namespace blitz;
@@ -49,7 +50,7 @@ inline bool is_r_density_label(long label, int N00, int N01)
     return (label <= N00 / 2 && label >= 1) || (label <= N00 + (N01 / 2) && label > N00);
 }
 
-inline DensityGrowthCounts density_growth_neighborhood_counts(int x1, int y1, int N00, int N01, const Array<long,3> &Visual_range)
+inline DensityGrowthCounts density_growth_neighborhood_counts(int x1, int y1, int N00, int N01, const VisualRange &Visual_range)
 {
     long subcell_r[36]={0};
     long subcell_K[36]={0};
@@ -90,7 +91,7 @@ inline DensityGrowthCounts density_growth_neighborhood_counts(int x1, int y1, in
     return counts;
 }
 
-inline void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, CellStore &cells,const Array<long,3> &Visual_range, long rng_time_step)
+inline void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, CellStore &cells,const VisualRange &Visual_range, long rng_time_step)
 {
     (void)lambda_r;
     (void)lambda_K;

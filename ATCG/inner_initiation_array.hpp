@@ -32,10 +32,11 @@
 #include <blitz/array.h>
 #include "stateless_rng.hpp"
 #include "cell_store.hpp"
+#include "visual_range.hpp"
 using namespace blitz;
 
 template <typename CellArray>
-inline void fill_inner_initiation_cells(int N0,int N01,int R0,int Visual_range_x, int Visual_range_y, CellArray &cell_array_inner, const Array<long,3> &Visual_range, double uniup_r1, double unilow_r1, double sigmahatr,double muhatr, double uniup_K1, double unilow_K1, double sigmahatK,double muhatK, int N0r1,int N0K1, double *migration_rate_r1, double *migration_rate_K1, int Col)
+inline void fill_inner_initiation_cells(int N0,int N01,int R0,int Visual_range_x, int Visual_range_y, CellArray &cell_array_inner, const VisualRange &Visual_range, double uniup_r1, double unilow_r1, double sigmahatr,double muhatr, double uniup_K1, double unilow_K1, double sigmahatK,double muhatK, int N0r1,int N0K1, double *migration_rate_r1, double *migration_rate_K1, int Col)
 {
     const long rng_context = 10003;
     double initial_r_growth_rate[N0r1];
@@ -128,7 +129,7 @@ inline void fill_inner_initiation_cells(int N0,int N01,int R0,int Visual_range_x
     }
 }
 
-inline CellStore inner_initiation_cell_store(int N0,int N01,int R0,int Visual_range_x, int Visual_range_y, const Array<long,3> &Visual_range, double uniup_r1, double unilow_r1, double sigmahatr,double muhatr, double uniup_K1, double unilow_K1, double sigmahatK,double muhatK, int N0r1,int N0K1, double *migration_rate_r1, double *migration_rate_K1, int Col)
+inline CellStore inner_initiation_cell_store(int N0,int N01,int R0,int Visual_range_x, int Visual_range_y, const VisualRange &Visual_range, double uniup_r1, double unilow_r1, double sigmahatr,double muhatr, double uniup_K1, double unilow_K1, double sigmahatK,double muhatK, int N0r1,int N0K1, double *migration_rate_r1, double *migration_rate_K1, int Col)
 {
     CellStore cells(Col);
     cells.resize(N01);

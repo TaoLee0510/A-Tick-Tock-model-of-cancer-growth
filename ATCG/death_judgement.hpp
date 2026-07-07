@@ -21,6 +21,7 @@
 #include <blitz/array.h>
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
+#include "visual_range.hpp"
 #include "density_growth_rate_calculation_1.hpp"
 #include "stateless_rng.hpp"
 using namespace blitz;
@@ -32,7 +33,7 @@ inline bool death_judgement_live_cell(const CellArray &cell_array, int row)
 }
 
 template <typename CellArray>
-inline void clear_dead_cell_visual(int site, CellArray &cell_array, Array<long,3> &Visual_range, int C)
+inline void clear_dead_cell_visual(int site, CellArray &cell_array, VisualRange &Visual_range, int C)
 {
     Range all = Range::all();
     int stage = (int)cell_array(site,cell_col::kStage);
@@ -67,7 +68,7 @@ inline void clear_dead_cell_visual(int site, CellArray &cell_array, Array<long,3
     }
 }
 
-inline void compact_after_death_judgement(CellStore &cells, Array<long,3> &Visual_range, int, int nthreads, int C)
+inline void compact_after_death_judgement(CellStore &cells, VisualRange &Visual_range, int, int nthreads, int C)
 {
     int current_size=cells.rows();
     omp_set_num_threads(nthreads);
@@ -99,7 +100,7 @@ inline void compact_after_death_judgement(CellStore &cells, Array<long,3> &Visua
 }
 
 template <typename CellArray>
-inline void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, CellArray &cell_array, Array<long,3> &Visual_range, double deathjudge, int Col,int nthreads,long rng_time_step)
+inline void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, CellArray &cell_array, VisualRange &Visual_range, double deathjudge, int Col,int nthreads,long rng_time_step)
 {
     int C= cell_array.rows();
 //    omp_set_num_threads(nthreads);

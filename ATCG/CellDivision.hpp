@@ -37,6 +37,7 @@
 #define BZ_THREADSAFE_USE_OPENMP
 #include <blitz/blitz.h>
 #include <blitz/array.h>
+#include "visual_range.hpp"
 #include "outer_corr.hpp"
 #include "outer_cell_count.hpp"
 #include "deltah_calculation.hpp"
@@ -58,7 +59,7 @@
 #include <omp.h>
 
 template <typename CellArray>
-inline void CellDivision(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<long, 3> &Visual_range, CellRowBuffer &cell_temp,int &cell_label, double &deltah,int utralsmall,int Col,double deathjudge,int borderx,int bordery, long rng_time_step)
+inline void CellDivision(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, VisualRange &Visual_range, CellRowBuffer &cell_temp,int &cell_label, double &deltah,int utralsmall,int Col,double deathjudge,int borderx,int bordery, long rng_time_step)
 {
     if(cell_array(i,1)==0 && cell_array(i,5) ==0)
     {

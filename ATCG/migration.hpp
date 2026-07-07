@@ -53,6 +53,7 @@
 #include <gsl/gsl_matrix.h>
 #include <blitz/blitz.h>
 #include <blitz/array.h>
+#include "visual_range.hpp"
 #include "cell_columns.hpp"
 #include "deltah_calculation.hpp"
 #include "cell_motion.hpp"
@@ -62,12 +63,12 @@
 using std::chrono::high_resolution_clock;
 using namespace blitz;
 
-inline bool migration_visual_site_empty(const Array<long, 3> &Visual_range, int x, int y)
+inline bool migration_visual_site_empty(const VisualRange &Visual_range, int x, int y)
 {
     return Visual_range(x, y, 1) == 0;
 }
 
-inline void fill_big_migration_directions(int x1, int y1, const Array<long, 3> &Visual_range, int direction[8])
+inline void fill_big_migration_directions(int x1, int y1, const VisualRange &Visual_range, int direction[8])
 {
     if (migration_visual_site_empty(Visual_range, x1, y1 - 1) &&
         migration_visual_site_empty(Visual_range, x1 - 1, y1 - 1) &&
@@ -115,7 +116,7 @@ inline void fill_big_migration_directions(int x1, int y1, const Array<long, 3> &
     }
 }
 
-inline void fill_small_migration_directions(int x1, int y1, const Array<long, 3> &Visual_range, int direction[8])
+inline void fill_small_migration_directions(int x1, int y1, const VisualRange &Visual_range, int direction[8])
 {
     if (migration_visual_site_empty(Visual_range, x1 - 1, y1 - 1))
     {
@@ -167,12 +168,12 @@ inline void add_unique_migration_label(int labels[100], int &count, int label)
     labels[count++] = label;
 }
 
-inline void add_migration_density_site(const Array<long, 3> &Visual_range, int x1, int y1, int local_x, int local_y, int labels[100], int &count)
+inline void add_migration_density_site(const VisualRange &Visual_range, int x1, int y1, int local_x, int local_y, int labels[100], int &count)
 {
     add_unique_migration_label(labels, count, (int)Visual_range(x1 - 5 + local_x, y1 - 5 + local_y, 4));
 }
 
-inline double big_migration_density(int x1, int y1, const Array<long, 3> &Visual_range, int direction_index)
+inline double big_migration_density(int x1, int y1, const VisualRange &Visual_range, int direction_index)
 {
     int labels[100] = {0};
     int count = 0;
@@ -259,7 +260,7 @@ inline double big_migration_density(int x1, int y1, const Array<long, 3> &Visual
     return (double)count / (double)denominator;
 }
 
-inline double small_migration_density(int x1, int y1, const Array<long, 3> &Visual_range, int direction_index)
+inline double small_migration_density(int x1, int y1, const VisualRange &Visual_range, int direction_index)
 {
     int labels[100] = {0};
     int count = 0;
@@ -342,7 +343,7 @@ inline double small_migration_density(int x1, int y1, const Array<long, 3> &Visu
 }
 
 template <typename CellArray>
-inline void migration(int i, double deltah, CellArray &cell_array, Array<long, 3> &Visual_range, double &migration_judgement, long rng_time_step, long rng_event_base)
+inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &Visual_range, double &migration_judgement, long rng_time_step, long rng_event_base)
 {
     (void)deltah;
     Range all = Range::all();
