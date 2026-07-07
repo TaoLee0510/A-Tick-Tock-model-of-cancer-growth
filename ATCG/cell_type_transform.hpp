@@ -41,7 +41,8 @@
 
 using std::chrono::high_resolution_clock;
 
-void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,int i,Array<long, 3> sub_visual, Array<long,3> Visual_range,Array<double, 2> &cell_array, double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,long &r_label,double K_formation_rate, long cell_rng_id, long rng_time_step, long &rng_event)
+template <typename CellArray>
+inline void cell_type_transform(Array<double, 2> &cell_temp, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,int i,Array<long, 3> sub_visual, Array<long,3> Visual_range,CellArray &cell_array, double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,long &r_label,double K_formation_rate, long cell_rng_id, long rng_time_step, long &rng_event)
 {
     double Dr1=density_calculation(i, sub_visual, Visual_range, cell_array);
     double initial_K_growth_rate1;

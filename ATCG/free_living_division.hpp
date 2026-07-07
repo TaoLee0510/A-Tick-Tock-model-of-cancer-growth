@@ -37,6 +37,7 @@
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
 #include "cell_type_transform.hpp"
+#include "cell_store.hpp"
 #include "stateless_rng.hpp"
 #include <chrono>
 #include <omp.h>
@@ -45,7 +46,8 @@
 using std::chrono::high_resolution_clock;
 using namespace std;
 using namespace blitz;
-void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<double, 2> &cell_array, Array<double,2> cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<long,2> &cell_trace,Array<long,2> cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads,Array<long,2> &cell_trace_ndcells,int &ndcells,Array<double,2> &cell_array_ndcells, long rng_time_step)
+template <typename CellArray>
+inline void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<double,2> cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<long,2> &cell_trace,Array<long,2> cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads,Array<long,2> &cell_trace_ndcells,int &ndcells,Array<double,2> &cell_array_ndcells, long rng_time_step)
 {
     Range all = Range::all();
     long cell_rng_id = (long)cell_array(i,15);
@@ -143,7 +145,7 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
     int cell_type=(int)cell_array(i,14);
     
     
-    cell_temp(2,all)=cell_array(i,all);
+    cell_store_copy_row_to_array(cell_array, i, cell_temp, 2, Col);
     
     switch (cell_type)
     {
@@ -1646,7 +1648,7 @@ void free_living_division(int i, double max_growth_rate_r, double max_growth_rat
     
     if (cell_temp(1,1)==0 && cell_temp(1,5)==0)
     {
-        cell_array(i,all)=cell_temp(2,all);
+        cell_store_assign_row_from_array(cell_array, i, cell_temp, 2, Col);
 //        cell_array(i,22)=0;
 //        fprintf(fid2, "%s\n" ,"Cell division error: Daughter cell failed to get coordinates!");
 //        fprintf(fid2, "%s\n" ,"Mark cells as inviabile.");
