@@ -495,9 +495,7 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
 
 
         start12=omp_get_wtime();
-        cell_store_to_array(cells, cell_array, Col);
-        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads,H);
-        cells = cell_store_from_array(cell_array, Col);
+        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cells, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads,H);
         end12=omp_get_wtime();
         
         start14=omp_get_wtime();

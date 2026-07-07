@@ -477,9 +477,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         ///
         int nthreads = 1;
-        cell_store_to_array(cells, cell_array, Col);
-        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads,H);
-        cells = cell_store_from_array(cell_array, Col);
+        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cells, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads,H);
         cells.sort_by_column(cell_col::kType);///sort cell type
         stage_convert(Visual_range_x, Visual_range_y, cells, Visual_range, cell_label,utralsmall,H);
         deltah_recalculation(deltah, cells, MMR, DDM);

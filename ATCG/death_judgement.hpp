@@ -10,16 +10,131 @@
 #define death_judgement_hpp
 
 #include <stdio.h>
-//#include <omp.h>
+#include <omp.h>
+#include <algorithm>
 #include <random>
+#include <vector>
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 #include <ctime>
 #include <blitz/blitz.h>
 #include <blitz/array.h>
+#include "cell_columns.hpp"
+#include "cell_store.hpp"
 #include "stateless_rng.hpp"
 using namespace blitz;
-void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, Array<double, 2> &cell_array, Array<double,2> &cell_array_temp, Array<long, 3> &sub_visual, Array<long,3> &Visual_range, double deathjudge, int Col,int nthreads,long rng_time_step)
+
+template <typename CellArray>
+inline bool death_judgement_live_cell(const CellArray &cell_array, int row)
+{
+    return cell_array(row,cell_col::kViability)==1 && cell_array(row,cell_col::kX1)!=0 && cell_array(row,cell_col::kY1)!=0;
+}
+
+template <typename CellArray>
+inline void clear_dead_cell_visual(int site, CellArray &cell_array, Array<long,3> &Visual_range, int C)
+{
+    Range all = Range::all();
+    int stage = (int)cell_array(site,cell_col::kStage);
+    if(stage==0)
+    {
+        Visual_range((int)cell_array(site,cell_col::kX1),(int)cell_array(site,cell_col::kY1),all)=0;
+        Visual_range((int)cell_array(site,cell_col::kX2),(int)cell_array(site,cell_col::kY2),all)=0;
+        Visual_range((int)cell_array(site,cell_col::kX3),(int)cell_array(site,cell_col::kY3),all)=0;
+        Visual_range((int)cell_array(site,cell_col::kX4),(int)cell_array(site,cell_col::kY4),all)=0;
+    }
+    else if(stage==1)
+    {
+        Visual_range((int)cell_array(site,cell_col::kX1),(int)cell_array(site,cell_col::kY1),all)=0;
+    }
+    else if(stage==2)
+    {
+        double usx=cell_array(site,cell_col::kX1);
+        double usy=cell_array(site,cell_col::kY1);
+        cell_array(site,cell_col::kX1)=1;
+        cell_array(site,cell_col::kY1)=1;
+        for (int us=1;us<=C;us++)
+        {
+            if(cell_array(us,cell_col::kX1)!=0 && cell_array(us,cell_col::kY1)!=0 && cell_array(site,cell_col::kStage)==2)
+            {
+                if(cell_array(us,cell_col::kX1)==usx && cell_array(us,cell_col::kY1)==usy)
+                {
+                    Visual_range((int)cell_array(us,cell_col::kX1),(int)cell_array(us,cell_col::kY1),3)=1;
+                    cell_array(us,cell_col::kStage)=1;
+                }
+            }
+        }
+    }
+}
+
+inline void compact_after_death_judgement(Array<double, 2> &cell_array, Array<double,2> &cell_array_temp, Array<long,3> &Visual_range, int Col, int nthreads, int C)
+{
+    Range all = Range::all();
+    int current_size=cell_array.rows();
+    omp_set_num_threads(nthreads);
+    int sum =0;
+    #pragma omp parallel for schedule(dynamic) reduction(+:sum)
+    {
+        for (int CN=1; CN<=current_size; ++CN)
+        {
+            if (death_judgement_live_cell(cell_array, CN))
+            {
+                sum=sum+1;
+            }
+        }
+    }
+    cell_array_temp.resize(sum,Col);
+    cell_array_temp=0;
+    int site1=1;
+    for (int site=1; site<= current_size; ++site)
+    {
+        if (death_judgement_live_cell(cell_array, site))
+        {
+            cell_array_temp(site1,all)=cell_array(site,all);
+            site1++;
+        }
+        else
+        {
+            clear_dead_cell_visual(site, cell_array, Visual_range, C);
+        }
+    }
+    cell_array.resize(sum,Col);
+    cell_array=0;
+    cell_array(all,all)=cell_array_temp(all,all);
+}
+
+inline void compact_after_death_judgement(CellStore &cells, Array<double,2> &, Array<long,3> &Visual_range, int, int nthreads, int C)
+{
+    int current_size=cells.rows();
+    omp_set_num_threads(nthreads);
+    int sum =0;
+    #pragma omp parallel for schedule(dynamic) reduction(+:sum)
+    {
+        for (int CN=1; CN<=current_size; ++CN)
+        {
+            if (death_judgement_live_cell(cells, CN))
+            {
+                sum=sum+1;
+            }
+        }
+    }
+    CellStore compacted(cells.column_count());
+    compacted.reserve(sum);
+    for (int site=1; site<= current_size; ++site)
+    {
+        if (death_judgement_live_cell(cells, site))
+        {
+            compacted.append_row_from(cells, site);
+        }
+        else
+        {
+            clear_dead_cell_visual(site, cells, Visual_range, C);
+        }
+    }
+    cells = compacted;
+}
+
+template <typename CellArray>
+inline void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, CellArray &cell_array, Array<double,2> &cell_array_temp, Array<long, 3> &sub_visual, Array<long,3> &Visual_range, double deathjudge, int Col,int nthreads,long rng_time_step)
 {
     Range all = Range::all();
     int C= cell_array.rows();
@@ -515,64 +630,6 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
             }
         }
 //    }
-    int current_size=cell_array.rows();
-    omp_set_num_threads(nthreads);
-    int sum =0;
-    #pragma omp parallel for schedule(dynamic) reduction(+:sum)
-    {
-        for (int CN=1; CN<=current_size; ++CN)
-        {
-            if (cell_array(CN,22)==1 && cell_array(CN,1)!=0 && cell_array(CN,5)!=0)
-            {
-                sum=sum+1;
-            }
-        }
-    }
-    cell_array_temp.resize(sum,Col);
-    cell_array_temp=0;
-    int site1=1;
-    for (int site=1; site<= current_size; ++site)
-    {
-        if (cell_array(site,22)==1 && cell_array(site,1)!=0 && cell_array(site,5)!=0)
-        {
-            cell_array_temp(site1,all)=cell_array(site,all);
-            site1++;
-        }
-        else
-        {
-            if(cell_array(site,14)==0)
-            {
-                Visual_range(cell_array(site,1),cell_array(site,5),all)=0;
-                Visual_range(cell_array(site,2),cell_array(site,6),all)=0;
-                Visual_range(cell_array(site,3),cell_array(site,7),all)=0;
-                Visual_range(cell_array(site,4),cell_array(site,8),all)=0;
-            }
-            else if(cell_array(site,14)==1)
-            {
-                Visual_range(cell_array(site,1),cell_array(site,5),all)=0;
-            }
-            else if(cell_array(site,14)==2)
-            {
-                double usx=cell_array(site,1);
-                double usy=cell_array(site,5);
-                cell_array(site,1)=1;
-                cell_array(site,5)=1;
-                for (int us=1;us<=C;us++)
-                {
-                    if(cell_array(us,1)!=0 && cell_array(us,5)!=0 && cell_array(site,14)==2)
-                    {
-                        if(cell_array(us,1)==usx && cell_array(us,5)==usy)
-                        {
-                            Visual_range((int)cell_array(us,1),(int)cell_array(us,5),3)=1;
-                            cell_array(us,14)=1;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    cell_array.resize(sum,Col);
-    cell_array=0;
-    cell_array(all,all)=cell_array_temp(all,all);
+    compact_after_death_judgement(cell_array, cell_array_temp, Visual_range, Col, nthreads, C);
 }
 #endif /* death_judgement_hpp */
