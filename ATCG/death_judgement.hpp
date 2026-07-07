@@ -29,38 +29,50 @@ using namespace blitz;
 template <typename CellArray>
 inline bool death_judgement_live_cell(const CellArray &cell_array, int row)
 {
-    return cell_array(row,cell_col::kViability)==1 && cell_array(row,cell_col::kX1)!=0 && cell_array(row,cell_col::kY1)!=0;
+    int idx = row - 1;
+    return cell_array.viability()[idx]==1 && cell_array.x1()[idx]!=0 && cell_array.y1()[idx]!=0;
 }
 
 template <typename CellArray>
 inline void clear_dead_cell_visual(int site, CellArray &cell_array, VisualRange &Visual_range, int C)
 {
-    int stage = (int)cell_array(site,cell_col::kStage);
+    int idx = site - 1;
+    auto &x1_values = cell_array.x1();
+    auto &x2_values = cell_array.x2();
+    auto &x3_values = cell_array.x3();
+    auto &x4_values = cell_array.x4();
+    auto &y1_values = cell_array.y1();
+    auto &y2_values = cell_array.y2();
+    auto &y3_values = cell_array.y3();
+    auto &y4_values = cell_array.y4();
+    auto &stages = cell_array.stage();
+    int stage = (int)stages[idx];
     if(stage==0)
     {
-        Visual_range.clear_site((int)cell_array(site,cell_col::kX1),(int)cell_array(site,cell_col::kY1));
-        Visual_range.clear_site((int)cell_array(site,cell_col::kX2),(int)cell_array(site,cell_col::kY2));
-        Visual_range.clear_site((int)cell_array(site,cell_col::kX3),(int)cell_array(site,cell_col::kY3));
-        Visual_range.clear_site((int)cell_array(site,cell_col::kX4),(int)cell_array(site,cell_col::kY4));
+        Visual_range.clear_site((int)x1_values[idx],(int)y1_values[idx]);
+        Visual_range.clear_site((int)x2_values[idx],(int)y2_values[idx]);
+        Visual_range.clear_site((int)x3_values[idx],(int)y3_values[idx]);
+        Visual_range.clear_site((int)x4_values[idx],(int)y4_values[idx]);
     }
     else if(stage==1)
     {
-        Visual_range.clear_site((int)cell_array(site,cell_col::kX1),(int)cell_array(site,cell_col::kY1));
+        Visual_range.clear_site((int)x1_values[idx],(int)y1_values[idx]);
     }
     else if(stage==2)
     {
-        double usx=cell_array(site,cell_col::kX1);
-        double usy=cell_array(site,cell_col::kY1);
-        cell_array(site,cell_col::kX1)=1;
-        cell_array(site,cell_col::kY1)=1;
+        double usx=x1_values[idx];
+        double usy=y1_values[idx];
+        x1_values[idx]=1;
+        y1_values[idx]=1;
         for (int us=1;us<=C;us++)
         {
-            if(cell_array(us,cell_col::kX1)!=0 && cell_array(us,cell_col::kY1)!=0 && cell_array(site,cell_col::kStage)==2)
+            int us_idx = us - 1;
+            if(x1_values[us_idx]!=0 && y1_values[us_idx]!=0 && stages[idx]==2)
             {
-                if(cell_array(us,cell_col::kX1)==usx && cell_array(us,cell_col::kY1)==usy)
+                if(x1_values[us_idx]==usx && y1_values[us_idx]==usy)
                 {
-                    Visual_range.stage((int)cell_array(us,cell_col::kX1),(int)cell_array(us,cell_col::kY1))=1;
-                    cell_array(us,cell_col::kStage)=1;
+                    Visual_range.stage((int)x1_values[us_idx],(int)y1_values[us_idx])=1;
+                    stages[us_idx]=1;
                 }
             }
         }
@@ -102,119 +114,132 @@ template <typename CellArray>
 inline void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, CellArray &cell_array, VisualRange &Visual_range, double deathjudge, int Col,int nthreads,long rng_time_step)
 {
     int C= cell_array.rows();
+    auto &x1_values = cell_array.x1();
+    auto &y1_values = cell_array.y1();
+    auto &types = cell_array.type();
+    auto &growth_rates = cell_array.growth_rate();
+    auto &density_growth_rates = cell_array.density_growth_rate();
+    auto &ids = cell_array.id();
+    auto &division_times = cell_array.division_time();
+    auto &death_times = cell_array.death_time();
+    auto &death_elapsed = cell_array.death_elapsed();
+    auto &migration_intervals = cell_array.migration_interval();
+    auto &viability = cell_array.viability();
+    auto &migration_rates = cell_array.migration_rate();
 //    omp_set_num_threads(nthreads);
 //    #pragma omp parallel for schedule(dynamic)
 //    {
         for (int rows=1; rows<=C; ++rows)
         {
-            long cell_rng_id = (long)cell_array(rows,15);
+            int row = rows - 1;
+            long cell_rng_id = (long)ids[row];
             if (cell_rng_id == 0)
             {
                 cell_rng_id = rows;
             }
             long rng_event = 100;
-            if (cell_array(rows,11)>deathjudge)
+            if (density_growth_rates[row]>deathjudge)
             {
-                if (cell_array(rows,9)==1)
+                if (types[row]==1)
                 {
-                    if (cell_array(rows,1)>=100 && cell_array(rows,5) >=100 && cell_array(rows,1)<=Visual_range_x+100 && cell_array(rows,5)<=Visual_range_y+100)
+                    if (x1_values[row]>=100 && y1_values[row] >=100 && x1_values[row]<=Visual_range_x+100 && y1_values[row]<=Visual_range_y+100)
                     {
-                        DensityGrowthCounts counts = density_growth_neighborhood_counts((int)cell_array(rows,1), (int)cell_array(rows,5), N00, N01, Visual_range);
+                        DensityGrowthCounts counts = density_growth_neighborhood_counts((int)x1_values[row], (int)y1_values[row], N00, N01, Visual_range);
                         long rc=counts.rc;
                         long kc=counts.kc;
                         long cells_number=counts.cells_number;
-                        double growth_rate_inherent_r=cell_array(rows,10);
+                        double growth_rate_inherent_r=growth_rates[row];
                         if (cells_number>=r_limit)
                         {
-                            cell_array(rows,11)=growth_rate_inherent_r-((growth_rate_inherent_r*2*(rc+kc+alpha*kc-r_limit))/carrying_capacity_r);
+                            density_growth_rates[row]=growth_rate_inherent_r-((growth_rate_inherent_r*2*(rc+kc+alpha*kc-r_limit))/carrying_capacity_r);
                         }
                         else
                         {
-                            cell_array(rows,11)=growth_rate_inherent_r;
+                            density_growth_rates[row]=growth_rate_inherent_r;
                         }
-                        if (cell_array(rows,11)>deathjudge)
+                        if (density_growth_rates[row]>deathjudge)
                         {
-                            double expected_division_time=24/cell_array(rows,11);
+                            double expected_division_time=24/density_growth_rates[row];
                             double undividing_time=0.9*expected_division_time;
                             double diving_time_range=0.1*expected_division_time;
                             double probability_of_division=1/diving_time_range;
                             double expected_dividing_time=undividing_time+stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_of_division);;
-                            cell_array(rows,17)=expected_dividing_time;
+                            division_times[row]=expected_dividing_time;
                         }
                         else
                         {
-                            if (cell_array(rows,18)==0)
+                            if (death_times[row]==0)
                             {
                                 double probability_to_death=1/death_time_range_r;
-                                cell_array(rows,18)=stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_to_death);
+                                death_times[row]=stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_to_death);
                             }
-                            cell_array(rows,19)=cell_array(rows,19)+deltah;
-                            cell_array(rows,17)=0;
+                            death_elapsed[row]=death_elapsed[row]+deltah;
+                            division_times[row]=0;
                         }
-                        cell_array(rows,21)=1/cell_array(rows,28);
+                        migration_intervals[row]=1/migration_rates[row];
                     }
-                    cell_array(rows,21)=1/cell_array(rows,28);
+                    migration_intervals[row]=1/migration_rates[row];
                 }
                 else
                 {
-                    if (cell_array(rows,1)>=100 && cell_array(rows,5) >=100 && cell_array(rows,1)<=Visual_range_x+100 && cell_array(rows,5)<=Visual_range_y+100)
+                    if (x1_values[row]>=100 && y1_values[row] >=100 && x1_values[row]<=Visual_range_x+100 && y1_values[row]<=Visual_range_y+100)
                     {
-                        DensityGrowthCounts counts = density_growth_neighborhood_counts((int)cell_array(rows,1), (int)cell_array(rows,5), N00, N01, Visual_range);
+                        DensityGrowthCounts counts = density_growth_neighborhood_counts((int)x1_values[row], (int)y1_values[row], N00, N01, Visual_range);
                         long rc=counts.rc;
                         long kc=counts.kc;
                         long cells_number=counts.cells_number;
-                        double growth_rate_inherent_K=cell_array(rows,10);
+                        double growth_rate_inherent_K=growth_rates[row];
                         if (cells_number>=K_limit)
                         {
-                            cell_array(rows,11)=growth_rate_inherent_K-((growth_rate_inherent_K*2*(beta*rc+rc+kc-K_limit))/carrying_capacity_K);
+                            density_growth_rates[row]=growth_rate_inherent_K-((growth_rate_inherent_K*2*(beta*rc+rc+kc-K_limit))/carrying_capacity_K);
                         }
                         else
                         {
-                            cell_array(rows,11)=growth_rate_inherent_K;
+                            density_growth_rates[row]=growth_rate_inherent_K;
                         }
-                        if (cell_array(rows,11)>deathjudge)
+                        if (density_growth_rates[row]>deathjudge)
                         {
-                            double expected_division_time=24/cell_array(rows,11);
+                            double expected_division_time=24/density_growth_rates[row];
                             double undividing_time=0.9*expected_division_time;
                             double diving_time_range=0.1*expected_division_time;
                             double probability_of_division=1/diving_time_range;
                             double expected_dividing_time=undividing_time+stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_of_division);;
-                            cell_array(rows,17)=expected_dividing_time;
+                            division_times[row]=expected_dividing_time;
                         }
                         else
                         {
-                            if (cell_array(rows,18)==0)
+                            if (death_times[row]==0)
                             {
                                 double probability_to_death=1/death_time_range_K;
-                                cell_array(rows,18)=stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_to_death);
+                                death_times[row]=stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_to_death);
                             }
-                            cell_array(rows,19)=cell_array(rows,19)+deltah;
-                            cell_array(rows,17)=0;
+                            death_elapsed[row]=death_elapsed[row]+deltah;
+                            division_times[row]=0;
                         }
-                        cell_array(rows,21)=1/cell_array(rows,28);
+                        migration_intervals[row]=1/migration_rates[row];
                     }
-                    cell_array(rows,21)=1/cell_array(rows,28);
+                    migration_intervals[row]=1/migration_rates[row];
                 }
             }
-            else if (cell_array(rows,11)<=deathjudge)
+            else if (density_growth_rates[row]<=deathjudge)
             {
                 if(h==0)
                 {
                     double probability_to_death=0;
-                    if (cell_array(rows,9)==1)
+                    if (types[row]==1)
                     {
                         probability_to_death=1/death_time_range_r;
                     }
-                    else if (cell_array(rows,9)==2)
+                    else if (types[row]==2)
                     {
                         probability_to_death=1/death_time_range_K;
                     }
-                    cell_array(rows,18)=stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_to_death);
+                    death_times[row]=stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_to_death);
                 }
                 else
                 {
-                    double D_time_1=1.5*(24/cell_array(rows,10));
-                    double D_time_2=0.9*cell_array(rows,18);
+                    double D_time_1=1.5*(24/growth_rates[row]);
+                    double D_time_2=0.9*death_times[row];
                     double D_time = 0;
                     if (D_time_1<=D_time_2)
                     {
@@ -224,92 +249,92 @@ inline void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int
                     {
                         D_time = D_time_2;
                     }
-                    if (cell_array(rows,19)<=D_time)
+                    if (death_elapsed[row]<=D_time)
                     {
-                        if (cell_array(rows,9)==1)
+                        if (types[row]==1)
                         {
-                            if (cell_array(rows,1)>=100 && cell_array(rows,5) >=100 && cell_array(rows,1)<=Visual_range_x+100 && cell_array(rows,5)<=Visual_range_y+100)
+                            if (x1_values[row]>=100 && y1_values[row] >=100 && x1_values[row]<=Visual_range_x+100 && y1_values[row]<=Visual_range_y+100)
                             {
-                                DensityGrowthCounts counts = density_growth_neighborhood_counts((int)cell_array(rows,1), (int)cell_array(rows,5), N00, N01, Visual_range);
+                                DensityGrowthCounts counts = density_growth_neighborhood_counts((int)x1_values[row], (int)y1_values[row], N00, N01, Visual_range);
                                 long rc=counts.rc;
                                 long kc=counts.kc;
                                 long cells_number=counts.cells_number;
-                                double growth_rate_inherent_r=cell_array(rows,10);
+                                double growth_rate_inherent_r=growth_rates[row];
                                 if (cells_number>=r_limit)
                                 {
-                                    cell_array(rows,11)=growth_rate_inherent_r-((growth_rate_inherent_r*2*(rc+kc+alpha*kc-r_limit))/carrying_capacity_r);
+                                    density_growth_rates[row]=growth_rate_inherent_r-((growth_rate_inherent_r*2*(rc+kc+alpha*kc-r_limit))/carrying_capacity_r);
                                 }
                                 else
                                 {
-                                    cell_array(rows,11)=growth_rate_inherent_r;
+                                    density_growth_rates[row]=growth_rate_inherent_r;
                                 }
-                                if (cell_array(rows,11)>deathjudge)
+                                if (density_growth_rates[row]>deathjudge)
                                 {
-                                    double expected_division_time=24/cell_array(rows,11);
+                                    double expected_division_time=24/density_growth_rates[row];
                                     double undividing_time=0.9*expected_division_time;
                                     double diving_time_range=0.1*expected_division_time;
                                     double probability_of_division=1/diving_time_range;
                                     double expected_dividing_time=undividing_time+stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_of_division);;
-                                    cell_array(rows,17)=expected_dividing_time;
-                                    cell_array(rows,18)=0;
-                                    cell_array(rows,19)=0;
+                                    division_times[row]=expected_dividing_time;
+                                    death_times[row]=0;
+                                    death_elapsed[row]=0;
                                 }
                                 else
                                 {
-                                    cell_array(rows,19)=cell_array(rows,19)+deltah;
-                                    cell_array(rows,17)=0;
+                                    death_elapsed[row]=death_elapsed[row]+deltah;
+                                    division_times[row]=0;
                                 }
-                                cell_array(rows,21)=1/cell_array(rows,28);
+                                migration_intervals[row]=1/migration_rates[row];
                             }
-                            cell_array(rows,21)=1/cell_array(rows,28);
+                            migration_intervals[row]=1/migration_rates[row];
                         }
                         else
                         {
-                            if (cell_array(rows,1)>=100 && cell_array(rows,5) >=100 && cell_array(rows,1)<=Visual_range_x+100 && cell_array(rows,5)<=Visual_range_y+100)
+                            if (x1_values[row]>=100 && y1_values[row] >=100 && x1_values[row]<=Visual_range_x+100 && y1_values[row]<=Visual_range_y+100)
                             {
-                                DensityGrowthCounts counts = density_growth_neighborhood_counts((int)cell_array(rows,1), (int)cell_array(rows,5), N00, N01, Visual_range);
+                                DensityGrowthCounts counts = density_growth_neighborhood_counts((int)x1_values[row], (int)y1_values[row], N00, N01, Visual_range);
                                 long rc=counts.rc;
                                 long kc=counts.kc;
                                 long cells_number=counts.cells_number;
-                                double growth_rate_inherent_K=cell_array(rows,10);
+                                double growth_rate_inherent_K=growth_rates[row];
                                 if (cells_number>=K_limit)
                                 {
-                                    cell_array(rows,11)=growth_rate_inherent_K-((growth_rate_inherent_K*2*(beta*rc+rc+kc-K_limit))/carrying_capacity_K);
+                                    density_growth_rates[row]=growth_rate_inherent_K-((growth_rate_inherent_K*2*(beta*rc+rc+kc-K_limit))/carrying_capacity_K);
                                 }
                                 else
                                 {
-                                    cell_array(rows,11)=growth_rate_inherent_K;
+                                    density_growth_rates[row]=growth_rate_inherent_K;
                                 }
-                                if (cell_array(rows,11)>deathjudge)
+                                if (density_growth_rates[row]>deathjudge)
                                 {
-                                    double expected_division_time=24/cell_array(rows,11);
+                                    double expected_division_time=24/density_growth_rates[row];
                                     double undividing_time=0.9*expected_division_time;
                                     double diving_time_range=0.1*expected_division_time;
                                     double probability_of_division=1/diving_time_range;
                                     double expected_dividing_time=undividing_time+stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_of_division);;
-                                    cell_array(rows,17)=expected_dividing_time;
-                                    cell_array(rows,18)=0;
-                                    cell_array(rows,19)=0;
+                                    division_times[row]=expected_dividing_time;
+                                    death_times[row]=0;
+                                    death_elapsed[row]=0;
                                 }
                                 else
                                 {
-                                    cell_array(rows,19)=cell_array(rows,19)+deltah;
-                                    cell_array(rows,17)=0;
+                                    death_elapsed[row]=death_elapsed[row]+deltah;
+                                    division_times[row]=0;
                                 }
-                                cell_array(rows,21)=1/cell_array(rows,28);
+                                migration_intervals[row]=1/migration_rates[row];
                             }
-                            cell_array(rows,21)=1/cell_array(rows,28);
+                            migration_intervals[row]=1/migration_rates[row];
                         }
                     }
                     else
                     {
-                        if(cell_array(rows,18)<=cell_array(rows,19))
+                        if(death_times[row]<=death_elapsed[row])
                         {
-                            cell_array(rows,22)=0;
+                            viability[row]=0;
                         }
                         else
                         {
-                            cell_array(rows,19)=cell_array(rows,19)+deltah;
+                            death_elapsed[row]=death_elapsed[row]+deltah;
                         }
                     }
                 }
