@@ -61,16 +61,16 @@
 template <typename CellArray>
 inline void CellDivision(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, VisualRange &Visual_range, CellRowBuffer &cell_temp,int &cell_label, double &deltah,int utralsmall,int Col,double deathjudge,int borderx,int bordery, long rng_time_step)
 {
-    if(cell_array(i,1)==0 && cell_array(i,5) ==0)
+    if(cell_array.x1()[i - 1]==0 && cell_array.y1()[i - 1] ==0)
     {
-        cell_array(i,22)=0;
+        cell_array.viability()[i - 1]=0;
     }
-    if (cell_array(i,1)>=100 && cell_array(i,5) >=100 && cell_array(i,1)<=borderx && cell_array(i,5)<=bordery)
+    if (cell_array.x1()[i - 1]>=100 && cell_array.y1()[i - 1] >=100 && cell_array.x1()[i - 1]<=borderx && cell_array.y1()[i - 1]<=bordery)
     {
-//        if (cell_array(i,11)>deathjudge)
-        if (cell_array(i,17)>0)
+//        if (cell_array.density_growth_rate()[i - 1]>deathjudge)
+        if (cell_array.division_time()[i - 1]>0)
         {
-            if (cell_array(i,16)>=cell_array(i,17))
+            if (cell_array.division_elapsed()[i - 1]>=cell_array.division_time()[i - 1])
             {
                 division(i, max_growth_rate_r, max_growth_rate_K, cell_array, Visual_range, cell_temp,cell_label,deltah,utralsmall, Col, rng_time_step);
             }

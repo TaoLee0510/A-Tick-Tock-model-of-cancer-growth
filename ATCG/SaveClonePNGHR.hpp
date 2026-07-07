@@ -36,10 +36,10 @@ inline void SaveClonePNGHR(int Visual_range_x, int Visual_range_y, const CellArr
     int C0 = cell_array.rows();
     for (int i=1;i<=C0;i++)
     {
-        int x= cell_array(i,1);
-        int y= cell_array(i,5);
-        int cell_stage=cell_array(i,14);
-        int cell_index=cell_array(i,15);
+        int x= cell_array.x1()[i - 1];
+        int y= cell_array.y1()[i - 1];
+        int cell_stage=cell_array.stage()[i - 1];
+        int cell_index=cell_array.id()[i - 1];
         
         if(cell_stage==0)
         {

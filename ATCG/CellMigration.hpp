@@ -64,24 +64,24 @@ using std::chrono::high_resolution_clock;
 template <typename CellArray>
 inline void CellMigration(int &DDM, int i, double &deltah,CellArray &cell_array, VisualRange &Visual_range, double &migration_judgement,double deathjudge, double beta_distribution_alpha_mig_time,double beta_distribution_beta_mig_time,int chemotaxis,double bunderD,int borderx,int bordery,double beta_distribution_alpha_for_normal_migration,double migration_rate_r_mean_quia,double beta_distribution_beta_for_normal_migration,long rng_time_step)
 {
-    long cell_rng_id = (long)cell_array(i,15);
+    long cell_rng_id = (long)cell_array.id()[i - 1];
     if (cell_rng_id == 0)
     {
         cell_rng_id = i;
     }
     long rng_event = 100;
-    if (cell_array(i,1)>=100 && cell_array(i,5) >=100 && cell_array(i,1)<=borderx && cell_array(i,5)<=bordery)
+    if (cell_array.x1()[i - 1]>=100 && cell_array.y1()[i - 1] >=100 && cell_array.x1()[i - 1]<=borderx && cell_array.y1()[i - 1]<=bordery)
     {
-//        if (cell_array(i,11)>deathjudge)
-        if (cell_array(i,17)>0)
+//        if (cell_array.density_growth_rate()[i - 1]>deathjudge)
+        if (cell_array.division_time()[i - 1]>0)
         {
-            if (cell_array(i,16)<cell_array(i,17))
+            if (cell_array.division_elapsed()[i - 1]<cell_array.division_time()[i - 1])
             {
-//                double undividing_time=21.6/cell_array(i,11);//24*0.9=21.6
-                double undividing_time=cell_array(i,17)*0.9;
-                if (cell_array(i,16)<=undividing_time)
+//                double undividing_time=21.6/cell_array.density_growth_rate()[i - 1];//24*0.9=21.6
+                double undividing_time=cell_array.division_time()[i - 1]*0.9;
+                if (cell_array.division_elapsed()[i - 1]<=undividing_time)
                 {
-                    int migration_label=(int)cell_array(i,25);
+                    int migration_label=(int)cell_array.migration_active()[i - 1];
                     switch (migration_label)
                     {
                         case 0:
@@ -93,40 +93,40 @@ inline void CellMigration(int &DDM, int i, double &deltah,CellArray &cell_array,
                                     double Dr=density_calculation(i, Visual_range, cell_array);
                                     if (Dr>=bunderD)
                                     {
-                                        cell_array(i,25)=1;
-                                        cell_array(i,28)=cell_array(i,12);
+                                        cell_array.migration_active()[i - 1]=1;
+                                        cell_array.migration_rate()[i - 1]=cell_array.migration_rate_base()[i - 1];
 
-                                        cell_array(i,26)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time)*(cell_array(i,17)-cell_array(i,16));
+                                        cell_array.migration_duration()[i - 1]=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time)*(cell_array.division_time()[i - 1]-cell_array.division_elapsed()[i - 1]);
                                     }
-                                    cell_array(i,21)=1/cell_array(i,28);
+                                    cell_array.migration_interval()[i - 1]=1/cell_array.migration_rate()[i - 1];
                                     break;
                                 }
                                 case 0:
                                 {
-                                    cell_array(i,21)=1/cell_array(i,28);
+                                    cell_array.migration_interval()[i - 1]=1/cell_array.migration_rate()[i - 1];
                                     break;
                                 }
                             }
-                            if (cell_array(i,20)>=cell_array(i,21))
+                            if (cell_array.migration_elapsed()[i - 1]>=cell_array.migration_interval()[i - 1])
                             {
                                 random_migration(i, deltah, cell_array, Visual_range, migration_judgement, rng_time_step, 1000 + rng_event++);
                             }
                             else
                             {
-                                cell_array(i,20)=cell_array(i,20)+deltah;
+                                cell_array.migration_elapsed()[i - 1]=cell_array.migration_elapsed()[i - 1]+deltah;
                             }
                             break;
                         }
                         case 1:
                         {
-                            if (cell_array(i,27)>=cell_array(i,26))
+                            if (cell_array.migration_passed()[i - 1]>=cell_array.migration_duration()[i - 1])
                             {
-                                cell_array(i,25)=0;
-                                cell_array(i,26)=0;
-                                cell_array(i,27)=0;
-                                cell_array(i,28)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
-                                cell_array(i,21)=1/cell_array(i,28);
-                                if (cell_array(i,20)>=cell_array(i,21))
+                                cell_array.migration_active()[i - 1]=0;
+                                cell_array.migration_duration()[i - 1]=0;
+                                cell_array.migration_passed()[i - 1]=0;
+                                cell_array.migration_rate()[i - 1]=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
+                                cell_array.migration_interval()[i - 1]=1/cell_array.migration_rate()[i - 1];
+                                if (cell_array.migration_elapsed()[i - 1]>=cell_array.migration_interval()[i - 1])
                                 {
                                     switch (chemotaxis)
                                     {
@@ -144,12 +144,12 @@ inline void CellMigration(int &DDM, int i, double &deltah,CellArray &cell_array,
                                 }
                                 else
                                 {
-                                    cell_array(i,20)=cell_array(i,20)+deltah;
+                                    cell_array.migration_elapsed()[i - 1]=cell_array.migration_elapsed()[i - 1]+deltah;
                                 }
                             }
-                            else //cell_array(i,27)<cell_array(i,26)
+                            else //cell_array.migration_passed()[i - 1]<cell_array.migration_duration()[i - 1]
                             {
-                                if (cell_array(i,20)>=cell_array(i,21))
+                                if (cell_array.migration_elapsed()[i - 1]>=cell_array.migration_interval()[i - 1])
                                 {
                                     switch (chemotaxis)
                                     {
@@ -165,11 +165,11 @@ inline void CellMigration(int &DDM, int i, double &deltah,CellArray &cell_array,
                                         }
                                     }
                                 }
-                                else//cell_array(i,20)<cell_array(i,21)
+                                else//cell_array.migration_elapsed()[i - 1]<cell_array.migration_interval()[i - 1]
                                 {
-                                    cell_array(i,20)=cell_array(i,20)+deltah;
-                                    cell_array(i,27)=cell_array(i,27)+deltah;
-                                    cell_array(i,28)=cell_array(i,12);
+                                    cell_array.migration_elapsed()[i - 1]=cell_array.migration_elapsed()[i - 1]+deltah;
+                                    cell_array.migration_passed()[i - 1]=cell_array.migration_passed()[i - 1]+deltah;
+                                    cell_array.migration_rate()[i - 1]=cell_array.migration_rate_base()[i - 1];
                                 }
                             }
 
@@ -177,13 +177,13 @@ inline void CellMigration(int &DDM, int i, double &deltah,CellArray &cell_array,
                         }
                     }
                 }
-//                cell_array(i,16)=cell_array(i,16)+deltah;
+//                cell_array.division_elapsed()[i - 1]=cell_array.division_elapsed()[i - 1]+deltah;
             }
         }
         else
         {
-            double D_time_1=1.5*(24/cell_array(i,10));
-            double D_time_2=0.9*cell_array(i,18);
+            double D_time_1=1.5*(24/cell_array.growth_rate()[i - 1]);
+            double D_time_2=0.9*cell_array.death_time()[i - 1];
             double D_time = 0;
             if (D_time_1<=D_time_2)
             {
@@ -193,9 +193,9 @@ inline void CellMigration(int &DDM, int i, double &deltah,CellArray &cell_array,
             {
                 D_time = D_time_2;
             }
-            if (cell_array(i,19)<=D_time)
+            if (cell_array.death_elapsed()[i - 1]<=D_time)
             {
-                if (cell_array(i,20)>=cell_array(i,21))
+                if (cell_array.migration_elapsed()[i - 1]>=cell_array.migration_interval()[i - 1])
                 {
                     switch (chemotaxis)
                     {
@@ -206,7 +206,7 @@ inline void CellMigration(int &DDM, int i, double &deltah,CellArray &cell_array,
                         }
                         case 1:
                         {
-                            if(cell_array(i,25)==0)
+                            if(cell_array.migration_active()[i - 1]==0)
                             {
                                 random_migration(i, deltah, cell_array, Visual_range, migration_judgement, rng_time_step, 1000 + rng_event++);
                             }
@@ -220,12 +220,12 @@ inline void CellMigration(int &DDM, int i, double &deltah,CellArray &cell_array,
                 }
                 else
                 {
-                    cell_array(i,20)=cell_array(i,20)+deltah;
+                    cell_array.migration_elapsed()[i - 1]=cell_array.migration_elapsed()[i - 1]+deltah;
                 }
             }
             else
             {
-                cell_array(i,20)=cell_array(i,20)+deltah;
+                cell_array.migration_elapsed()[i - 1]=cell_array.migration_elapsed()[i - 1]+deltah;
             }
         }
     }

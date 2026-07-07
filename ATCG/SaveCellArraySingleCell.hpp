@@ -30,15 +30,15 @@ inline void SaveCellArraySingleCell(int T, double alpha, double beta, const Cell
         {
             if(co<29)
             {
-                fprintf(fid3,"%g\t",cell_array(i,co));
+                fprintf(fid3,"%g\t",cell_array.column(co)[i - 1]);
             }
             else if (co>=29 & co<Col)
             {
-                fprintf(fid3,"%ld\t",(long)cell_array(i,co));
+                fprintf(fid3,"%ld\t",(long)cell_array.column(co)[i - 1]);
             }
             else
             {
-                fprintf(fid3,"%ld\n",(long)cell_array(i,co));
+                fprintf(fid3,"%ld\n",(long)cell_array.column(co)[i - 1]);
             }
         }
     }
