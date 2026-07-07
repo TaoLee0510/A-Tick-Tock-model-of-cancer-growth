@@ -18,6 +18,7 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "cell_columns.hpp"
+#include "cell_store.hpp"
 #include "stateless_rng.hpp"
 
 using namespace blitz;
@@ -151,6 +152,89 @@ void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, i
                     cell_array(i,cell_col::kDivisionTime)=expected_dividing_time;
                 }
                 cell_array(i,cell_col::kMigrationInterval)=1/cell_array(i,cell_col::kMigrationRate);
+                break;
+            }
+        }
+    }
+}
+
+inline void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, CellStore &cells,Array<long, 3> &sub_visual,const Array<long,3> &Visual_range, long rng_time_step)
+{
+    (void)lambda_r;
+    (void)lambda_K;
+    (void)Cr;
+    (void)CK;
+    (void)death_time_range_r;
+    (void)death_time_range_K;
+
+    const CellStore::Column &ids = cells.id();
+    const CellStore::Column &xs = cells.x1();
+    const CellStore::Column &ys = cells.y1();
+    const CellStore::Column &types = cells.type();
+    const CellStore::Column &growth_rates = cells.growth_rate();
+    CellStore::Column &density_growth_rates = cells.density_growth_rate();
+    CellStore::Column &division_times = cells.division_time();
+    CellStore::Column &migration_intervals = cells.migration_interval();
+    const CellStore::Column &migration_rates = cells.migration_rate();
+
+    int C0= cells.rows();
+    for (int i=1; i<=C0; i++)
+    {
+        int row = i - 1;
+        long cell_rng_id = (long)ids[row];
+        if (cell_rng_id == 0)
+        {
+            cell_rng_id = i;
+        }
+        long rng_event = 100;
+        int x1=(int)xs[row];
+        int y1=(int)ys[row];
+        int cell_type=(int)types[row];
+        if (x1<100 || y1<100 || x1>Visual_range_x+100 || y1>Visual_range_y+100)
+        {
+            continue;
+        }
+
+        switch (cell_type)
+        {
+            case 1:
+            {
+                DensityGrowthCounts counts = density_growth_neighborhood_counts(x1, y1, N00, N01, sub_visual, Visual_range);
+                double growth_rate_inherent_r=growth_rates[row];
+                if (counts.cells_number>=r_limit)
+                {
+                    density_growth_rates[row]=growth_rate_inherent_r-((growth_rate_inherent_r*2*(counts.rc+counts.kc+alpha*counts.kc-r_limit))/carrying_capacity_r);
+                }
+                if (density_growth_rates[row]>0)
+                {
+                    double expected_division_time=24/density_growth_rates[row];
+                    double undividing_time=0.9*expected_division_time;
+                    double diving_time_range=0.1*expected_division_time;
+                    double probability_of_division=1/diving_time_range;
+                    double expected_dividing_time=undividing_time+stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_of_division);;
+                    division_times[row]=expected_dividing_time;
+                }
+                migration_intervals[row]=1/migration_rates[row];
+                break;
+            }
+            case 2:
+            {
+                DensityGrowthCounts counts = density_growth_neighborhood_counts(x1, y1, N00, N01, sub_visual, Visual_range);
+                double growth_rate_inherent_K=growth_rates[row];
+                if (counts.cells_number>=K_limit)
+                {
+                    density_growth_rates[row]=growth_rate_inherent_K-((growth_rate_inherent_K*2*(beta*counts.rc+counts.rc+counts.kc-K_limit))/carrying_capacity_K);
+                }
+                if (density_growth_rates[row]>0)
+                {
+                    double expected_division_time=24/density_growth_rates[row];
+                    double undividing_time=0.9*expected_division_time;
+                    double diving_time_range=0.1*expected_division_time;
+                    double probability_of_division=1/diving_time_range;
+                    double expected_dividing_time=undividing_time+stateless_geometric(cell_rng_id, rng_time_step, rng_event++, probability_of_division);;
+                    division_times[row]=expected_dividing_time;
+                }
+                migration_intervals[row]=1/migration_rates[row];
                 break;
             }
         }
