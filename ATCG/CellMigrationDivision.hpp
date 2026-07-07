@@ -105,7 +105,7 @@ inline void CellMigrationDivision(int &DDM, int i, double &deltah,CellArray &cel
                         }
                         if (cell_array(i,20)>=cell_array(i,21))
                         {
-                            random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, rng_time_step, 1000 + rng_event++);
+                            random_migration(i, deltah, cell_array, Visual_range, migration_judgement, rng_time_step, 1000 + rng_event++);
                         }
                         else
                         {
@@ -127,7 +127,7 @@ inline void CellMigrationDivision(int &DDM, int i, double &deltah,CellArray &cel
                                 {
                                     case 0:
                                     {
-                                        random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, rng_time_step, 1000 + rng_event++);
+                                        random_migration(i, deltah, cell_array, Visual_range, migration_judgement, rng_time_step, 1000 + rng_event++);
                                         break;
                                     }
                                     case 1:
@@ -149,7 +149,7 @@ inline void CellMigrationDivision(int &DDM, int i, double &deltah,CellArray &cel
                                 {
                                     case 0:
                                     {
-                                        random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, rng_time_step, 1000 + rng_event++);
+                                        random_migration(i, deltah, cell_array, Visual_range, migration_judgement, rng_time_step, 1000 + rng_event++);
                                         break;
                                     }
                                     case 1:
@@ -196,14 +196,14 @@ inline void CellMigrationDivision(int &DDM, int i, double &deltah,CellArray &cel
                     {
                         case 0:
                         {
-                            random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, rng_time_step, 1000 + rng_event++);
+                            random_migration(i, deltah, cell_array, Visual_range, migration_judgement, rng_time_step, 1000 + rng_event++);
                             break;
                         }
                         case 1:
                         {
                             if(cell_array(i,25)==0)
                             {
-                                random_migration(i, deltah, cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, rng_time_step, 1000 + rng_event++);
+                                random_migration(i, deltah, cell_array, Visual_range, migration_judgement, rng_time_step, 1000 + rng_event++);
                             }
                             else
                             {

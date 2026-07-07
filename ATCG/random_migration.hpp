@@ -41,82 +41,78 @@
 #include "stateless_rng.hpp"
 using namespace blitz;
 
-inline int select_random_migration_direction(int x1, int y1, int cell_stage, Array<long, 3> &Visual_range, Array<int,2> &cor_big, Array<int, 2> &cor_small, long cell_rng_id, long rng_time_step, long rng_event)
+inline int select_random_migration_direction(int x1, int y1, int cell_stage, const Array<long, 3> &Visual_range, long cell_rng_id, long rng_time_step, long rng_event)
 {
-    Range all = Range::all();
     int direction[8]={0};
+    auto is_empty = [&](int dx, int dy) {
+        return Visual_range(x1 + dx, y1 + dy, 1) == 0;
+    };
     if (cell_stage==0)
     {
-        cor_big.resize(4,4);
-        cor_big=0;
-        cor_big(all,all)=Visual_range(Range(x1-1,x1+2),Range(y1-1,y1+2),1);
-        if (cor_big(2,1)==0 && cor_big(1,1)==0 && cor_big(1,2)==0)
+        if (is_empty(0, -1) && is_empty(-1, -1) && is_empty(-1, 0))
         {
             direction[0]=1;
         }
-        if (cor_big(1,2)==0 && cor_big(1,3)==0)
+        if (is_empty(-1, 0) && is_empty(-1, 1))
         {
             direction[1]=2;
         }
-        if (cor_big(1,3)==0 && cor_big(1,4)==0 && cor_big(2,4)==0)
+        if (is_empty(-1, 1) && is_empty(-1, 2) && is_empty(0, 2))
         {
             direction[2]=3;
         }
-        if (cor_big(2,4)==0 && cor_big(3,4)==0)
+        if (is_empty(0, 2) && is_empty(1, 2))
         {
             direction[3]=4;
         }
-        if (cor_big(3,4)==0 && cor_big(4,4)==0 && cor_big(4,3)==0)
+        if (is_empty(1, 2) && is_empty(2, 2) && is_empty(2, 1))
         {
             direction[4]=5;
         }
-        if (cor_big(4,3)==0 && cor_big(4,2)==0)
+        if (is_empty(2, 1) && is_empty(2, 0))
         {
             direction[5]=6;
         }
-        if (cor_big(4,2)==0 && cor_big(4,1)==0 && cor_big(3,1)==0)
+        if (is_empty(2, 0) && is_empty(2, -1) && is_empty(1, -1))
         {
             direction[6]=7;
         }
-        if (cor_big(3,1)==0 && cor_big(2,1)==0)
+        if (is_empty(1, -1) && is_empty(0, -1))
         {
             direction[7]=8;
         }
     }
     else //small stage
     {
-        cor_small.resize(3, 3);
-        cor_small=0;
-        cor_small(all,all)=Visual_range(Range(x1-1,x1+1),Range(y1-1,y1+1),1);
-        if (cor_small(1,1)==0)
+        if (is_empty(-1, -1))
         {
             direction[0]=1;
         }
-        if (cor_small(1,2)==0)
+        if (is_empty(-1, 0))
         {
             direction[1]=2;
         }
-        if (cor_small(1,3)==0)
+        if (is_empty(-1, 1))
         {
             direction[2]=3;
         }
-        if (cor_small(2,3)==0)
+        if (is_empty(0, 1))
         {
             direction[3]=4;
         }
-        if (cor_small(3,3)==0)
+        if (is_empty(1, 1))
         {
             direction[4]=5;
         }
-        if (cor_small(3,2)==0)
+        if (is_empty(1, 0))
         {
             direction[5]=6;
         }
-        if (cor_small(3,1)==0)
+        if (is_empty(1, -1))
         {
             direction[6]=7;
         }
-        if (cor_small(2,1)==0)
+        if (is_empty(0, -1))
         {
             direction[7]=8;
         }
@@ -141,13 +137,9 @@ inline int select_random_migration_direction(int x1, int y1, int cell_stage, Arr
     return candidates[0];
 }
 
-inline void random_migration(int i, double deltah, CellStore &cells, Array<long, 3> &Visual_range, Array<int,2> &cor_big, Array<int, 2> &area_square, Array<int, 2> &sub_area_square, Array<int, 2> &cor_small, Array<int, 2> &area_square_s, Array<int, 2>  &sub_area_square_s,double &migration_judgement, long rng_time_step, long rng_event_base)
+inline void random_migration(int i, double deltah, CellStore &cells, Array<long, 3> &Visual_range, double &migration_judgement, long rng_time_step, long rng_event_base)
 {
     (void)deltah;
-    (void)area_square;
-    (void)sub_area_square;
-    (void)area_square_s;
-    (void)sub_area_square_s;
 
     int row = i - 1;
     long cell_rng_id = (long)cells.id()[row];
@@ -159,7 +151,7 @@ inline void random_migration(int i, double deltah, CellStore &cells, Array<long,
     long rng_event = rng_event_base + ((long)cell_stage * 100);
     int x1=(int)cells.x1()[row];
     int y1=(int)cells.y1()[row];
-    int order = select_random_migration_direction(x1, y1, cell_stage, Visual_range, cor_big, cor_small, cell_rng_id, rng_time_step, rng_event);
+    int order = select_random_migration_direction(x1, y1, cell_stage, Visual_range, cell_rng_id, rng_time_step, rng_event);
     if (order!=0)
     {
         move_cell_store(i, cells, Visual_range, order);

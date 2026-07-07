@@ -480,7 +480,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                                 }
                                 if (cells(i,20)>=cells(i,21))
                                 {
-                                    random_migration(i, deltah, cells, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 1000 + rng_event++);
+                                    random_migration(i, deltah, cells, Visual_range, migration_judgement, H, 1000 + rng_event++);
                                 }
                                 else
                                 {
@@ -500,7 +500,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                                     {
                                         if (chemotaxis==0)
                                         {
-                                            random_migration(i, deltah, cells, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 1000 + rng_event++);
+                                            random_migration(i, deltah, cells, Visual_range, migration_judgement, H, 1000 + rng_event++);
                                         }
                                         else
                                         {
@@ -518,7 +518,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                                     {
                                         if (chemotaxis==0)
                                         {
-                                            random_migration(i, deltah, cells, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 1000 + rng_event++);
+                                            random_migration(i, deltah, cells, Visual_range, migration_judgement, H, 1000 + rng_event++);
                                         }
                                         else
                                         {
@@ -562,13 +562,13 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                         {
                             if (chemotaxis==0)
                             {
-                                random_migration(i, deltah, cells, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 1000 + rng_event++);
+                                random_migration(i, deltah, cells, Visual_range, migration_judgement, H, 1000 + rng_event++);
                             }
                             else
                             {
                                 if(cells(i,25)==0)
                                 {
-                                    random_migration(i, deltah, cells, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 1000 + rng_event++);
+                                    random_migration(i, deltah, cells, Visual_range, migration_judgement, H, 1000 + rng_event++);
                                 }
                                 else
                                 {
