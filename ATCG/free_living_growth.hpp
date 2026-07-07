@@ -73,6 +73,7 @@
 #include <blitz/array.h>
 #include "random_uniform.hpp"
 #include "cell_columns.hpp"
+#include "cell_store.hpp"
 #include "outer_corr.hpp"
 #include "outer_cell_count.hpp"
 #include "deltah_calculation.hpp"
@@ -394,12 +395,10 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     FILE * fid2;
     fid2=fopen (filedir1,"w+");
     ////////////////////////////////////////////////////////////////////migration and proliferation//////////////////////////////////////////////////////////////
-    cell_array.resize(N0,Col);
-    cell_array=0;
-    cell_array(all,all)=cell_array0(all,all);
-    migrate_activation(cell_array, bunderD, sub_visual, Visual_range,migration_time_range, migration_rate_r_mean_quia,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, DDM, 0);
-    density_growth_rate_calculation_1(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK,death_time_range_r,death_time_range_K,cell_array, sub_visual, Visual_range, 0);
-    sortRow(cell_array,cell_array1,Col,17,1);///sort time per generation
+    CellStore cells = cell_store_from_array(cell_array0, Col);
+    migrate_activation(cells, bunderD, sub_visual, Visual_range,migration_time_range, migration_rate_r_mean_quia,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, DDM, 0);
+    density_growth_rate_calculation_1(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK,death_time_range_r,death_time_range_K,cells, sub_visual, Visual_range, 0);
+    cells.sort_by_column(cell_col::kDivisionTime);///sort time per generation
     double h=0;
     int T=0;
     double migration_judgement=0;
@@ -452,7 +451,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         }
         
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        int C2=cell_array.rows();
+        int C2=cells.rows();
         if(DynamicThreads==1)
         {
             if (nthreads<threads)
@@ -505,16 +504,19 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         
         int JU =H%division_interval;
         start12=omp_get_wtime();
+        cell_store_to_array(cells, cell_array, Col);
         death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cell_array, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads,H);
+        cells = cell_store_from_array(cell_array, Col);
         end12=omp_get_wtime();
         
         start14=omp_get_wtime();
-        sortRow(cell_array, cell_array1,Col,9,nthreads);///sort cell type
+        cells.sort_by_column(cell_col::kType);///sort cell type
         end14=omp_get_wtime();
-        stage_convert(Visual_range_x, Visual_range_y, cell_array, Visual_range, cell_label,utralsmall,H);
+        stage_convert(Visual_range_x, Visual_range_y, cells, Visual_range, cell_label,utralsmall,H);
         
         
-        int C1=cell_array.rows();
+        int C1=cells.rows();
+        cell_store_to_array(cells, cell_array, Col);
         
         double start04(0);
         double end04(0);
@@ -596,7 +598,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
             if (JU !=0 )
             {
                 start15=omp_get_wtime();
-                sortRow(cell_array,cell_array1,Col,13,nthreads);///sort random label
+                cells.sort_by_column(cell_col::kRandomLabel);///sort random label
                 end15=omp_get_wtime();
                 
                 start04=omp_get_wtime();
@@ -605,8 +607,8 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 {
                     for (int i=C1; i!=0; --i)
                     {
-                        CellMigration(DDM, i, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration, H);
-                        cell_array(i,16)=cell_array(i,16)+deltah;// add detalh
+                        CellMigration(DDM, i, deltah,cells, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration, H);
+                        cells(i,16)=cells(i,16)+deltah;// add detalh
                     }
                 }
                 end04=omp_get_wtime();
@@ -615,7 +617,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
             else
             {
                 start15=omp_get_wtime();
-                sortRow(cell_array,cell_array1,Col,13,nthreads);///sort random label
+                cells.sort_by_column(cell_col::kRandomLabel);///sort random label
                 end15=omp_get_wtime();
                 start04=omp_get_wtime();
                 omp_set_num_threads(nthreads);
@@ -623,17 +625,18 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 {
                     for (int i=C1; i!=0; --i)
                     {
-                        CellMigration(DDM, i, deltah,cell_array, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration, H);
+                        CellMigration(DDM, i, deltah,cells, Visual_range, cor_big,area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration, H);
                     }
                 }
                 end04=omp_get_wtime();
                 
                 start13=omp_get_wtime();
-                sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
+                cells.sort_by_column(cell_col::kDivisionElapsed);///sort time division
                 end13=omp_get_wtime();
                 
                 double programTimes15 = 0;
                 start06=omp_get_wtime();
+                cell_store_to_array(cells, cell_array, Col);
 
                 Array<long,2> cell_trace_ndcells(1,150,FortranArray<2>());
                 cell_trace_ndcells=0;
@@ -659,6 +662,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                     cell_array.resizeAndPreserve(C1+current_size_ndcells-1,Col);
                     cell_array(Range(C1+1,toEnd),all)=cell_array_ndcells(Range(2,toEnd),all);
                 }
+                cells = cell_store_from_array(cell_array, Col);
                 
                 end06=omp_get_wtime();
             }
@@ -666,12 +670,14 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         else
         {
             start08=omp_get_wtime();
-            sortRow(cell_array,cell_array1,Col,16,nthreads);///sort time division
-            save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
+            cells.sort_by_column(cell_col::kDivisionElapsed);///sort time division
+            save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cells,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
+            cell_store_to_array(cells, cell_array, Col);
             for (int i=C1; i!=0; --i)
             {
                 CellMigrationDivisionSingleCell(DDM, i, deltah,cell_array, Visual_range, cor_big,  area_square,  sub_area_square,  cor_small, area_square_s, sub_area_square_s, migration_judgement, max_growth_rate_r,  max_growth_rate_K, cell_array_temp,  cor_big_1, cor_big_1_change_shape,  cor_small_1, proliferation_loci,  cell_temp, cell_label , utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K,  unilow_K, sigmahatK, muhatK, K_label,sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration, cell_trace, cell_trace_temp,  cell_index,  r_label, Col, K_formation_rate, deathjudge,  beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD, borderx, bordery,fid2,nthreads, H);
             }
+            cells = cell_store_from_array(cell_array, Col);
             end08=omp_get_wtime();
         }
         
