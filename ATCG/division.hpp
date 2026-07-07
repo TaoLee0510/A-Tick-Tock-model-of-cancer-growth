@@ -55,7 +55,6 @@ inline void append_cell(CellStore &cells, const CellRowBuffer &cell_temp, int Co
 template <typename CellArray>
 inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, VisualRange &Visual_range, CellRowBuffer &cell_temp,int &cell_label, double &deltah,int utralsmall,int Col, long rng_time_step)
 {
-    Range all = Range::all();
     long cell_rng_id = (long)cell_array(i,15);
     if (cell_rng_id == 0)
     {
@@ -349,63 +348,63 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         int proloci2=random_pro_loci1[1];
                         if (proloci1==1)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                             {
                                 int cor_cell_y=cor_cell+4;
                                 cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
                                 cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
                             }
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                         }
                         else if (proloci1==3)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                             {
                                 int cor_cell_y=cor_cell+4;
                                 cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
                                 cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
                             }
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                         }
                         else if (proloci1==5)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                             {
                                 int cor_cell_y=cor_cell+4;
                                 cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
                                 cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
                             }
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                         }
                         else if (proloci1==7)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                             {
                                 int cor_cell_y=cor_cell+4;
                                 cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
                                 cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
                             }
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                         }
                         if (proloci2==1)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             cell_temp(1,1)=x-1;
                             cell_temp(1,5)=y-1;
                             cell_temp(1,2)=cell_temp(1,1);
@@ -417,14 +416,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,14)=cell_array(i,14);
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                            Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
                         else if (proloci2==3)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             cell_temp(1,1)=x-1;
                             cell_temp(1,5)=y+1;
                             cell_temp(1,2)=cell_temp(1,1);
@@ -436,14 +435,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,14)=cell_array(i,14);
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                            Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
                         else if (proloci2==5)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             cell_temp(1,1)=x+1;
                             cell_temp(1,5)=y+1;
                             cell_temp(1,2)=cell_temp(1,1);
@@ -455,14 +454,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,14)=cell_array(i,14);
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                            Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
                         else if (proloci2==7)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             cell_temp(1,1)=x+1;
                             cell_temp(1,5)=y-1;
                             cell_temp(1,2)=cell_temp(1,1);
@@ -474,10 +473,10 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,14)=cell_array(i,14);
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                            Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
                     }
                     else if (random_pro_loci[0]==2)
@@ -493,55 +492,55 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         int proloci2=random_pro_loci2[1];
                         if (proloci1==2)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                             {
                                 cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
                             }
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                         }
                         else if (proloci1==4)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                             {
                                 cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
                             }
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                         }
                         else if (proloci1==6)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                             {
                                 cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
                             }
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                         }
                         else if (proloci1==8)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                             {
                                 cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
                             }
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                         }
                         if (proloci2==2)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             cell_temp(1,1)=x-1;
                             cell_temp(1,5)=y;
                             cell_temp(1,2)=cell_temp(1,1);
@@ -553,14 +552,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,14)=cell_array(i,14);
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                            Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
                         else if (proloci2==4)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             cell_temp(1,1)=x;
                             cell_temp(1,5)=y+1;
                             cell_temp(1,2)=cell_temp(1,1);
@@ -572,14 +571,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,14)=cell_array(i,14);
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                            Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
                         else if (proloci2==6)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             cell_temp(1,1)=x+1;
                             cell_temp(1,5)=y;
                             cell_temp(1,2)=cell_temp(1,1);
@@ -591,14 +590,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,14)=cell_array(i,14);
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                            Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
                         else if (proloci2==8)
                         {
-                            Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                            Visual_range.clear_square(x,y);
                             cell_temp(1,1)=x;
                             cell_temp(1,5)=y-1;
                             cell_temp(1,2)=cell_temp(1,1);
@@ -610,10 +609,10 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,14)=cell_array(i,14);
                             cell_temp(1,22)=cell_array(i,22);
                             cell_temp(1,24)=cell_array(i,24);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                            Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                            Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                            Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
                     }
                 }
@@ -630,63 +629,63 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                     int proloci2=random_pro_loci1[1];
                     if (proloci1==1)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                         {
                             int cor_cell_y=cor_cell+4;
                             cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
                             cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
                         }
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                     }
                     else if (proloci1==3)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                         {
                             int cor_cell_y=cor_cell+4;
                             cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
                             cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
                         }
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                     }
                     else if (proloci1==5)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                         {
                             int cor_cell_y=cor_cell+4;
                             cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
                             cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
                         }
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                     }
                     else if (proloci1==7)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                         {
                             int cor_cell_y=cor_cell+4;
                             cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
                             cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
                         }
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                     }
                     if (proloci2==1)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         cell_temp(1,1)=x-1;
                         cell_temp(1,5)=y-1;
                         cell_temp(1,2)=cell_temp(1,1);
@@ -698,14 +697,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,14)=cell_array(i,14);
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                        Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                     }
                     else if (proloci2==3)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         cell_temp(1,1)=x-1;
                         cell_temp(1,5)=y+1;
                         cell_temp(1,2)=cell_temp(1,1);
@@ -717,14 +716,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,14)=cell_array(i,14);
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                        Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                     }
                     else if (proloci2==5)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         cell_temp(1,1)=x+1;
                         cell_temp(1,5)=y+1;
                         cell_temp(1,2)=cell_temp(1,1);
@@ -736,14 +735,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,14)=cell_array(i,14);
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                        Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                     }
                     else if (proloci2==7)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         cell_temp(1,1)=x+1;
                         cell_temp(1,5)=y-1;
                         cell_temp(1,2)=cell_temp(1,1);
@@ -755,10 +754,10 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,14)=cell_array(i,14);
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                        Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                     }
                 }
                 else if (pro_loci_number1 < 2 && pro_loci_number2 >1)
@@ -774,55 +773,55 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                     int proloci2=random_pro_loci2[1];
                     if (proloci1==2)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                         {
                             cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
                         }
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                     }
                     else if (proloci1==4)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                         {
                             cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
                         }
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                     }
                     else if (proloci1==6)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                         {
                             cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
                         }
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                     }
                     else if (proloci1==8)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                         {
                             cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
                         }
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                     }
                     if (proloci2==2)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         cell_temp(1,1)=x-1;
                         cell_temp(1,5)=y;
                         cell_temp(1,2)=cell_temp(1,1);
@@ -834,15 +833,15 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,14)=cell_array(i,14);
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                        Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         
                     }
                     else if (proloci2==4)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         cell_temp(1,1)=x;
                         cell_temp(1,5)=y+1;
                         cell_temp(1,2)=cell_temp(1,1);
@@ -854,14 +853,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,14)=cell_array(i,14);
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                        Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                     }
                     else if (proloci2==6)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         cell_temp(1,1)=x+1;
                         cell_temp(1,5)=y;
                         cell_temp(1,2)=cell_temp(1,1);
@@ -873,14 +872,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,14)=cell_array(i,14);
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                        Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                     }
                     else if (proloci2==8)
                     {
-                        Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                        Visual_range.clear_square(x,y);
                         cell_temp(1,1)=x;
                         cell_temp(1,5)=y-1;
                         cell_temp(1,2)=cell_temp(1,1);
@@ -892,10 +891,10 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,14)=cell_array(i,14);
                         cell_temp(1,22)=cell_array(i,22);
                         cell_temp(1,24)=cell_array(i,24);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                        Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                        Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                        Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                     }
                 }
                 else if (pro_loci_number1 ==1 && pro_loci_number2 ==1)
@@ -910,63 +909,63 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             int proloci2=pro_loci2_new[0];
                             if (proloci1==1)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
                                     int cor_cell_y=cor_cell+4;
                                     cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
                                     cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
                                 }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                             }
                             else if (proloci1==3)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
                                     int cor_cell_y=cor_cell+4;
                                     cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
                                     cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
                                 }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                             }
                             else if (proloci1==5)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
                                     int cor_cell_y=cor_cell+4;
                                     cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
                                     cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
                                 }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                             }
                             else if (proloci1==7)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
                                     int cor_cell_y=cor_cell+4;
                                     cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
                                     cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
                                 }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                             }
                             if (proloci2==2)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 cell_temp(1,1)=x-1;
                                 cell_temp(1,5)=y;
                                 cell_temp(1,2)=cell_temp(1,1);
@@ -978,15 +977,15 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,14)=cell_array(i,14);
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                                Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                                 
                             }
                             else if (proloci2==4)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 cell_temp(1,1)=x;
                                 cell_temp(1,5)=y+1;
                                 cell_temp(1,2)=cell_temp(1,1);
@@ -998,14 +997,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,14)=cell_array(i,14);
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                                Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                             }
                             else if (proloci2==6)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 cell_temp(1,1)=x+1;
                                 cell_temp(1,5)=y;
                                 cell_temp(1,2)=cell_temp(1,1);
@@ -1017,14 +1016,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,14)=cell_array(i,14);
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                                Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                             }
                             else if (proloci2==8)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 cell_temp(1,1)=x;
                                 cell_temp(1,5)=y-1;
                                 cell_temp(1,2)=cell_temp(1,1);
@@ -1036,10 +1035,10 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,14)=cell_array(i,14);
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                                Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                             }
                         }
                         else if (random_pro_loci[0]==2)
@@ -1048,55 +1047,55 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             int proloci2=pro_loci1_new[0];
                             if (proloci1==2)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
                                     cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
                                 }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                             }
                             else if (proloci1==4)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                                 {
                                     cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
                                 }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                             }
                             else if (proloci1==6)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
                                     cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
                                 }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                             }
                             else if (proloci1==8)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                                 {
                                     cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
                                 }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
+                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
+                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
                             }
                             if (proloci2==1)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 cell_temp(1,1)=x-1;
                                 cell_temp(1,5)=y-1;
                                 cell_temp(1,2)=cell_temp(1,1);
@@ -1108,14 +1107,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,14)=cell_array(i,14);
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                                Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                             }
                             else if (proloci2==3)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 cell_temp(1,1)=x-1;
                                 cell_temp(1,5)=y+1;
                                 cell_temp(1,2)=cell_temp(1,1);
@@ -1127,14 +1126,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,14)=cell_array(i,14);
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                                Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                             }
                             else if (proloci2==5)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 cell_temp(1,1)=x+1;
                                 cell_temp(1,5)=y+1;
                                 cell_temp(1,2)=cell_temp(1,1);
@@ -1146,14 +1145,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,14)=cell_array(i,14);
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                                Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                             }
                             else if (proloci2==7)
                             {
-                                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                                Visual_range.clear_square(x,y);
                                 cell_temp(1,1)=x+1;
                                 cell_temp(1,5)=y-1;
                                 cell_temp(1,2)=cell_temp(1,1);
@@ -1165,10 +1164,10 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,14)=cell_array(i,14);
                                 cell_temp(1,22)=cell_array(i,22);
                                 cell_temp(1,24)=cell_array(i,24);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),1)=1;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),2)=(int)cell_array(i,15);
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_temp(1,1),cell_temp(1,1)+1),Range(cell_temp(1,5),cell_temp(1,5)+1),4)=cell_label;
+                                Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
+                                Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                             }
                         }
                     }
@@ -1221,7 +1220,7 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         random_pro_loci_1[cor_pro_1_1_nozero_locus]=cor_pro_1_1_nozero_locus+1;
                     }
                     stateless_shuffle(random_pro_loci_1,random_pro_loci_1+cor_pro_1_length, cell_rng_id, rng_time_step, rng_event++);
-                    Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                    Visual_range.clear_square(x,y);
                     cell_temp(1,1)=(double)cor_pro_1(1,random_pro_loci_1[0]);
                     cell_temp(1,5)=(double)cor_pro_1(2,random_pro_loci_1[0]);
                     cell_temp(1,14)=1;
@@ -1305,7 +1304,7 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                     random_pro_loci_1[pro_loci_small_nozero_locus]=pro_loci_small_nozero_locus+1;
                 }
                 stateless_shuffle(random_pro_loci_1,random_pro_loci_1+pro_loci_small_length, cell_rng_id, rng_time_step, rng_event++);
-                Visual_range(Range(x,x+1),Range(y,y+1),all)=0;
+                Visual_range.clear_square(x,y);
                 cell_temp(1,1)=(double)pro_loci_small(1,random_pro_loci_1[0]);
                 cell_temp(1,5)=(double)pro_loci_small(2,random_pro_loci_1[0]);
                 cell_temp(1,14)=1;
@@ -1411,7 +1410,7 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
             if (cell_array(i,9)==1)
             {
                 cell_array(i,22)=0;
-                Visual_range(cell_array(i,1),cell_array(i,5),all)=0;
+                Visual_range.clear_site(cell_array(i,1),cell_array(i,5));
                 cell_temp(1,22)=0;
             }
             else

@@ -91,6 +91,26 @@ public:
         set_rect(x1, x1 + 1, y1, y1 + 1, 4, 4, label);
     }
 
+    void set_square_occupied(int x1, int y1, long value)
+    {
+        set_rect(x1, x1 + 1, y1, y1 + 1, 1, 1, value);
+    }
+
+    void set_square_density_label(int x1, int y1, long value)
+    {
+        set_rect(x1, x1 + 1, y1, y1 + 1, 2, 2, value);
+    }
+
+    void set_square_stage(int x1, int y1, long value)
+    {
+        set_rect(x1, x1 + 1, y1, y1 + 1, 3, 3, value);
+    }
+
+    void set_square_cell_label(int x1, int y1, long value)
+    {
+        set_rect(x1, x1 + 1, y1, y1 + 1, 4, 4, value);
+    }
+
     class SiteLayersProxy
     {
     public:
