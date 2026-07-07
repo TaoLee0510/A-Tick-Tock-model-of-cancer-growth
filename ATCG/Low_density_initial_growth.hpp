@@ -171,12 +171,6 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     cell_temp=0;
     Array<long, 3> sub_visual(3,3,4,FortranArray<3>());
     sub_visual=0;
-    Array<double,2> cell_array0(1,Col,FortranArray<2>());
-    cell_array0=0;
-    Array<double,2> cell_array_out(1,Col,FortranArray<2>());
-    cell_array_out=0;
-    Array<double,2> cell_array_inner(1,Col,FortranArray<2>());
-    cell_array_out=0;
     Array<int,2> A(Visual_range_x/2,Visual_range_y/2,FortranArray<2>());
     A=0;
     int NNy=Visual_range_x*Visual_range_y;
@@ -259,27 +253,24 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
         migration_rate_K[x-1]=stateless_beta(rng_context, 0, 21000 + x, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
     }
     /////////////////////////Initiation////////////////////////////////
-    Array<double,2> initialized_outer=outer_initiation_array_low_density(N0, Visual_range_x, Visual_range_y, A, uniup_r, unilow_r, sigmahatr, muhatr, uniup_K, unilow_K, sigmahatK, muhatK, N0r, N0K, migration_rate_r, migration_rate_K);
-    cell_array_out.resize(initialized_outer.rows(),Col);
-    cell_array_out=0;
-    cell_array_out(all,all)=initialized_outer(all,all);
-    N0=cell_array_out.rows();
+    CellStore cells = outer_initiation_low_density_cell_store(N0, Visual_range_x, Visual_range_y, A, uniup_r, unilow_r, sigmahatr, muhatr, uniup_K, unilow_K, sigmahatK, muhatK, N0r, N0K, migration_rate_r, migration_rate_K);
+    N0=cells.rows();
     N0r=0;
     N0K=0;
     for (int x=1; x<=N0; x++)
     {
-        if (cell_array_out(x,cell_col::kType)==1)
+        if (cells(x,cell_col::kType)==1)
         {
             N0r++;
         }
-        else if (cell_array_out(x,cell_col::kType)==2)
+        else if (cells(x,cell_col::kType)==2)
         {
             N0K++;
         }
     }
     //////////* Outer deltah calculation*///////////////////////////////////////////
     double deltah1=deltah_calculation(N0, migration_rate_r,N0r,MMR1,DDM);
-    Visual_range=outer_initiation_visualrange(cell_array_out, N0, Vx, Vy, cell_label);
+    Visual_range=outer_initiation_visualrange(cells, N0, Vx, Vy, cell_label);
     ////////////////////////////////////////////////////////////////////////* Inner cells initiation*////////////////////////////////////////////////////////////////
     N01=inner_count_low_density(Visual_range_x, Visual_range_y, Visual_range, N01, R1);
     int NN=N0+N01;
@@ -314,15 +305,13 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     //////////* Inner deltah calculation*///////////////////////////////////////////
     double deltah2=deltah_calculation(N01, migration_rate_r1, N0r1,MMR2,DDM);
     /////////////////////////*initiation*////////////////////////////////
-    cell_array_inner.resize(N01,Col);
-    cell_array_inner=0;
-    inner_initiation_array(N0, N01, R1+5,Visual_range_x, Visual_range_y,cell_array_inner, Visual_range, uniup_r1, unilow_r1, sigmahatr, muhatr, uniup_K1, unilow_K1, sigmahatK, muhatK, N0r1, N0K1, migration_rate_r1, migration_rate_K1);
+    CellStore inner_cells = inner_initiation_cell_store(N0, N01, R1+5,Visual_range_x, Visual_range_y, Visual_range, uniup_r1, unilow_r1, sigmahatr, muhatr, uniup_K1, unilow_K1, sigmahatK, muhatK, N0r1, N0K1, migration_rate_r1, migration_rate_K1, Col);
     for (int x=1; x<=N01; x++)
     {
-        int x1 = cell_array_inner(x,1);
-        int y1 = cell_array_inner(x,5);
-        int cell_array_index=cell_array_inner(x,15);
-        int cell_array_stage=cell_array_inner(x,14);
+        int x1 = inner_cells(x,1);
+        int y1 = inner_cells(x,5);
+        int cell_array_index=inner_cells(x,15);
+        int cell_array_stage=inner_cells(x,14);
         Visual_range(x1,y1,1)=1;
         Visual_range(x1,y1,2)=cell_array_index;
         Visual_range(x1,y1,3)=cell_array_stage;
@@ -330,19 +319,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
         cell_label=cell_label+1;
     }
     //////////////////////////////////////////////////////////////////////////cell_array combine////////////////////////////////////////////////////////////
-    cell_array0.resize(NN,Col);
-    cell_array0=0;
-    for (int i=1;i<=NN;i++)
-    {
-        if (i<=N0)
-        {
-            cell_array0(i,all)=cell_array_out(i,all);
-        }
-        else
-        {
-            cell_array0(i,all)=cell_array_inner(i-N0,all);
-        }
-    }
+    cells.append_from(inner_cells);
     //////////////////////////////////////////////////////////////////////////parameters renew////////////////////////////////////////////////////////////
     if (deltah1<deltah2)
     {
@@ -436,7 +413,6 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     fprintf(fid1, "%s %s %d\n" ,"output_all_PNGs", "=", allpng);
     fclose(fid1);
     ////////////////////////////////////////////////////////////////////migration and proliferation//////////////////////////////////////////////////////////////
-    CellStore cells = cell_store_from_array(cell_array0, Col);
     migrate_activation(cells, bunderD, sub_visual, Visual_range,migration_time_range, migration_rate_r_mean_quia,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time,DDM, 0);
     density_growth_rate_calculation_1(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK,death_time_range_r,death_time_range_K,cells, sub_visual, Visual_range, 0);
     cells.sort_by_column(cell_col::kDivisionTime);///sort time per generation

@@ -208,12 +208,6 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     cell_temp=0;
     Array<long, 3> sub_visual(3,3,4,FortranArray<3>());
     sub_visual=0;
-    Array<double,2> cell_array0(1,Col,FortranArray<2>());
-    cell_array0=0;
-    Array<double,2> cell_array_out(1,Col,FortranArray<2>());
-    cell_array_out=0;
-    Array<double,2> cell_array_inner(1,Col,FortranArray<2>());
-    cell_array_out=0;
     Array<int,2> A(Visual_range_x/2,Visual_range_y/2,FortranArray<2>());
     A=0;
     
@@ -308,21 +302,15 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     }
     
     /////////////////////////Initiation////////////////////////////////
-    cell_array_out.resize(N0,Col);
-    cell_array_out=0;
-    cell_array_out=outer_initiation_array(N0, Visual_range_x, Visual_range_y, A, uniup_r, unilow_r, sigmahatr, muhatr, uniup_K, unilow_K, sigmahatK, muhatK, N0r, N0K, migration_rate_r, migration_rate_K,Col);
-    Visual_range=outer_initiation_visualrange(cell_array_out, N0, Vx, Vy, cell_label);
-    
-    cell_array0.resize(N0,Col);
-    cell_array0=0;
-    cell_array0(all,all)=cell_array_out(all,all);
+    CellStore cells = outer_initiation_cell_store(N0, Visual_range_x, Visual_range_y, A, uniup_r, unilow_r, sigmahatr, muhatr, uniup_K, unilow_K, sigmahatK, muhatK, N0r, N0K, migration_rate_r, migration_rate_K,Col);
+    Visual_range=outer_initiation_visualrange(cells, N0, Vx, Vy, cell_label);
     
     deltah=0.005;
     
     N00=N0;
     MMR=1/deltah;
     
-    cell_trace(1,1)=cell_array0(1,15);
+    cell_trace(1,1)=cells(1,15);
     cell_trace(1,2)=1;
     cell_index=N0;
     
@@ -395,7 +383,6 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     FILE * fid2;
     fid2=fopen (filedir1,"w+");
     ////////////////////////////////////////////////////////////////////migration and proliferation//////////////////////////////////////////////////////////////
-    CellStore cells = cell_store_from_array(cell_array0, Col);
     migrate_activation(cells, bunderD, sub_visual, Visual_range,migration_time_range, migration_rate_r_mean_quia,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, DDM, 0);
     density_growth_rate_calculation_1(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK,death_time_range_r,death_time_range_K,cells, sub_visual, Visual_range, 0);
     cells.sort_by_column(cell_col::kDivisionTime);///sort time per generation
