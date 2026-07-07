@@ -14,6 +14,7 @@
 #include <blitz/array.h>
 #include <pngwriter.h>
 #include <cmath>
+#include "cell_store.hpp"
 
 using namespace blitz;
 void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01, int MMR, int H, int T, double alpha, double beta, const Array<double,2> &cell_array, int migration_judgement,double deltah, const Array<double,2> &colorspace, int DDM, int allpng,int Col, const Array<long,2> &cell_trace)
@@ -204,6 +205,12 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
     //        fclose(fid8);
         }
     }
+}
+
+inline void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01, int MMR, int H, int T, double alpha, double beta, const CellStore &cells, int migration_judgement,double deltah, const Array<double,2> &colorspace, int DDM, int allpng,int Col, const Array<long,2> &cell_trace)
+{
+    Array<double,2> cell_array = cell_array_from_store(cells, Col);
+    save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array, migration_judgement, deltah, colorspace, DDM, allpng, Col, cell_trace);
 }
 
 #endif /* save_data_free_living_hpp */
