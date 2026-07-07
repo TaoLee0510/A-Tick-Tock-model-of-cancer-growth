@@ -137,8 +137,7 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     Range all = Range::all();
     Array<long,3> Visual_range(Vx,Vy,4,FortranArray<3>());
     Visual_range(all,all,all)=0;
-    Array<double,2> cell_array(1,Col,FortranArray<2>());
-    cell_array=0;
+    CellStore cells(Col);
     Array<double,2> cell_array1(1,Col,FortranArray<2>());
     cell_array1=0;
     Array<double,2> cell_array_temp(1,Col,FortranArray<2>());
@@ -175,12 +174,6 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     cell_temp=0;
     Array<long, 3> sub_visual(3,3,4,FortranArray<3>());
     sub_visual=0;
-    Array<double,2> cell_array0(1,Col,FortranArray<2>());
-    cell_array0=0;
-    Array<double,2> cell_array_out(1,Col,FortranArray<2>());
-    cell_array_out=0;
-    Array<double,2> cell_array_inner(1,Col,FortranArray<2>());
-    cell_array_out=0;
     Array<int,2> A(Visual_range_x/2,Visual_range_y/2,FortranArray<2>());
     A=0;
     
@@ -259,7 +252,7 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     Array<double,2> Parameters_array(39,1,FortranArray<2>());
     Parameters_array=0;
     
-    read_file(cell_array,cell_trace, Parameters_array, Cell_arry_file,Cell_trace_arry_file, Parameters);
+    read_file(cells,cell_trace, Parameters_array, Cell_arry_file,Cell_trace_arry_file, Parameters);
     
     
 
@@ -269,36 +262,36 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     division_interval=Parameters_array(39,1);
     
     
-    int Cell_number = cell_array.rows();
+    int Cell_number = cells.rows();
     
     for (int i=1; i<=Cell_number; ++i)
     {
-        if(cell_array(i,2)==0 && cell_array(i,6)==0)
+        if(cells(i,2)==0 && cells(i,6)==0)
         {
-            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),1)=1;
-            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),2)=cell_array(i,15);
-            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),3)=cell_array(i,14);
-            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),4)=cell_label;
+            Visual_range(int(cells(i,1)),int(cells(i,5)),1)=1;
+            Visual_range(int(cells(i,1)),int(cells(i,5)),2)=cells(i,15);
+            Visual_range(int(cells(i,1)),int(cells(i,5)),3)=cells(i,14);
+            Visual_range(int(cells(i,1)),int(cells(i,5)),4)=cell_label;
             cell_label=cell_label+1;
         }
         else
         {
-            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),1)=1;
-            Visual_range(int(cell_array(i,2)),int(cell_array(i,6)),1)=1;
-            Visual_range(int(cell_array(i,3)),int(cell_array(i,7)),1)=1;
-            Visual_range(int(cell_array(i,4)),int(cell_array(i,8)),1)=1;
-            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),2)=cell_array(i,15);
-            Visual_range(int(cell_array(i,2)),int(cell_array(i,6)),2)=cell_array(i,15);
-            Visual_range(int(cell_array(i,3)),int(cell_array(i,7)),2)=cell_array(i,15);
-            Visual_range(int(cell_array(i,4)),int(cell_array(i,8)),2)=cell_array(i,15);
-            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),3)=cell_array(i,14);
-            Visual_range(int(cell_array(i,2)),int(cell_array(i,6)),3)=cell_array(i,14);
-            Visual_range(int(cell_array(i,3)),int(cell_array(i,7)),3)=cell_array(i,14);
-            Visual_range(int(cell_array(i,4)),int(cell_array(i,8)),3)=cell_array(i,14);
-            Visual_range(int(cell_array(i,1)),int(cell_array(i,5)),4)=cell_label;
-            Visual_range(int(cell_array(i,2)),int(cell_array(i,6)),4)=cell_label;
-            Visual_range(int(cell_array(i,3)),int(cell_array(i,7)),4)=cell_label;
-            Visual_range(int(cell_array(i,4)),int(cell_array(i,8)),4)=cell_label;
+            Visual_range(int(cells(i,1)),int(cells(i,5)),1)=1;
+            Visual_range(int(cells(i,2)),int(cells(i,6)),1)=1;
+            Visual_range(int(cells(i,3)),int(cells(i,7)),1)=1;
+            Visual_range(int(cells(i,4)),int(cells(i,8)),1)=1;
+            Visual_range(int(cells(i,1)),int(cells(i,5)),2)=cells(i,15);
+            Visual_range(int(cells(i,2)),int(cells(i,6)),2)=cells(i,15);
+            Visual_range(int(cells(i,3)),int(cells(i,7)),2)=cells(i,15);
+            Visual_range(int(cells(i,4)),int(cells(i,8)),2)=cells(i,15);
+            Visual_range(int(cells(i,1)),int(cells(i,5)),3)=cells(i,14);
+            Visual_range(int(cells(i,2)),int(cells(i,6)),3)=cells(i,14);
+            Visual_range(int(cells(i,3)),int(cells(i,7)),3)=cells(i,14);
+            Visual_range(int(cells(i,4)),int(cells(i,8)),3)=cells(i,14);
+            Visual_range(int(cells(i,1)),int(cells(i,5)),4)=cell_label;
+            Visual_range(int(cells(i,2)),int(cells(i,6)),4)=cell_label;
+            Visual_range(int(cells(i,3)),int(cells(i,7)),4)=cell_label;
+            Visual_range(int(cells(i,4)),int(cells(i,8)),4)=cell_label;
             cell_label=cell_label+1;
         }
 
@@ -386,7 +379,6 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     int MaxThread=omp_get_max_threads();
     int nthreads;
     
-    CellStore cells = cell_store_from_array(cell_array, Col);
     cells.sort_by_column(cell_col::kCellTraceLabel);///sort cell index
     
     cell_index=cells(cells.rows(),cell_col::kCellTraceLabel);
