@@ -271,7 +271,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     N00=N0;
     MMR=1/deltah;
     
-    cell_trace(1,1)=cells(1,15);
+    cell_trace(1,1)=cells.id()[0];
     cell_trace(1,2)=1;
     cell_index=N0;
     
@@ -553,7 +553,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                     for (int i=C1; i!=0; --i)
                     {
                         CellMigration(DDM, i, deltah,cells, Visual_range, migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration, H);
-                        cells(i,16)=cells(i,16)+deltah;// add detalh
+                        cells.division_elapsed()[i - 1]=cells.division_elapsed()[i - 1]+deltah;// add detalh
                     }
                 }
                 end04=omp_get_wtime();

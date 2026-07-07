@@ -229,17 +229,18 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     
     for (int i=1; i<=Cell_number; ++i)
     {
-        if(cells(i,2)==0 && cells(i,6)==0)
+        int row = i - 1;
+        if(cells.x2()[row]==0 && cells.y2()[row]==0)
         {
-            Visual_range.write_site(int(cells(i,1)), int(cells(i,5)), cells(i,15), cells(i,14), cell_label);
+            Visual_range.write_site(int(cells.x1()[row]), int(cells.y1()[row]), cells.id()[row], cells.stage()[row], cell_label);
             cell_label=cell_label+1;
         }
         else
         {
-            Visual_range.write_site(int(cells(i,1)), int(cells(i,5)), cells(i,15), cells(i,14), cell_label);
-            Visual_range.write_site(int(cells(i,2)), int(cells(i,6)), cells(i,15), cells(i,14), cell_label);
-            Visual_range.write_site(int(cells(i,3)), int(cells(i,7)), cells(i,15), cells(i,14), cell_label);
-            Visual_range.write_site(int(cells(i,4)), int(cells(i,8)), cells(i,15), cells(i,14), cell_label);
+            Visual_range.write_site(int(cells.x1()[row]), int(cells.y1()[row]), cells.id()[row], cells.stage()[row], cell_label);
+            Visual_range.write_site(int(cells.x2()[row]), int(cells.y2()[row]), cells.id()[row], cells.stage()[row], cell_label);
+            Visual_range.write_site(int(cells.x3()[row]), int(cells.y3()[row]), cells.id()[row], cells.stage()[row], cell_label);
+            Visual_range.write_site(int(cells.x4()[row]), int(cells.y4()[row]), cells.id()[row], cells.stage()[row], cell_label);
             cell_label=cell_label+1;
         }
 
@@ -329,7 +330,7 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     
     cells.sort_by_column(cell_col::kCellTraceLabel);///sort cell index
     
-    cell_index=cells(cells.rows(),cell_col::kCellTraceLabel);
+    cell_index=cells.cell_trace_label()[cells.rows() - 1];
 
     if(MaxThread<threads)
     {
@@ -535,7 +536,7 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
                     for (int i=C1; i!=0; --i)
                     {
                         CellMigration(DDM, i, deltah,cells, Visual_range, migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration, H);
-                        cells(i,16)=cells(i,16)+deltah;// add detalh
+                        cells.division_elapsed()[i - 1]=cells.division_elapsed()[i - 1]+deltah;// add detalh
                     }
                 }
                 end04=omp_get_wtime();

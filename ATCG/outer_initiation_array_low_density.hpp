@@ -127,21 +127,22 @@ inline CellStore outer_initiation_low_density_cell_store(int N0, int Visual_rang
 
         cells.push_empty();
         int target_row=cells.rows();
-        cells(target_row,1)=x1;
-        cells(target_row,2)=x2;
-        cells(target_row,3)=x3;
-        cells(target_row,4)=x4;
-        cells(target_row,5)=y1;
-        cells(target_row,6)=y2;
-        cells(target_row,7)=y3;
-        cells(target_row,8)=y4;
-        cells(target_row,9)=type;
-        cells(target_row,10)=growth_rate;
-        cells(target_row,11)=growth_rate;
-        cells(target_row,12)=migration_rate;
-        cells(target_row,14)=0;
-        cells(target_row,15)=target_row;
-        cells(target_row,22)=1;
+        int row = target_row - 1;
+        cells.x1()[row]=x1;
+        cells.x2()[row]=x2;
+        cells.x3()[row]=x3;
+        cells.x4()[row]=x4;
+        cells.y1()[row]=y1;
+        cells.y2()[row]=y2;
+        cells.y3()[row]=y3;
+        cells.y4()[row]=y4;
+        cells.type()[row]=type;
+        cells.growth_rate()[row]=growth_rate;
+        cells.density_growth_rate()[row]=growth_rate;
+        cells.migration_rate_base()[row]=migration_rate;
+        cells.stage()[row]=0;
+        cells.id()[row]=target_row;
+        cells.migration_interval()[row]=1;
     }
     return cells;
 }

@@ -41,7 +41,7 @@ inline void read_file(CellStore &cells,CellTraceStore &cell_trace, RecoveryParam
         {
             for(int col=1;col<=cols;++col)
             {
-                file >> cells(row,col);
+                file >> cells.column(col)[row - 1];
             }
         }
     }
