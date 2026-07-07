@@ -137,14 +137,8 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     //    $26: migration lasted time
     //    $27: passed time of migration
     //    $28: migration rate
-    Array<double,2> cell_array1(1,28,FortranArray<2>());
-    cell_array1=0;
     Array<double,2> cell_array_temp(1,28,FortranArray<2>());
     cell_array_temp=0;
-    Array<double, 2> cell_array_temp1(1,28,FortranArray<2>());
-    cell_array_temp1=0;
-    Array<double,2> cell_array2(1,28,FortranArray<2>());
-    cell_array2=0;
     Array<int,2> cor_big(1,4,FortranArray<2>());
     cor_big=0;
     Array<int, 2> area_square(1,10,FortranArray<2>());
@@ -157,10 +151,6 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     area_square_s=0;
     Array<int, 2>  sub_area_square_s(9,9,FortranArray<2>());
     sub_area_square_s=0;
-    Array<int,2> Visual_range_1(10,10,FortranArray<2>());
-    Visual_range_1=0;
-    Array<int,2> Visual_range_2(10,10,FortranArray<2>());
-    Visual_range_2=0;
     Array<int, 2> cor_big_1(1,16,FortranArray<2>());
     cor_big_1=0;
     Array<int, 2> cor_big_1_change_shape(1,16,FortranArray<2>());
@@ -498,7 +488,6 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
         cells.sort_by_column(cell_col::kType);
         stage_convert(Visual_range_x, Visual_range_y, cells, Visual_range, cell_label,utralsmall,H);
 //        deltah_recalculation(deltah, cell_array, MMR, DDM);
-//        sortRow(cell_array,cell_array1,Col,16,threads);
 //        save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array,migration_judgement, deltah, colorspace,DDM, allpng);
         int C1=cells.rows();
         
