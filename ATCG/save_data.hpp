@@ -18,7 +18,8 @@
 #include "cell_store.hpp"
 
 using namespace blitz;
-void save_data(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01, int MMR, int H, int &T, double alpha, double beta, const Array<double,2> &cell_array, int migration_judgement,double deltah, const Array<double,2> &colorspace, int DDM, int allpng)
+template <typename CellArray>
+inline void save_data(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01, int MMR, int H, int &T, double alpha, double beta, const CellArray &cell_array, int migration_judgement,double deltah, const Array<double,2> &colorspace, int DDM, int allpng)
 {
     if (H%MMR==0)
     {
@@ -211,11 +212,5 @@ void save_data(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01,
         fclose(fid7);
 //        fclose(fid8);
     }
-}
-
-inline void save_data(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01, int MMR, int H, int &T, double alpha, double beta, const CellStore &cells, int migration_judgement,double deltah, const Array<double,2> &colorspace, int DDM, int allpng)
-{
-    Array<double,2> cell_array = cell_array_from_store(cells, cell_col::kStandardColumnCount);
-    save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cell_array, migration_judgement, deltah, colorspace, DDM, allpng);
 }
 #endif /* save_data_hpp */
