@@ -132,14 +132,6 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     //    $26: migration lasted time
     //    $27: passed time of migration
     //    $28: migration rate
-    Array<int, 2> cor_big_1(1,16,FortranArray<2>());
-    cor_big_1=0;
-    Array<int, 2> cor_big_1_change_shape(1,16,FortranArray<2>());
-    cor_big_1_change_shape=0;
-    Array<int, 2> cor_small_1(1,8,FortranArray<2>());
-    cor_small_1=0;
-    Array<int, 2> proliferation_loci(1,4,FortranArray<2>());
-    proliferation_loci=0;
     CellRowBuffer cell_temp(1, Col);
     Array<long, 3> sub_visual(3,3,4,FortranArray<3>());
     sub_visual=0;
@@ -528,7 +520,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                     }
                     else
                     {
-                        division(i, max_growth_rate_r, max_growth_rate_K, cells, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp,cell_label,deltah,utralsmall,Col, H);
+                        division(i, max_growth_rate_r, max_growth_rate_K, cells, Visual_range, cell_temp,cell_label,deltah,utralsmall,Col, H);
                     }
                 }
                 else

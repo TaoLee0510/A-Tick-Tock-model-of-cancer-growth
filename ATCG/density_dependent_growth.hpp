@@ -137,14 +137,6 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     //    $26: migration lasted time
     //    $27: passed time of migration
     //    $28: migration rate
-    Array<int, 2> cor_big_1(1,16,FortranArray<2>());
-    cor_big_1=0;
-    Array<int, 2> cor_big_1_change_shape(1,16,FortranArray<2>());
-    cor_big_1_change_shape=0;
-    Array<int, 2> cor_small_1(1,8,FortranArray<2>());
-    cor_small_1=0;
-    Array<int, 2> proliferation_loci(1,4,FortranArray<2>());
-    proliferation_loci=0;
     CellRowBuffer cell_temp(1, Col);
     Array<long, 3> sub_visual(3,3,4,FortranArray<3>());
     sub_visual=0;
@@ -496,7 +488,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                 save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cells,migration_judgement, deltah, colorspace,DDM, allpng);
                 for (int i=C1; i>=1; i--)
                 {
-                    CellMigrationDivision(DDM, i,  deltah, cells, Visual_range, migration_judgement, deathjudge,  beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD, sub_visual, borderx, bordery, beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration,  max_growth_rate_r,  max_growth_rate_K, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp, cell_label, utralsmall, Col, H);
+                    CellMigrationDivision(DDM, i,  deltah, cells, Visual_range, migration_judgement, deathjudge,  beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD, sub_visual, borderx, bordery, beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration,  max_growth_rate_r,  max_growth_rate_K, cell_temp, cell_label, utralsmall, Col, H);
                 }
                 end08=omp_get_wtime();
                 break;
@@ -567,7 +559,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                 start06=omp_get_wtime();
                 for (int i=C1; i>=1; i--)
                 {
-                    CellDivision( i,  max_growth_rate_r,  max_growth_rate_K, cells, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1,  proliferation_loci, cell_temp, cell_label,  deltah, utralsmall, Col, deathjudge, borderx, bordery, H);
+                    CellDivision( i,  max_growth_rate_r,  max_growth_rate_K, cells, Visual_range, cell_temp, cell_label,  deltah, utralsmall, Col, deathjudge, borderx, bordery, H);
                 }
                 end06=omp_get_wtime();
                 

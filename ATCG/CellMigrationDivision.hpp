@@ -62,7 +62,7 @@ using std::chrono::high_resolution_clock;
 
 
 template <typename CellArray>
-inline void CellMigrationDivision(int &DDM, int i, double &deltah,CellArray &cell_array, Array<long, 3> &Visual_range, double &migration_judgement,double deathjudge, double beta_distribution_alpha_mig_time,double beta_distribution_beta_mig_time,int chemotaxis,double bunderD,Array<long, 3> &sub_visual,int borderx,int bordery,double beta_distribution_alpha_for_normal_migration,double migration_rate_r_mean_quia,double beta_distribution_beta_for_normal_migration, double max_growth_rate_r, double max_growth_rate_K,  Array<int,2> &cor_big_1, Array<int, 2> &cor_big_1_change_shape, Array<int, 2> &cor_small_1, Array<int, 2> &proliferation_loci, CellRowBuffer &cell_temp,int &cell_label,int utralsmall,int Col,long rng_time_step)
+inline void CellMigrationDivision(int &DDM, int i, double &deltah,CellArray &cell_array, Array<long, 3> &Visual_range, double &migration_judgement,double deathjudge, double beta_distribution_alpha_mig_time,double beta_distribution_beta_mig_time,int chemotaxis,double bunderD,Array<long, 3> &sub_visual,int borderx,int bordery,double beta_distribution_alpha_for_normal_migration,double migration_rate_r_mean_quia,double beta_distribution_beta_for_normal_migration, double max_growth_rate_r, double max_growth_rate_K, CellRowBuffer &cell_temp,int &cell_label,int utralsmall,int Col,long rng_time_step)
 {
     long cell_rng_id = (long)cell_array(i,15);
     if (cell_rng_id == 0)
@@ -172,7 +172,7 @@ inline void CellMigrationDivision(int &DDM, int i, double &deltah,CellArray &cel
             }
             else
             {
-                division(i, max_growth_rate_r, max_growth_rate_K, cell_array, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp,cell_label,deltah,utralsmall, Col, rng_time_step);
+                division(i, max_growth_rate_r, max_growth_rate_K, cell_array, Visual_range, cell_temp,cell_label,deltah,utralsmall, Col, rng_time_step);
             }
         }
         else

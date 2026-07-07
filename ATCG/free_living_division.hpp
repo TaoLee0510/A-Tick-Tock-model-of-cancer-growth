@@ -38,6 +38,7 @@
 #include "deltah_calculation.hpp"
 #include "cell_type_transform.hpp"
 #include "cell_store.hpp"
+#include "int_matrix.hpp"
 #include "cell_trace.hpp"
 #include "stateless_rng.hpp"
 #include <chrono>
@@ -48,7 +49,7 @@ using std::chrono::high_resolution_clock;
 using namespace std;
 using namespace blitz;
 template <typename CellArray>
-inline void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, CellRowBuffer cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,CellTraceStore &cell_trace,CellTraceStore cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads,CellTraceStore &cell_trace_ndcells,int &ndcells,CellRowBuffer &cell_array_ndcells, long rng_time_step)
+inline void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<long, 3> &Visual_range, CellRowBuffer cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,CellTraceStore &cell_trace,CellTraceStore cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads,CellTraceStore &cell_trace_ndcells,int &ndcells,CellRowBuffer &cell_array_ndcells, long rng_time_step)
 {
     Range all = Range::all();
     long cell_rng_id = (long)cell_array(i,15);
@@ -63,14 +64,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
     int pro_loci2[4]={0};
     int pro_loci1_new[4]={0};
     int pro_loci2_new[4]={0};
-    cor_big_1.resize(2, 16);
-    cor_big_1=0;
-    cor_big_1_change_shape.resize(2, 16);
-    cor_big_1_change_shape=0;
-    cor_small_1.resize(2, 8);
-    cor_small_1=0;
-    proliferation_loci.resize(2, 4);
-    proliferation_loci=0;
+    IntMatrix cor_big_1(2, 16);
+    IntMatrix cor_big_1_change_shape(2, 16);
+    IntMatrix cor_small_1(2, 8);
     cell_temp.resize(2, Col);
     cell_temp=0;
     int x=(int)cell_array(i,1);
@@ -117,30 +113,30 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
     cor_big_1(2,15)=a;
     cor_big_1(1,16)=B;
     cor_big_1(2,16)=a;
-    cor_big_1_change_shape(all,1)=B,b;
-    cor_big_1_change_shape(all,2)=B,c;
-    cor_big_1_change_shape(all,3)=B,d;
-    cor_big_1_change_shape(all,4)=B,e;
-    cor_big_1_change_shape(all,5)=C,e;
-    cor_big_1_change_shape(all,6)=D,e;
-    cor_big_1_change_shape(all,7)=E,e;
-    cor_big_1_change_shape(all,8)=E,d;
-    cor_big_1_change_shape(all,9)=E,c;
-    cor_big_1_change_shape(all,10)=E,b;
-    cor_big_1_change_shape(all,11)=D,b;
-    cor_big_1_change_shape(all,12)=C,b;
-    cor_big_1_change_shape(all,13)=C,c;
-    cor_big_1_change_shape(all,14)=C,d;
-    cor_big_1_change_shape(all,15)=D,d;
-    cor_big_1_change_shape(all,16)=D,c;
-    cor_small_1(all,1)=B,b;
-    cor_small_1(all,2)=B,c;
-    cor_small_1(all,3)=B,d;
-    cor_small_1(all,4)=C,d;
-    cor_small_1(all,5)=D,d;
-    cor_small_1(all,6)=D,c;
-    cor_small_1(all,7)=D,b;
-    cor_small_1(all,8)=C,b;
+    cor_big_1_change_shape.set_col(1, B, b);
+    cor_big_1_change_shape.set_col(2, B, c);
+    cor_big_1_change_shape.set_col(3, B, d);
+    cor_big_1_change_shape.set_col(4, B, e);
+    cor_big_1_change_shape.set_col(5, C, e);
+    cor_big_1_change_shape.set_col(6, D, e);
+    cor_big_1_change_shape.set_col(7, E, e);
+    cor_big_1_change_shape.set_col(8, E, d);
+    cor_big_1_change_shape.set_col(9, E, c);
+    cor_big_1_change_shape.set_col(10, E, b);
+    cor_big_1_change_shape.set_col(11, D, b);
+    cor_big_1_change_shape.set_col(12, C, b);
+    cor_big_1_change_shape.set_col(13, C, c);
+    cor_big_1_change_shape.set_col(14, C, d);
+    cor_big_1_change_shape.set_col(15, D, d);
+    cor_big_1_change_shape.set_col(16, D, c);
+    cor_small_1.set_col(1, B, b);
+    cor_small_1.set_col(2, B, c);
+    cor_small_1.set_col(3, B, d);
+    cor_small_1.set_col(4, C, d);
+    cor_small_1.set_col(5, D, d);
+    cor_small_1.set_col(6, D, c);
+    cor_small_1.set_col(7, D, b);
+    cor_small_1.set_col(8, C, b);
     int cor_temp1[16]={0};
     
     int cell_type=(int)cell_array(i,14);
@@ -1297,7 +1293,7 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                     }
                     else
                     {
-                        Array<int, 2> cor_pro_1_1(2,16,FortranArray<2>());
+                        IntMatrix cor_pro_1_1(2, 16);
                         cor_pro_1_1=0;
                         int ssss=1;
                         for (int sss=1;sss<=16;sss++)
@@ -1317,14 +1313,14 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 cor_pro_1_1_nozero_length=cor_pro_1_1_nozero_length+1;
                             }
                         }
-                        Array<int, 2> cor_pro_1(2,cor_pro_1_1_nozero_length+4,FortranArray<2>());
+                        IntMatrix cor_pro_1(2, cor_pro_1_1_nozero_length + 4);
                         cor_pro_1=0;
                         int nzl=1;
                         for (int aa=1;aa<=16;aa++ )
                         {
                             if (cor_pro_1_1(1,aa)!=0)
                             {
-                                cor_pro_1(all,nzl)=cor_pro_1_1(all,aa);
+                                cor_pro_1.copy_col_from(nzl, cor_pro_1_1, aa);
                                 nzl=nzl+1;
                             }
                         }
@@ -1381,7 +1377,7 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                     long cell_label_1=Visual_range(x,y,4);
                     long cellstage=Visual_range(x,y,3);
                     cell_label=cell_label+1;
-                    Array<int, 2> pro_loci_small_1(2,16,FortranArray<2>());
+                    IntMatrix pro_loci_small_1(2, 16);
                     pro_loci_small_1=0;
                     int ddddd=1;
                     for (int loci22=1;loci22<=16;loci22++)
@@ -1401,14 +1397,14 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                             pro_loci_small_1_nozero_length=pro_loci_small_1_nozero_length+1;
                         }
                     }
-                    Array<int, 2> pro_loci_small(2,pro_loci_small_1_nozero_length+4,FortranArray<2>());
+                    IntMatrix pro_loci_small(2, pro_loci_small_1_nozero_length + 4);
                     pro_loci_small=0;
                     int nzl=1;
                     for (int aa=1;aa<=16;aa++ )
                     {
                         if (pro_loci_small_1(1,aa)!=0)
                         {
-                            pro_loci_small(all,nzl)=pro_loci_small_1(all,aa);
+                            pro_loci_small.copy_col_from(nzl, pro_loci_small_1, aa);
                             nzl=nzl+1;
                         }
                     }
@@ -1462,7 +1458,7 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
         }
         case 1:
         {
-            Array<int, 2> cor_temp_2(1,8,FortranArray<2>());
+            IntMatrix cor_temp_2(1, 8);
             cor_temp_2=0;
             int cor_temp_length=1;
             for (int s=1;s<=8;s++)
