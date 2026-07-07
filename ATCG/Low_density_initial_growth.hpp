@@ -133,8 +133,6 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     //    $27: passed time of migration
     //    $28: migration rate
     CellRowBuffer cell_temp(1, Col);
-    Array<long, 3> sub_visual(3,3,4,FortranArray<3>());
-    sub_visual=0;
     IntGrid A(Visual_range_x/2, Visual_range_y/2);
     A=0;
     int NNy=Visual_range_x*Visual_range_y;
@@ -375,8 +373,8 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     fprintf(fid1, "%s %s %d\n" ,"output_all_PNGs", "=", allpng);
     fclose(fid1);
     ////////////////////////////////////////////////////////////////////migration and proliferation//////////////////////////////////////////////////////////////
-    migrate_activation(cells, bunderD, sub_visual, Visual_range,migration_time_range, migration_rate_r_mean_quia,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time,DDM, 0);
-    density_growth_rate_calculation_1(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK,death_time_range_r,death_time_range_K,cells, sub_visual, Visual_range, 0);
+    migrate_activation(cells, bunderD, Visual_range,migration_time_range, migration_rate_r_mean_quia,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time,DDM, 0);
+    density_growth_rate_calculation_1(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK,death_time_range_r,death_time_range_K,cells, Visual_range, 0);
     cells.sort_by_column(cell_col::kDivisionTime);///sort time per generation
     double h=0;
     int T=0;
@@ -415,7 +413,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         ///
         int nthreads = 1;
-        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cells, sub_visual, Visual_range, deathjudge,Col,nthreads,H);
+        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cells, Visual_range, deathjudge,Col,nthreads,H);
         cells.sort_by_column(cell_col::kType);///sort cell type
         stage_convert(Visual_range_x, Visual_range_y, cells, Visual_range, cell_label,utralsmall,H);
         deltah_recalculation(deltah, cells, MMR, DDM);
@@ -444,7 +442,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                             {
                                 if (DDM==1)
                                 {
-                                    double Dr=density_calculation(i, sub_visual, Visual_range, cells);
+                                    double Dr=density_calculation(i, Visual_range, cells);
                                     if (Dr>=bunderD)
                                     {
                                         cells(i,25)=1;

@@ -49,7 +49,7 @@ using std::chrono::high_resolution_clock;
 using namespace std;
 using namespace blitz;
 template <typename CellArray>
-inline void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<long, 3> &Visual_range, CellRowBuffer cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,CellTraceStore &cell_trace,CellTraceStore cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads,CellTraceStore &cell_trace_ndcells,int &ndcells,CellRowBuffer &cell_array_ndcells, long rng_time_step)
+inline void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<long, 3> &Visual_range, CellRowBuffer cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,CellTraceStore &cell_trace,CellTraceStore cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads,CellTraceStore &cell_trace_ndcells,int &ndcells,CellRowBuffer &cell_array_ndcells, long rng_time_step)
 {
     Range all = Range::all();
     long cell_rng_id = (long)cell_array(i,15);
@@ -167,7 +167,7 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
             }
             
             
-            cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label,K_formation_rate, cell_rng_id, rng_time_step, rng_event);
+            cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label,K_formation_rate, cell_rng_id, rng_time_step, rng_event);
             
             cell_index=cell_index+1;
 //            generation=generation+1;
@@ -1505,7 +1505,7 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                 {
                     cell_array(i,15)=K_label;
                 }
-                cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,sub_visual,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label, K_formation_rate, cell_rng_id, rng_time_step, rng_event);
+                cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label, K_formation_rate, cell_rng_id, rng_time_step, rng_event);
                 
                 cell_index=cell_index+1;
 //                generation=generation+1;

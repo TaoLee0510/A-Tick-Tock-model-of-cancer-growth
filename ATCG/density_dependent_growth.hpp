@@ -138,8 +138,6 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     //    $27: passed time of migration
     //    $28: migration rate
     CellRowBuffer cell_temp(1, Col);
-    Array<long, 3> sub_visual(3,3,4,FortranArray<3>());
-    sub_visual=0;
     IntGrid A(Visual_range_x/2, Visual_range_y/2);
     A=0;
     int NNy=Visual_range_x*Visual_range_y;
@@ -369,8 +367,8 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     fprintf(fid1, "%s %s %d\n" ,"output_all_PNGs", "=", allpng);
     fclose(fid1);
     ////////////////////////////////////////////////////////////////////migration and proliferation//////////////////////////////////////////////////////////////
-    density_growth_rate_calculation_1(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK,death_time_range_r,death_time_range_K,cells, sub_visual, Visual_range, 0);
-    migrate_activation(cells, bunderD, sub_visual, Visual_range,migration_time_range, migration_rate_r_mean_quia,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time,DDM, 0);
+    density_growth_rate_calculation_1(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK,death_time_range_r,death_time_range_K,cells, Visual_range, 0);
+    migrate_activation(cells, bunderD, Visual_range,migration_time_range, migration_rate_r_mean_quia,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time,DDM, 0);
     cells.sort_by_column(cell_col::kDivisionTime);
     double h=0;
     int T=0;
@@ -461,7 +459,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                 }
             }
         }
-        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cells, sub_visual, Visual_range, deathjudge,Col,nthreads,H);
+        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cells, Visual_range, deathjudge,Col,nthreads,H);
         cells.sort_by_column(cell_col::kType);
         stage_convert(Visual_range_x, Visual_range_y, cells, Visual_range, cell_label,utralsmall,H);
 //        deltah_recalculation(deltah, cell_array, MMR, DDM);
@@ -488,7 +486,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                 save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cells,migration_judgement, deltah, colorspace,DDM, allpng);
                 for (int i=C1; i>=1; i--)
                 {
-                    CellMigrationDivision(DDM, i,  deltah, cells, Visual_range, migration_judgement, deathjudge,  beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD, sub_visual, borderx, bordery, beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration,  max_growth_rate_r,  max_growth_rate_K, cell_temp, cell_label, utralsmall, Col, H);
+                    CellMigrationDivision(DDM, i,  deltah, cells, Visual_range, migration_judgement, deathjudge,  beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD, borderx, bordery, beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration,  max_growth_rate_r,  max_growth_rate_K, cell_temp, cell_label, utralsmall, Col, H);
                 }
                 end08=omp_get_wtime();
                 break;
@@ -505,7 +503,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
                     for (int i=C1; i>=1; i--)
                     {
 //                        #pragma omp flush(cell_array,Visual_range)
-                        CellMigration(DDM, i, deltah,cells, Visual_range, migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration, H);
+                        CellMigration(DDM, i, deltah,cells, Visual_range, migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration, H);
                         
                     }
                 }

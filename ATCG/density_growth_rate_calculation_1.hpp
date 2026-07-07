@@ -49,13 +49,8 @@ inline bool is_r_density_label(long label, int N00, int N01)
     return (label <= N00 / 2 && label >= 1) || (label <= N00 + (N01 / 2) && label > N00);
 }
 
-inline DensityGrowthCounts density_growth_neighborhood_counts(int x1, int y1, int N00, int N01, Array<long, 3> &sub_visual, const Array<long,3> &Visual_range)
+inline DensityGrowthCounts density_growth_neighborhood_counts(int x1, int y1, int N00, int N01, const Array<long,3> &Visual_range)
 {
-    Range all = Range::all();
-    sub_visual.resize(6,6,4);
-    sub_visual=0;
-    sub_visual(all,all,all)=Visual_range(Range(x1-2,x1+3),Range(y1-2,y1+3),all);
-
     long subcell_r[36]={0};
     long subcell_K[36]={0};
     int r_cells_number=0;
@@ -66,8 +61,10 @@ inline DensityGrowthCounts density_growth_neighborhood_counts(int x1, int y1, in
     {
         for(int cyy=1;cyy<=6;cyy++)
         {
-            long density_label = sub_visual(cxx,cyy,2);
-            long cell_label = sub_visual(cxx,cyy,4);
+            int visual_x = x1 - 3 + cxx;
+            int visual_y = y1 - 3 + cyy;
+            long density_label = Visual_range(visual_x, visual_y, 2);
+            long cell_label = Visual_range(visual_x, visual_y, 4);
             if(is_r_density_label(density_label, N00, N01))
             {
                 subcell_r[r_cells_number]=cell_label;
@@ -79,7 +76,7 @@ inline DensityGrowthCounts density_growth_neighborhood_counts(int x1, int y1, in
                 K_cells_number=K_cells_number+1;
             }
 
-            if (sub_visual(cxx,cyy,3)==2)
+            if (Visual_range(visual_x, visual_y, 3)==2)
             {
                 stage_sum=stage_sum+1;
             }
@@ -93,7 +90,7 @@ inline DensityGrowthCounts density_growth_neighborhood_counts(int x1, int y1, in
     return counts;
 }
 
-inline void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, CellStore &cells,Array<long, 3> &sub_visual,const Array<long,3> &Visual_range, long rng_time_step)
+inline void density_growth_rate_calculation_1(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, CellStore &cells,const Array<long,3> &Visual_range, long rng_time_step)
 {
     (void)lambda_r;
     (void)lambda_K;
@@ -134,7 +131,7 @@ inline void density_growth_rate_calculation_1(int Visual_range_x, int Visual_ran
         {
             case 1:
             {
-                DensityGrowthCounts counts = density_growth_neighborhood_counts(x1, y1, N00, N01, sub_visual, Visual_range);
+                DensityGrowthCounts counts = density_growth_neighborhood_counts(x1, y1, N00, N01, Visual_range);
                 double growth_rate_inherent_r=growth_rates[row];
                 if (counts.cells_number>=r_limit)
                 {
@@ -154,7 +151,7 @@ inline void density_growth_rate_calculation_1(int Visual_range_x, int Visual_ran
             }
             case 2:
             {
-                DensityGrowthCounts counts = density_growth_neighborhood_counts(x1, y1, N00, N01, sub_visual, Visual_range);
+                DensityGrowthCounts counts = density_growth_neighborhood_counts(x1, y1, N00, N01, Visual_range);
                 double growth_rate_inherent_K=growth_rates[row];
                 if (counts.cells_number>=K_limit)
                 {

@@ -40,7 +40,7 @@
 #include "deltah_calculation.hpp"
 #include "stateless_rng.hpp"
 
-inline void migrate_activation(CellStore &cells, double bunderD, Array<long, 3> &sub_visual, const Array<long,3> &Visual_range,double migration_time_range, double migration_rate_r_mean_quia, double beta_distribution_alpha_for_normal_migration, double beta_distribution_beta_for_normal_migration, double beta_distribution_alpha_mig_time, double beta_distribution_beta_mig_time, int DDM, long rng_time_step)
+inline void migrate_activation(CellStore &cells, double bunderD, const Array<long,3> &Visual_range,double migration_time_range, double migration_rate_r_mean_quia, double beta_distribution_alpha_for_normal_migration, double beta_distribution_beta_for_normal_migration, double beta_distribution_alpha_mig_time, double beta_distribution_beta_mig_time, int DDM, long rng_time_step)
 {
     (void)migration_time_range;
     CellStore::Column &ids = cells.id();
@@ -64,7 +64,7 @@ inline void migrate_activation(CellStore &cells, double bunderD, Array<long, 3> 
         long rng_event = 100;
         if (DDM==1)
         {
-            double Dr=density_calculation(i, sub_visual, Visual_range, cells);
+            double Dr=density_calculation(i, Visual_range, cells);
             int dudgement=0;
             if (Dr<bunderD)
             {

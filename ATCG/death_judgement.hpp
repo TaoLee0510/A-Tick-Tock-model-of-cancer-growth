@@ -98,9 +98,10 @@ inline void compact_after_death_judgement(CellStore &cells, Array<long,3> &Visua
 }
 
 template <typename CellArray>
-inline void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, CellArray &cell_array, Array<long, 3> &sub_visual, Array<long,3> &Visual_range, double deathjudge, int Col,int nthreads,long rng_time_step)
+inline void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, CellArray &cell_array, Array<long,3> &Visual_range, double deathjudge, int Col,int nthreads,long rng_time_step)
 {
     Range all = Range::all();
+    Array<long, 3> sub_visual(6,6,4,FortranArray<3>());
     int C= cell_array.rows();
 //    omp_set_num_threads(nthreads);
 //    #pragma omp parallel for schedule(dynamic)

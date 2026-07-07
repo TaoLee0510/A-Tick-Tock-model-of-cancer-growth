@@ -62,7 +62,7 @@ using std::chrono::high_resolution_clock;
 
 
 template <typename CellArray>
-inline void CellMigrationDivision(int &DDM, int i, double &deltah,CellArray &cell_array, Array<long, 3> &Visual_range, double &migration_judgement,double deathjudge, double beta_distribution_alpha_mig_time,double beta_distribution_beta_mig_time,int chemotaxis,double bunderD,Array<long, 3> &sub_visual,int borderx,int bordery,double beta_distribution_alpha_for_normal_migration,double migration_rate_r_mean_quia,double beta_distribution_beta_for_normal_migration, double max_growth_rate_r, double max_growth_rate_K, CellRowBuffer &cell_temp,int &cell_label,int utralsmall,int Col,long rng_time_step)
+inline void CellMigrationDivision(int &DDM, int i, double &deltah,CellArray &cell_array, Array<long, 3> &Visual_range, double &migration_judgement,double deathjudge, double beta_distribution_alpha_mig_time,double beta_distribution_beta_mig_time,int chemotaxis,double bunderD,int borderx,int bordery,double beta_distribution_alpha_for_normal_migration,double migration_rate_r_mean_quia,double beta_distribution_beta_for_normal_migration, double max_growth_rate_r, double max_growth_rate_K, CellRowBuffer &cell_temp,int &cell_label,int utralsmall,int Col,long rng_time_step)
 {
     long cell_rng_id = (long)cell_array(i,15);
     if (cell_rng_id == 0)
@@ -87,7 +87,7 @@ inline void CellMigrationDivision(int &DDM, int i, double &deltah,CellArray &cel
                         {
                             case 1:
                             {
-                                double Dr=density_calculation(i, sub_visual, Visual_range, cell_array);
+                                double Dr=density_calculation(i, Visual_range, cell_array);
                                 if (Dr>=bunderD)
                                 {
                                     cell_array(i,25)=1;

@@ -140,8 +140,6 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     Visual_range(all,all,all)=0;
     CellStore cells(Col);
     CellRowBuffer cell_temp(2, Col);
-    Array<long, 3> sub_visual(3,3,4,FortranArray<3>());
-    sub_visual=0;
     IntGrid A(Visual_range_x/2, Visual_range_y/2);
     A=0;
     
@@ -453,7 +451,7 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
 
 
         start12=omp_get_wtime();
-        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cells, sub_visual, Visual_range, deathjudge,Col,nthreads,H);
+        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cells, Visual_range, deathjudge,Col,nthreads,H);
         end12=omp_get_wtime();
         
         start14=omp_get_wtime();
@@ -552,7 +550,7 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
                 {
                     for (int i=C1; i!=0; --i)
                     {
-                        CellMigration(DDM, i, deltah,cells, Visual_range, migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration, H);
+                        CellMigration(DDM, i, deltah,cells, Visual_range, migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration, H);
                         cells(i,16)=cells(i,16)+deltah;// add detalh
                     }
                 }
@@ -570,7 +568,7 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
                 {
                     for (int i=C1; i!=0; --i)
                     {
-                        CellMigration(DDM, i, deltah,cells, Visual_range, migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,sub_visual, borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration, H);
+                        CellMigration(DDM, i, deltah,cells, Visual_range, migration_judgement,deathjudge, beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD,borderx,bordery,beta_distribution_alpha_for_normal_migration, migration_rate_r_mean_quia, beta_distribution_beta_for_normal_migration, H);
                     }
                 }
                 end04=omp_get_wtime();
@@ -590,7 +588,7 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
                 
                 for (int i=C1; i!=0; --i)
                 {
-                    CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cells, Visual_range, cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, r_label, Col, K_formation_rate, deathjudge, borderx, bordery,fid2,nthreads,programTimes15,cell_trace_ndcells,ndcells,cell_array_ndcells, H);
+                    CellDivisionSingleCell(i, max_growth_rate_r,  max_growth_rate_K, cells, Visual_range, cell_temp,cell_label, deltah, utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K, unilow_K,sigmahatK, muhatK, K_label, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,cell_trace,cell_trace_temp, cell_index, r_label, Col, K_formation_rate, deathjudge, borderx, bordery,fid2,nthreads,programTimes15,cell_trace_ndcells,ndcells,cell_array_ndcells, H);
                     programTimes16 = programTimes16 + programTimes15;
                 }
                 
@@ -617,7 +615,7 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
             save_data_free_living(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cells,migration_judgement, deltah, colorspace,DDM, allpng, Col, cell_trace);
             for (int i=C1; i!=0; --i)
             {
-                CellMigrationDivisionSingleCell(DDM, i, deltah,cells, Visual_range, migration_judgement, max_growth_rate_r,  max_growth_rate_K, cell_temp, cell_label , utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K,  unilow_K, sigmahatK, muhatK, K_label,sub_visual, beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration, cell_trace, cell_trace_temp,  cell_index,  r_label, Col, K_formation_rate, deathjudge,  beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD, borderx, bordery,fid2,nthreads, H);
+                CellMigrationDivisionSingleCell(DDM, i, deltah,cells, Visual_range, migration_judgement, max_growth_rate_r,  max_growth_rate_K, cell_temp, cell_label , utralsmall,  beta_distribution_alpha_for_normal_migration, beta_distribution_beta_for_normal_migration, migration_rate_K_mean, uniup_K,  unilow_K, sigmahatK, muhatK, K_label,beta_distribution_alpha,  beta_distribution_beta,  migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration, cell_trace, cell_trace_temp,  cell_index,  r_label, Col, K_formation_rate, deathjudge,  beta_distribution_alpha_mig_time, beta_distribution_beta_mig_time, chemotaxis, bunderD, borderx, bordery,fid2,nthreads, H);
             }
             end08=omp_get_wtime();
         }

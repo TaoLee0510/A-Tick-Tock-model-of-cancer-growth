@@ -38,9 +38,8 @@
 #include "cell_store.hpp"
 #include "deltah_calculation.hpp"
 
-inline double density_calculation_from_position(int x1, int y1, int cell_stage, Array<long, 3> &sub_visual, const Array<long,3> &Visual_range)
+inline double density_calculation_from_position(int x1, int y1, int cell_stage, const Array<long,3> &Visual_range)
 {
-    Range all = Range::all();
     int ar=70;
 //    int ar=30;
     int xar=(ar/2)-1;
@@ -48,16 +47,13 @@ inline double density_calculation_from_position(int x1, int y1, int cell_stage, 
     int cell_small=ar*ar;
     int cell_number_limit=ar*ar;
     int cell_big=cell_small*0.25;
-    sub_visual.resize(ar,ar,4);
-    sub_visual=0;
-    sub_visual(all,all,4)=Visual_range(Range(x1-xar,x1+yar),Range(y1-xar,y1+yar),4);
     long cell_count[cell_number_limit];////********
     int cc=0;
     for (int cx=0; cx<ar; cx++)
     {
         for(int cy=0; cy<ar; cy++)
         {
-            cell_count[cc]=sub_visual(cx+1,cy+1,4);
+            cell_count[cc]=Visual_range(x1 - xar + cx, y1 - xar + cy, 4);
             cc++;
         }
     }
@@ -75,7 +71,7 @@ inline double density_calculation_from_position(int x1, int y1, int cell_stage, 
     {
         for(int cy=0; cy<ar; cy++)
         {
-            if (sub_visual(cx+1,cy+1,3)==2)
+            if (Visual_range(x1 - xar + cx, y1 - xar + cy, 3)==2)
             {
             cell_count_small=cell_count_small+1;
             }
@@ -97,12 +93,12 @@ inline double density_calculation_from_position(int x1, int y1, int cell_stage, 
     return density;
 }
 
-inline double density_calculation(int i, Array<long, 3> &sub_visual, const Array<long,3> &Visual_range, const CellStore &cells)
+inline double density_calculation(int i, const Array<long,3> &Visual_range, const CellStore &cells)
 {
     int row = i - 1;
     int x1 = (int)cells.x1()[row];
     int y1 = (int)cells.y1()[row];
     int cell_stage = (int)cells.stage()[row];
-    return density_calculation_from_position(x1, y1, cell_stage, sub_visual, Visual_range);
+    return density_calculation_from_position(x1, y1, cell_stage, Visual_range);
 }
 #endif /* density_calculation_hpp */
