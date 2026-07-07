@@ -141,33 +141,6 @@ inline int select_random_migration_direction(int x1, int y1, int cell_stage, Arr
     return candidates[0];
 }
 
-inline void random_migration(int i, double deltah,Array<double, 2> &cell_array, Array<long, 3> &Visual_range, Array<int,2> &cor_big, Array<int, 2> &area_square, Array<int, 2> &sub_area_square, Array<int, 2> &cor_small, Array<int, 2> &area_square_s, Array<int, 2>  &sub_area_square_s,double &migration_judgement, long rng_time_step, long rng_event_base)
-{
-    (void)deltah;
-    (void)area_square;
-    (void)sub_area_square;
-    (void)area_square_s;
-    (void)sub_area_square_s;
-
-    long cell_rng_id = (long)cell_array(i,cell_col::kId);
-    if (cell_rng_id == 0)
-    {
-        cell_rng_id = i;
-    }
-    int cell_stage=(int)cell_array(i,cell_col::kStage);
-    long rng_event = rng_event_base + ((long)cell_stage * 100);
-    int x1=(int)cell_array(i,cell_col::kX1);
-    int y1=(int)cell_array(i,cell_col::kY1);
-    int order = select_random_migration_direction(x1, y1, cell_stage, Visual_range, cor_big, cor_small, cell_rng_id, rng_time_step, rng_event);
-    if (order!=0)
-    {
-        move_cell_array(i, cell_array, Visual_range, order);
-        cell_array(i,cell_col::kMigrationElapsed)=0;
-        cell_array(i,cell_col::kMigrationFollowFlag)=1;
-    }
-    migration_judgement=migration_judgement+0.0001;
-}
-
 inline void random_migration(int i, double deltah, CellStore &cells, Array<long, 3> &Visual_range, Array<int,2> &cor_big, Array<int, 2> &area_square, Array<int, 2> &sub_area_square, Array<int, 2> &cor_small, Array<int, 2> &area_square_s, Array<int, 2>  &sub_area_square_s,double &migration_judgement, long rng_time_step, long rng_event_base)
 {
     (void)deltah;

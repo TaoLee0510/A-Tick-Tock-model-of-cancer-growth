@@ -63,44 +63,6 @@ inline void write_small_cell_to_visual_range(Array<long, 3> &Visual_range, int x
     Visual_range(x1,y1,4)=cell_label;
 }
 
-inline void move_cell_array(int i, Array<double, 2> &cell_array, Array<long, 3> &Visual_range, int direction)
-{
-    Range all = Range::all();
-    int dx = migration_direction_dx(direction);
-    int dy = migration_direction_dy(direction);
-    int x1 = (int)cell_array(i,cell_col::kX1);
-    int y1 = (int)cell_array(i,cell_col::kY1);
-    int cell_stage = (int)cell_array(i,cell_col::kStage);
-    long visual_stage = Visual_range(x1,y1,3);
-    long cell_label = Visual_range(x1,y1,4);
-    long cell_id = (long)cell_array(i,cell_col::kId);
-
-    if (cell_stage == 0)
-    {
-        Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-        for (int x_col = cell_col::kX1; x_col <= cell_col::kX4; ++x_col)
-        {
-            cell_array(i,x_col)=cell_array(i,x_col)+dx;
-        }
-        for (int y_col = cell_col::kY1; y_col <= cell_col::kY4; ++y_col)
-        {
-            cell_array(i,y_col)=cell_array(i,y_col)+dy;
-        }
-
-        write_big_cell_to_visual_range(Visual_range, (int)cell_array(i,cell_col::kX1), (int)cell_array(i,cell_col::kY1), cell_id, visual_stage, cell_label);
-    }
-    else
-    {
-        Visual_range(x1,y1,all)=0;
-        cell_array(i,cell_col::kX1)=cell_array(i,cell_col::kX1)+dx;
-        cell_array(i,cell_col::kY1)=cell_array(i,cell_col::kY1)+dy;
-        write_small_cell_to_visual_range(Visual_range, (int)cell_array(i,cell_col::kX1), (int)cell_array(i,cell_col::kY1), cell_id, visual_stage, cell_label);
-    }
-
-    cell_array(i,cell_col::kMigrationDirection)=direction;
-    cell_array(i,cell_col::kMigrationElapsed)=0;
-}
-
 inline void move_cell_store(int i, CellStore &cells, Array<long, 3> &Visual_range, int direction)
 {
     Range all = Range::all();

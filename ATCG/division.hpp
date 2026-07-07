@@ -44,25 +44,6 @@ using namespace blitz;
 
 namespace division_detail
 {
-inline void append_cell(Array<double, 2> &cell_array, const Array<double, 2> &cell_temp, int Col)
-{
-    Range all = Range::all();
-    int current_size = cell_array.rows();
-    cell_array.resizeAndPreserve(current_size + 1, Col);
-    cell_array(current_size + 1, all) = cell_temp(1, all);
-}
-
-inline void append_cell(CellStore &cells, const Array<double, 2> &cell_temp, int Col)
-{
-    cells.push_empty();
-    int row = cells.rows();
-    int copied_cols = std::min(Col, cells.column_count());
-    for (int col = 1; col <= copied_cols; ++col)
-    {
-        cells(row, col) = cell_temp(1, col);
-    }
-}
-
 inline void append_cell(CellStore &cells, const CellRowBuffer &cell_temp, int Col)
 {
     cell_store_append_row_from_array(cells, cell_temp, 1, Col);

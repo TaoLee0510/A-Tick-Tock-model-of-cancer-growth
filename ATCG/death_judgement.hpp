@@ -66,42 +66,6 @@ inline void clear_dead_cell_visual(int site, CellArray &cell_array, Array<long,3
     }
 }
 
-inline void compact_after_death_judgement(Array<double, 2> &cell_array, Array<long,3> &Visual_range, int Col, int nthreads, int C)
-{
-    Range all = Range::all();
-    int current_size=cell_array.rows();
-    omp_set_num_threads(nthreads);
-    int sum =0;
-    #pragma omp parallel for schedule(dynamic) reduction(+:sum)
-    {
-        for (int CN=1; CN<=current_size; ++CN)
-        {
-            if (death_judgement_live_cell(cell_array, CN))
-            {
-                sum=sum+1;
-            }
-        }
-    }
-    Array<double,2> cell_array_temp(sum,Col,FortranArray<2>());
-    cell_array_temp=0;
-    int site1=1;
-    for (int site=1; site<= current_size; ++site)
-    {
-        if (death_judgement_live_cell(cell_array, site))
-        {
-            cell_array_temp(site1,all)=cell_array(site,all);
-            site1++;
-        }
-        else
-        {
-            clear_dead_cell_visual(site, cell_array, Visual_range, C);
-        }
-    }
-    cell_array.resize(sum,Col);
-    cell_array=0;
-    cell_array(all,all)=cell_array_temp(all,all);
-}
-
 inline void compact_after_death_judgement(CellStore &cells, Array<long,3> &Visual_range, int, int nthreads, int C)
 {
     int current_size=cells.rows();

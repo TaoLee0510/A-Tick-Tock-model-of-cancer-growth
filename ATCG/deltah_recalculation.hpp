@@ -32,20 +32,6 @@ inline void set_deltah_from_max_migration_rate(double &deltah, int &MMR, double 
     }
 }
 
-void deltah_recalculation(double &deltah, const Array<double,2> &cell_array, int &MMR, int DDM)
-{
-    if (DDM==1)
-    {
-        int row_count= cell_array.rows();
-        double max_mig_r=0.0;
-        for (int row=1; row<=row_count; row++)
-        {
-            max_mig_r=std::max(max_mig_r, cell_array(row,cell_col::kMigrationRateBase));
-        }
-        set_deltah_from_max_migration_rate(deltah, MMR, max_mig_r);
-    }
-}
-
 void deltah_recalculation(double &deltah, const CellStore &cells, int &MMR, int DDM)
 {
     if (DDM==1)

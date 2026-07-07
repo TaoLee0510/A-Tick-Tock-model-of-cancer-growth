@@ -11,11 +11,7 @@
 #include <numeric>
 #include <stdexcept>
 #include <vector>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include "cell_columns.hpp"
-
-using namespace blitz;
 
 class CellStore
 {
@@ -301,58 +297,10 @@ private:
     std::vector<double> values_;
 };
 
-inline void cell_store_copy_row_to_array(const Array<double, 2> &source, int source_row, Array<double, 2> &target, int target_row, int)
-{
-    Range all = Range::all();
-    target(target_row, all) = source(source_row, all);
-}
-
-inline void cell_store_copy_row_to_array(const CellStore &source, int source_row, Array<double, 2> &target, int target_row, int column_count)
-{
-    int copied_cols = std::min(column_count, source.column_count());
-    for (int col = 1; col <= copied_cols; ++col)
-    {
-        target(target_row, col) = source(source_row, col);
-    }
-}
-
-inline void cell_store_copy_row_to_array(const Array<double, 2> &source, int source_row, CellRowBuffer &target, int target_row, int column_count)
-{
-    int copied_cols = std::min(column_count, target.column_count());
-    for (int col = 1; col <= copied_cols; ++col)
-    {
-        target(target_row, col) = source(source_row, col);
-    }
-}
-
 inline void cell_store_copy_row_to_array(const CellStore &source, int source_row, CellRowBuffer &target, int target_row, int column_count)
 {
     int copied_cols = std::min(column_count, source.column_count());
     copied_cols = std::min(copied_cols, target.column_count());
-    for (int col = 1; col <= copied_cols; ++col)
-    {
-        target(target_row, col) = source(source_row, col);
-    }
-}
-
-inline void cell_store_assign_row_from_array(Array<double, 2> &target, int target_row, const Array<double, 2> &source, int source_row, int)
-{
-    Range all = Range::all();
-    target(target_row, all) = source(source_row, all);
-}
-
-inline void cell_store_assign_row_from_array(CellStore &target, int target_row, const Array<double, 2> &source, int source_row, int column_count)
-{
-    int copied_cols = std::min(column_count, target.column_count());
-    for (int col = 1; col <= copied_cols; ++col)
-    {
-        target(target_row, col) = source(source_row, col);
-    }
-}
-
-inline void cell_store_assign_row_from_array(Array<double, 2> &target, int target_row, const CellRowBuffer &source, int source_row, int column_count)
-{
-    int copied_cols = std::min(column_count, source.column_count());
     for (int col = 1; col <= copied_cols; ++col)
     {
         target(target_row, col) = source(source_row, col);
@@ -377,27 +325,6 @@ inline void cell_store_assign_row_from_array(CellRowBuffer &target, int target_r
     {
         target(target_row, col) = source(source_row, col);
     }
-}
-
-inline void cell_store_append_row_from_array(Array<double, 2> &target, const Array<double, 2> &source, int source_row, int column_count)
-{
-    Range all = Range::all();
-    int current_size = target.rows();
-    target.resizeAndPreserve(current_size + 1, column_count);
-    target(current_size + 1, all) = source(source_row, all);
-}
-
-inline void cell_store_append_row_from_array(CellStore &target, const Array<double, 2> &source, int source_row, int column_count)
-{
-    target.push_empty();
-    cell_store_assign_row_from_array(target, target.rows(), source, source_row, column_count);
-}
-
-inline void cell_store_append_row_from_array(Array<double, 2> &target, const CellRowBuffer &source, int source_row, int column_count)
-{
-    int current_size = target.rows();
-    target.resizeAndPreserve(current_size + 1, column_count);
-    cell_store_assign_row_from_array(target, current_size + 1, source, source_row, column_count);
 }
 
 inline void cell_store_append_row_from_array(CellStore &target, const CellRowBuffer &source, int source_row, int column_count)

@@ -56,7 +56,6 @@
 #include "migrate_activation.hpp"
 #include "density_calculation.hpp"
 #include "deltah_recalculation.hpp"
-#include "sortRow.hpp"
 #include <omp.h>
 #include <chrono>
 

@@ -36,30 +36,6 @@ inline void set_outer_visual_range_row(Array<long,3> &Visual_range, int x1, int 
     Visual_range(x4,y4,4)=cell_label;
 }
 
-inline Array<long,3> outer_initiation_visualrange(const Array<double,2> &cell_array0,int N0,int Vx,int Vy,int &cell_label)
-{
-    Range all = Range::all();
-    Array<long,3> Visual_range(Vx,Vy,4,FortranArray<3>());
-    Visual_range(all,all,all)=0;
-    N0=cell_array0.rows();
-    for (int x=1; x<=N0; x++)
-    {
-        int x1 = cell_array0(x,cell_col::kX1);
-        int y1 = cell_array0(x,cell_col::kY1);
-        int x2 = cell_array0(x,cell_col::kX2);
-        int y2 = cell_array0(x,cell_col::kY2);
-        int x3 = cell_array0(x,cell_col::kX3);
-        int y3 = cell_array0(x,cell_col::kY3);
-        int x4 = cell_array0(x,cell_col::kX4);
-        int y4 = cell_array0(x,cell_col::kY4);
-        int cell_array_index=cell_array0(x,cell_col::kId);
-        int cell_array_stage=cell_array0(x,cell_col::kStage);
-        set_outer_visual_range_row(Visual_range, x1, y1, x2, y2, x3, y3, x4, y4, cell_array_index, cell_array_stage, cell_label);
-        cell_label=cell_label+1;
-    }
-    return Visual_range;
-}
-
 inline Array<long,3> outer_initiation_visualrange(const CellStore &cells,int N0,int Vx,int Vy,int &cell_label)
 {
     Range all = Range::all();

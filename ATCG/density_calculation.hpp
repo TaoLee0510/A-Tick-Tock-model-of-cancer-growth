@@ -97,14 +97,6 @@ inline double density_calculation_from_position(int x1, int y1, int cell_stage, 
     return density;
 }
 
-inline double density_calculation(int i, Array<long, 3> &sub_visual, const Array<long,3> &Visual_range, const Array<double, 2> &cell_array)
-{
-    int x1 = (int)cell_array(i,cell_col::kX1);
-    int y1 = (int)cell_array(i,cell_col::kY1);
-    int cell_stage = (int)cell_array(i,cell_col::kStage);
-    return density_calculation_from_position(x1, y1, cell_stage, sub_visual, Visual_range);
-}
-
 inline double density_calculation(int i, Array<long, 3> &sub_visual, const Array<long,3> &Visual_range, const CellStore &cells)
 {
     int row = i - 1;
