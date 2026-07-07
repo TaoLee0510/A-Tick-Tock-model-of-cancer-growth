@@ -52,7 +52,29 @@ using namespace blitz;
 template <typename CellArray>
 inline void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, VisualRange &Visual_range, CellRowBuffer cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,CellTraceStore &cell_trace,CellTraceStore cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads,CellTraceStore &cell_trace_ndcells,int &ndcells,CellRowBuffer &cell_array_ndcells, long rng_time_step)
 {
-    long cell_rng_id = (long)cell_array(i,15);
+    int row = i - 1;
+    auto &x1_values = cell_array.x1();
+    auto &x2_values = cell_array.x2();
+    auto &x3_values = cell_array.x3();
+    auto &x4_values = cell_array.x4();
+    auto &y1_values = cell_array.y1();
+    auto &y2_values = cell_array.y2();
+    auto &y3_values = cell_array.y3();
+    auto &y4_values = cell_array.y4();
+    auto &types = cell_array.type();
+    auto &growth_rates = cell_array.growth_rate();
+    auto &random_labels = cell_array.random_label();
+    auto &stages = cell_array.stage();
+    auto &ids = cell_array.id();
+    auto &division_elapsed = cell_array.division_elapsed();
+    auto &migration_elapsed = cell_array.migration_elapsed();
+    auto &viability = cell_array.viability();
+    auto &migration_follow_flags = cell_array.migration_follow_flag();
+    auto &cell_trace_labels = cell_array.cell_trace_label();
+    auto &parent_trace_labels = cell_array.parent_trace_label();
+    auto &division_counts = cell_array.division_count();
+    auto &col_values = cell_array.column(Col);
+    long cell_rng_id = (long)ids[row];
     if (cell_rng_id == 0)
     {
         cell_rng_id = i;
@@ -69,8 +91,8 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
     IntMatrix cor_small_1(2, 8);
     cell_temp.resize(2, Col);
     cell_temp=0;
-    int x=(int)cell_array(i,1);
-    int y=(int)cell_array(i,5);
+    int x=(int)x1_values[row];
+    int y=(int)y1_values[row];
     int A=x-2;
     int B=x-1;
     int C=x;
@@ -139,7 +161,7 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
     cor_small_1.set_col(8, C, b);
     int cor_temp1[16]={0};
     
-    int cell_type=(int)cell_array(i,14);
+    int cell_type=(int)stages[row];
     
     
     cell_store_copy_row_to_array(cell_array, i, cell_temp, 2, Col);
@@ -150,20 +172,20 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
         {
             K_label=K_label+1;
             r_label=r_label+1;
-            double growth_rate_inherent=cell_array(i,10);
+            double growth_rate_inherent=growth_rates[row];
             double X1=growth_rate_inherent*(1-0.05);
             double X2=growth_rate_inherent*(1+0.05);
-            cell_array(i,10)=(X2-X1)*stateless_uniform(cell_rng_id, rng_time_step, rng_event++)+X1;
-            int division_times=(int)cell_array(i,Col);
-            cell_array(i,Col)=division_times+1;
+            growth_rates[row]=(X2-X1)*stateless_uniform(cell_rng_id, rng_time_step, rng_event++)+X1;
+            int division_times=(int)col_values[row];
+            col_values[row]=division_times+1;
             
-            if(cell_array(i,9)==1)
+            if(types[row]==1)
             {
-                cell_array(i,15)=r_label;
+                ids[row]=r_label;
             }
-            else if (cell_array(i,9)==2)
+            else if (types[row]==2)
             {
-                cell_array(i,15)=K_label;
+                ids[row]=K_label;
             }
             
             
@@ -172,15 +194,15 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
             cell_index=cell_index+1;
 //            generation=generation+1;
             
-            cell_array(i,30)=cell_array(i,29);
-            cell_array(i,29)=cell_index;
+            parent_trace_labels[row]=cell_trace_labels[row];
+            cell_trace_labels[row]=cell_index;
             
             cell_index=cell_index+1;
             cell_temp(1,29)=cell_index;
-            cell_temp(1,30)=cell_array(i,30);
+            cell_temp(1,30)=parent_trace_labels[row];
             
-//            cell_array(i,Col)=cell_array(i,13);
-            cell_temp(1,Col)=cell_array(i,Col);
+//            col_values[row]=random_labels[row];
+            cell_temp(1,Col)=col_values[row];
             
             
             int cor_temp_length=0;
@@ -218,13 +240,13 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                 cell_temp(1,6)=cor_big_1(2,loci)+1;
                 cell_temp(1,7)=cor_big_1(2,loci)+1;
                 cell_temp(1,8)=cor_big_1(2,loci);
-                cell_temp(1,14)=cell_array(i,14);
-                cell_temp(1,22)=cell_array(i,22);
-                cell_temp(1,24)=cell_array(i,24);
-                cell_array(i,20)=0;
+                cell_temp(1,14)=stages[row];
+                cell_temp(1,22)=viability[row];
+                cell_temp(1,24)=migration_follow_flags[row];
+                migration_elapsed[row]=0;
                 cell_temp(1,20)=0;
                 cell_temp(1,16)=0;
-                cell_array(i,16)=0;
+                division_elapsed[row]=0;
                 long cell_index= (int)cell_temp(1,15);
                 Visual_range.occupied((int)cell_temp(1,1),(int)cell_temp(1,5))=1;
                 Visual_range.occupied((int)cell_temp(1,2),(int)cell_temp(1,6))=1;
@@ -234,10 +256,10 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                 Visual_range.density_label((int)cell_temp(1,2),(int)cell_temp(1,6))=cell_index;
                 Visual_range.density_label((int)cell_temp(1,3),(int)cell_temp(1,7))=cell_index;
                 Visual_range.density_label((int)cell_temp(1,4),(int)cell_temp(1,8))=cell_index;
-                Visual_range.stage((int)cell_temp(1,1),(int)cell_temp(1,5))=(int)cell_array(i,14);
-                Visual_range.stage((int)cell_temp(1,2),(int)cell_temp(1,6))=(int)cell_array(i,14);
-                Visual_range.stage((int)cell_temp(1,3),(int)cell_temp(1,7))=(int)cell_array(i,14);
-                Visual_range.stage((int)cell_temp(1,4),(int)cell_temp(1,8))=(int)cell_array(i,14);
+                Visual_range.stage((int)cell_temp(1,1),(int)cell_temp(1,5))=(int)stages[row];
+                Visual_range.stage((int)cell_temp(1,2),(int)cell_temp(1,6))=(int)stages[row];
+                Visual_range.stage((int)cell_temp(1,3),(int)cell_temp(1,7))=(int)stages[row];
+                Visual_range.stage((int)cell_temp(1,4),(int)cell_temp(1,8))=(int)stages[row];
                 Visual_range.cell_label((int)cell_temp(1,1),(int)cell_temp(1,5))=cell_label;
                 Visual_range.cell_label((int)cell_temp(1,2),(int)cell_temp(1,6))=cell_label;
                 Visual_range.cell_label((int)cell_temp(1,3),(int)cell_temp(1,7))=cell_label;
@@ -342,10 +364,10 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                 int pro_loci_number2=siz2;
                 if (pro_loci_number>1)
                 {
-                    cell_array(i,20)=0;
+                    migration_elapsed[row]=0;
                     cell_temp(1,20)=0;
                     cell_temp(1,16)=0;
-                    cell_array(i,16)=0;
+                    division_elapsed[row]=0;
                     long cell_label_1=Visual_range.cell_label(x,y);
                     long cellstage=Visual_range.stage(x,y);
                     cell_label=cell_label+1;
@@ -376,13 +398,13 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                         {
                                             int cor_cell_y=cor_cell+4;
-                                            cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                            cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                            cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
+                                            cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                                         }
-                                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                         break;
                                     }
                                     case 3:
@@ -391,13 +413,13 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                         {
                                             int cor_cell_y=cor_cell+4;
-                                            cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                            cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                            cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
+                                            cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                                         }
-                                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                         break;
                                     }
                                     case 5:
@@ -406,13 +428,13 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                         {
                                             int cor_cell_y=cor_cell+4;
-                                            cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                            cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                            cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
+                                            cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                                         }
-                                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                         break;
                                     }
                                     case 7:
@@ -421,13 +443,13 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                         {
                                             int cor_cell_y=cor_cell+4;
-                                            cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                            cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                            cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
+                                            cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                                         }
-                                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                         break;
                                     }
                                 }
@@ -444,9 +466,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         cell_temp(1,6)=cell_temp(1,5)+1;
                                         cell_temp(1,7)=cell_temp(1,5)+1;
                                         cell_temp(1,8)=cell_temp(1,5);
-                                        cell_temp(1,14)=cell_array(i,14);
-                                        cell_temp(1,22)=cell_array(i,22);
-                                        cell_temp(1,24)=cell_array(i,24);
+                                        cell_temp(1,14)=stages[row];
+                                        cell_temp(1,22)=viability[row];
+                                        cell_temp(1,24)=migration_follow_flags[row];
                                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                         Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -464,9 +486,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         cell_temp(1,6)=cell_temp(1,5)+1;
                                         cell_temp(1,7)=cell_temp(1,5)+1;
                                         cell_temp(1,8)=cell_temp(1,5);
-                                        cell_temp(1,14)=cell_array(i,14);
-                                        cell_temp(1,22)=cell_array(i,22);
-                                        cell_temp(1,24)=cell_array(i,24);
+                                        cell_temp(1,14)=stages[row];
+                                        cell_temp(1,22)=viability[row];
+                                        cell_temp(1,24)=migration_follow_flags[row];
                                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                         Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -484,9 +506,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         cell_temp(1,6)=cell_temp(1,5)+1;
                                         cell_temp(1,7)=cell_temp(1,5)+1;
                                         cell_temp(1,8)=cell_temp(1,5);
-                                        cell_temp(1,14)=cell_array(i,14);
-                                        cell_temp(1,22)=cell_array(i,22);
-                                        cell_temp(1,24)=cell_array(i,24);
+                                        cell_temp(1,14)=stages[row];
+                                        cell_temp(1,22)=viability[row];
+                                        cell_temp(1,24)=migration_follow_flags[row];
                                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                         Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -504,9 +526,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         cell_temp(1,6)=cell_temp(1,5)+1;
                                         cell_temp(1,7)=cell_temp(1,5)+1;
                                         cell_temp(1,8)=cell_temp(1,5);
-                                        cell_temp(1,14)=cell_array(i,14);
-                                        cell_temp(1,22)=cell_array(i,22);
-                                        cell_temp(1,24)=cell_array(i,24);
+                                        cell_temp(1,14)=stages[row];
+                                        cell_temp(1,22)=viability[row];
+                                        cell_temp(1,24)=migration_follow_flags[row];
                                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                         Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -534,12 +556,12 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         Visual_range.clear_square(x,y);
                                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                         {
-                                            cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
+                                            cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
                                         }
-                                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                         break;
                                     }
                                     case 4:
@@ -547,12 +569,12 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         Visual_range.clear_square(x,y);
                                         for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                                         {
-                                            cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                            cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                                         }
-                                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                         break;
                                     }
                                     case 6:
@@ -560,12 +582,12 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         Visual_range.clear_square(x,y);
                                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                         {
-                                            cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
+                                            cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
                                         }
-                                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                         break;
                                     }
                                     case 8:
@@ -573,12 +595,12 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         Visual_range.clear_square(x,y);
                                         for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                                         {
-                                            cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                            cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                                         }
-                                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                         break;
                                     }
                                 }
@@ -595,9 +617,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         cell_temp(1,6)=cell_temp(1,5)+1;
                                         cell_temp(1,7)=cell_temp(1,5)+1;
                                         cell_temp(1,8)=cell_temp(1,5);
-                                        cell_temp(1,14)=cell_array(i,14);
-                                        cell_temp(1,22)=cell_array(i,22);
-                                        cell_temp(1,24)=cell_array(i,24);
+                                        cell_temp(1,14)=stages[row];
+                                        cell_temp(1,22)=viability[row];
+                                        cell_temp(1,24)=migration_follow_flags[row];
                                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                         Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -615,9 +637,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         cell_temp(1,6)=cell_temp(1,5)+1;
                                         cell_temp(1,7)=cell_temp(1,5)+1;
                                         cell_temp(1,8)=cell_temp(1,5);
-                                        cell_temp(1,14)=cell_array(i,14);
-                                        cell_temp(1,22)=cell_array(i,22);
-                                        cell_temp(1,24)=cell_array(i,24);
+                                        cell_temp(1,14)=stages[row];
+                                        cell_temp(1,22)=viability[row];
+                                        cell_temp(1,24)=migration_follow_flags[row];
                                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                         Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -635,9 +657,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         cell_temp(1,6)=cell_temp(1,5)+1;
                                         cell_temp(1,7)=cell_temp(1,5)+1;
                                         cell_temp(1,8)=cell_temp(1,5);
-                                        cell_temp(1,14)=cell_array(i,14);
-                                        cell_temp(1,22)=cell_array(i,22);
-                                        cell_temp(1,24)=cell_array(i,24);
+                                        cell_temp(1,14)=stages[row];
+                                        cell_temp(1,22)=viability[row];
+                                        cell_temp(1,24)=migration_follow_flags[row];
                                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                         Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -655,9 +677,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                         cell_temp(1,6)=cell_temp(1,5)+1;
                                         cell_temp(1,7)=cell_temp(1,5)+1;
                                         cell_temp(1,8)=cell_temp(1,5);
-                                        cell_temp(1,14)=cell_array(i,14);
-                                        cell_temp(1,22)=cell_array(i,22);
-                                        cell_temp(1,24)=cell_array(i,24);
+                                        cell_temp(1,14)=stages[row];
+                                        cell_temp(1,22)=viability[row];
+                                        cell_temp(1,24)=migration_follow_flags[row];
                                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                         Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -690,13 +712,13 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
                                     int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                    cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
+                                    cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                 break;
                             }
                             case 3:
@@ -705,13 +727,13 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
                                     int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                    cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
+                                    cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                 break;
                             }
                             case 5:
@@ -720,13 +742,13 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
                                     int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                    cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
+                                    cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                 break;
                             }
                             case 7:
@@ -735,13 +757,13 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
                                     int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                    cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
+                                    cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                 break;
                             }
                         }
@@ -758,9 +780,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                 Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -778,9 +800,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                 Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -798,9 +820,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                 Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -818,9 +840,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                 Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -848,12 +870,12 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 Visual_range.clear_square(x,y);
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
+                                    cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                 break;
                             }
                             case 4:
@@ -861,12 +883,12 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 Visual_range.clear_square(x,y);
                                 for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                                 {
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                    cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                 break;
                             }
                             case 6:
@@ -874,12 +896,12 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 Visual_range.clear_square(x,y);
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
+                                    cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                 break;
                             }
                             case 8:
@@ -887,12 +909,12 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 Visual_range.clear_square(x,y);
                                 for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                                 {
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                    cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                 break;
                             }
                         }
@@ -909,9 +931,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                 Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -930,9 +952,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                 Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -950,9 +972,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                 Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -970,9 +992,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                 Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -1003,13 +1025,13 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                             {
                                                 int cor_cell_y=cor_cell+4;
-                                                cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                                cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                                cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
+                                                cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                                             }
-                                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                             break;
                                         }
                                         case 3:
@@ -1018,13 +1040,13 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                             {
                                                 int cor_cell_y=cor_cell+4;
-                                                cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                                cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                                cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
+                                                cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                                             }
-                                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                             break;
                                         }
                                         case 5:
@@ -1033,13 +1055,13 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                             {
                                                 int cor_cell_y=cor_cell+4;
-                                                cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                                cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                                cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
+                                                cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                                             }
-                                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                             break;
                                         }
                                         case 7:
@@ -1048,13 +1070,13 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                             {
                                                 int cor_cell_y=cor_cell+4;
-                                                cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                                cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                                cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
+                                                cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                                             }
-                                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                             break;
                                         }
                                     }
@@ -1071,9 +1093,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             cell_temp(1,6)=cell_temp(1,5)+1;
                                             cell_temp(1,7)=cell_temp(1,5)+1;
                                             cell_temp(1,8)=cell_temp(1,5);
-                                            cell_temp(1,14)=cell_array(i,14);
-                                            cell_temp(1,22)=cell_array(i,22);
-                                            cell_temp(1,24)=cell_array(i,24);
+                                            cell_temp(1,14)=stages[row];
+                                            cell_temp(1,22)=viability[row];
+                                            cell_temp(1,24)=migration_follow_flags[row];
                                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                             Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -1092,9 +1114,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             cell_temp(1,6)=cell_temp(1,5)+1;
                                             cell_temp(1,7)=cell_temp(1,5)+1;
                                             cell_temp(1,8)=cell_temp(1,5);
-                                            cell_temp(1,14)=cell_array(i,14);
-                                            cell_temp(1,22)=cell_array(i,22);
-                                            cell_temp(1,24)=cell_array(i,24);
+                                            cell_temp(1,14)=stages[row];
+                                            cell_temp(1,22)=viability[row];
+                                            cell_temp(1,24)=migration_follow_flags[row];
                                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                             Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -1112,9 +1134,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             cell_temp(1,6)=cell_temp(1,5)+1;
                                             cell_temp(1,7)=cell_temp(1,5)+1;
                                             cell_temp(1,8)=cell_temp(1,5);
-                                            cell_temp(1,14)=cell_array(i,14);
-                                            cell_temp(1,22)=cell_array(i,22);
-                                            cell_temp(1,24)=cell_array(i,24);
+                                            cell_temp(1,14)=stages[row];
+                                            cell_temp(1,22)=viability[row];
+                                            cell_temp(1,24)=migration_follow_flags[row];
                                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                             Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -1132,9 +1154,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             cell_temp(1,6)=cell_temp(1,5)+1;
                                             cell_temp(1,7)=cell_temp(1,5)+1;
                                             cell_temp(1,8)=cell_temp(1,5);
-                                            cell_temp(1,14)=cell_array(i,14);
-                                            cell_temp(1,22)=cell_array(i,22);
-                                            cell_temp(1,24)=cell_array(i,24);
+                                            cell_temp(1,14)=stages[row];
+                                            cell_temp(1,22)=viability[row];
+                                            cell_temp(1,24)=migration_follow_flags[row];
                                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                             Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -1155,12 +1177,12 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             Visual_range.clear_square(x,y);
                                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                             {
-                                                cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
+                                                cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
                                             }
-                                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                             break;
                                         }
                                         case 4:
@@ -1168,12 +1190,12 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             Visual_range.clear_square(x,y);
                                             for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                                             {
-                                                cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                                cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                                             }
-                                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                             break;
                                         }
                                         case 6:
@@ -1181,12 +1203,12 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             Visual_range.clear_square(x,y);
                                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                             {
-                                                cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
+                                                cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
                                             }
-                                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                             break;
                                         }
                                         case 8:
@@ -1194,12 +1216,12 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             Visual_range.clear_square(x,y);
                                             for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                                             {
-                                                cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                                cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                                             }
-                                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                                             break;
                                         }
                                     }
@@ -1216,9 +1238,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             cell_temp(1,6)=cell_temp(1,5)+1;
                                             cell_temp(1,7)=cell_temp(1,5)+1;
                                             cell_temp(1,8)=cell_temp(1,5);
-                                            cell_temp(1,14)=cell_array(i,14);
-                                            cell_temp(1,22)=cell_array(i,22);
-                                            cell_temp(1,24)=cell_array(i,24);
+                                            cell_temp(1,14)=stages[row];
+                                            cell_temp(1,22)=viability[row];
+                                            cell_temp(1,24)=migration_follow_flags[row];
                                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                             Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -1236,9 +1258,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             cell_temp(1,6)=cell_temp(1,5)+1;
                                             cell_temp(1,7)=cell_temp(1,5)+1;
                                             cell_temp(1,8)=cell_temp(1,5);
-                                            cell_temp(1,14)=cell_array(i,14);
-                                            cell_temp(1,22)=cell_array(i,22);
-                                            cell_temp(1,24)=cell_array(i,24);
+                                            cell_temp(1,14)=stages[row];
+                                            cell_temp(1,22)=viability[row];
+                                            cell_temp(1,24)=migration_follow_flags[row];
                                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                             Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -1256,9 +1278,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             cell_temp(1,6)=cell_temp(1,5)+1;
                                             cell_temp(1,7)=cell_temp(1,5)+1;
                                             cell_temp(1,8)=cell_temp(1,5);
-                                            cell_temp(1,14)=cell_array(i,14);
-                                            cell_temp(1,22)=cell_array(i,22);
-                                            cell_temp(1,24)=cell_array(i,24);
+                                            cell_temp(1,14)=stages[row];
+                                            cell_temp(1,22)=viability[row];
+                                            cell_temp(1,24)=migration_follow_flags[row];
                                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                             Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -1276,9 +1298,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                                             cell_temp(1,6)=cell_temp(1,5)+1;
                                             cell_temp(1,7)=cell_temp(1,5)+1;
                                             cell_temp(1,8)=cell_temp(1,5);
-                                            cell_temp(1,14)=cell_array(i,14);
-                                            cell_temp(1,22)=cell_array(i,22);
-                                            cell_temp(1,24)=cell_array(i,24);
+                                            cell_temp(1,14)=stages[row];
+                                            cell_temp(1,22)=viability[row];
+                                            cell_temp(1,24)=migration_follow_flags[row];
                                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
                                             Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_temp(1,15));
                                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
@@ -1344,36 +1366,36 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                         cell_temp(1,5)=(double)cor_pro_1(2,random_pro_loci_1[0]);
                         cell_temp(1,14)=1;
                         cell_temp(1,15)=cell_temp(1,15);
-                        cell_array(i,1)=(double)cor_pro_1(1,random_pro_loci_1[1]);
-                        cell_array(i,5)=(double)cor_pro_1(2,random_pro_loci_1[1]);
+                        x1_values[row]=(double)cor_pro_1(1,random_pro_loci_1[1]);
+                        y1_values[row]=(double)cor_pro_1(2,random_pro_loci_1[1]);
                         if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
                         {
                             Visual_range.occupied((int)cell_temp(1,1),(int)cell_temp(1,5))=1;
                             Visual_range.density_label((int)cell_temp(1,1),(int)cell_temp(1,5))=(int)cell_temp(1,15);
                             Visual_range.stage((int)cell_temp(1,1),(int)cell_temp(1,5))=cellstage;
                             Visual_range.cell_label((int)cell_temp(1,1),(int)cell_temp(1,5))=cell_label;
-                            Visual_range.occupied((int)cell_array(i,1),(int)cell_array(i,5))=1;
-                            Visual_range.density_label((int)cell_array(i,1),(int)cell_array(i,5))=(int)cell_array(i,15);
-                            Visual_range.stage((int)cell_array(i,1),(int)cell_array(i,5))=cellstage;
-                            Visual_range.cell_label((int)cell_array(i,1),(int)cell_array(i,5))=cell_label_1;
+                            Visual_range.occupied((int)x1_values[row],(int)y1_values[row])=1;
+                            Visual_range.density_label((int)x1_values[row],(int)y1_values[row])=(int)ids[row];
+                            Visual_range.stage((int)x1_values[row],(int)y1_values[row])=cellstage;
+                            Visual_range.cell_label((int)x1_values[row],(int)y1_values[row])=cell_label_1;
                         }
-                        cell_array(i,14)=1;
-                        cell_array(i,2)=0;
-                        cell_array(i,3)=0;
-                        cell_array(i,4)=0;
-                        cell_array(i,6)=0;
-                        cell_array(i,7)=0;
-                        cell_array(i,8)=0;
+                        stages[row]=1;
+                        x2_values[row]=0;
+                        x3_values[row]=0;
+                        x4_values[row]=0;
+                        y2_values[row]=0;
+                        y3_values[row]=0;
+                        y4_values[row]=0;
                         delete[] random_pro_loci_1;
                         random_pro_loci_1 = NULL;
                     }
                 }
                 else
                 {
-                    cell_array(i,20)=0;
+                    migration_elapsed[row]=0;
                     cell_temp(1,20)=0;
                     cell_temp(1,16)=0;
-                    cell_array(i,16)=0;
+                    division_elapsed[row]=0;
                     long cell_label_1=Visual_range.cell_label(x,y);
                     long cellstage=Visual_range.stage(x,y);
                     cell_label=cell_label+1;
@@ -1428,26 +1450,26 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                     cell_temp(1,5)=(double)pro_loci_small(2,random_pro_loci_1[0]);
                     cell_temp(1,14)=1;
                     cell_temp(1,15)=cell_temp(1,15);
-                    cell_array(i,1)=(double)pro_loci_small(1,random_pro_loci_1[1]);
-                    cell_array(i,5)=(double)pro_loci_small(2,random_pro_loci_1[1]);
+                    x1_values[row]=(double)pro_loci_small(1,random_pro_loci_1[1]);
+                    y1_values[row]=(double)pro_loci_small(2,random_pro_loci_1[1]);
                     if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
                     {
                         Visual_range.occupied((int)cell_temp(1,1),(int)cell_temp(1,5))=1;
                         Visual_range.density_label((int)cell_temp(1,1),(int)cell_temp(1,5))=(int)cell_temp(1,15);
                         Visual_range.stage((int)cell_temp(1,1),(int)cell_temp(1,5))=cellstage;
                         Visual_range.cell_label((int)cell_temp(1,1),(int)cell_temp(1,5))=cell_label;
-                        Visual_range.occupied((int)cell_array(i,1),(int)cell_array(i,5))=1;
-                        Visual_range.density_label((int)cell_array(i,1),(int)cell_array(i,5))=(int)cell_array(i,15);
-                        Visual_range.stage((int)cell_array(i,1),(int)cell_array(i,5))=cellstage;
-                        Visual_range.cell_label((int)cell_array(i,1),(int)cell_array(i,5))=cell_label_1;
+                        Visual_range.occupied((int)x1_values[row],(int)y1_values[row])=1;
+                        Visual_range.density_label((int)x1_values[row],(int)y1_values[row])=(int)ids[row];
+                        Visual_range.stage((int)x1_values[row],(int)y1_values[row])=cellstage;
+                        Visual_range.cell_label((int)x1_values[row],(int)y1_values[row])=cell_label_1;
                     }
-                    cell_array(i,14)=1;
-                    cell_array(i,2)=0;
-                    cell_array(i,3)=0;
-                    cell_array(i,4)=0;
-                    cell_array(i,6)=0;
-                    cell_array(i,7)=0;
-                    cell_array(i,8)=0;
+                    stages[row]=1;
+                    x2_values[row]=0;
+                    x3_values[row]=0;
+                    x4_values[row]=0;
+                    y2_values[row]=0;
+                    y3_values[row]=0;
+                    y4_values[row]=0;
                     delete[] random_pro_loci_1;
                     random_pro_loci_1 = NULL;
                 }
@@ -1490,31 +1512,31 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
             }
             if (loci_number!=0)
             {
-                double growth_rate_inherent=cell_array(i,10);
+                double growth_rate_inherent=growth_rates[row];
                 double X1=growth_rate_inherent*(1-0.05);
                 double X2=growth_rate_inherent*(1+0.05);
-                cell_array(i,10)=(X2-X1)*stateless_uniform(cell_rng_id, rng_time_step, rng_event++)+X1;
+                growth_rates[row]=(X2-X1)*stateless_uniform(cell_rng_id, rng_time_step, rng_event++)+X1;
                 
                 r_label=r_label+1;
                 K_label=K_label+1;
-                if(cell_array(i,9)==1)
+                if(types[row]==1)
                 {
-                    cell_array(i,15)=r_label;
+                    ids[row]=r_label;
                 }
-                else if (cell_array(i,9)==1)
+                else if (types[row]==1)
                 {
-                    cell_array(i,15)=K_label;
+                    ids[row]=K_label;
                 }
                 cell_type_transform(cell_temp, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration,migration_rate_K_mean,uniup_K,unilow_K, sigmahatK, muhatK,K_label,i,Visual_range,cell_array, beta_distribution_alpha, beta_distribution_beta, migration_rate_r_mean, migration_rate_r_mean_quia, beta_distribution_expected_for_normal_migration,r_label, K_formation_rate, cell_rng_id, rng_time_step, rng_event);
                 
                 cell_index=cell_index+1;
 //                generation=generation+1;
-                cell_array(i,30)=cell_array(i,29);
-                cell_array(i,29)=cell_index;
+                parent_trace_labels[row]=cell_trace_labels[row];
+                cell_trace_labels[row]=cell_index;
                 
                 cell_index=cell_index+1;
                 cell_temp(1,29)=cell_index;
-                cell_temp(1,30)=cell_array(i,30);
+                cell_temp(1,30)=parent_trace_labels[row];
                 
                 cell_label=cell_label+1;
                 long cellstage=Visual_range.stage(x,y);
@@ -1528,45 +1550,45 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
                 Visual_range.stage((int)cell_temp(1,1),(int)cell_temp(1,5))=cellstage;
                 Visual_range.cell_label((int)cell_temp(1,1),(int)cell_temp(1,5))=cell_label;
                 cell_temp(1,14)=1;
-                cell_array(i,20)=0;
+                migration_elapsed[row]=0;
                 cell_temp(1,20)=0;
                 cell_temp(1,16)=0;
-                cell_array(i,16)=0;
+                division_elapsed[row]=0;
                 
-                int division_times=(int)cell_array(i,Col);
-                cell_array(i,Col)=division_times+1;
+                int division_times=(int)col_values[row];
+                col_values[row]=division_times+1;
                 
-                cell_array(i,15)=r_label;
-//                cell_array(i,13)=cell_array(i,13)+1;
+                ids[row]=r_label;
+//                random_labels[row]=random_labels[row]+1;
                 
-                cell_temp(1,Col)=cell_array(i,Col);
-//                cell_array(i,Col)=cell_array(i,13);
+                cell_temp(1,Col)=col_values[row];
+//                col_values[row]=random_labels[row];
             }
             else
             {
-                if (cell_array(i,9)==1)
+                if (types[row]==1)
                 {
-                    cell_array(i,22)=0;
-                    Visual_range.clear_site(cell_array(i,1),cell_array(i,5));
+                    viability[row]=0;
+                    Visual_range.clear_site(x1_values[row],y1_values[row]);
                     cell_temp(1,22)=0;
                 }
 //                else
 //                {
 //                    if (utralsmall==1)
 //                    {
-//                        cell_temp(1,1)=cell_array(i,1);
-//                        cell_temp(1,5)=cell_array(i,5);
-//                        cell_array(i,14)=2;
+//                        cell_temp(1,1)=x1_values[row];
+//                        cell_temp(1,5)=y1_values[row];
+//                        stages[row]=2;
 //                        cell_temp(1,14)=2;
 //                        Visual_range.stage((int)cell_temp(1,1),(int)cell_temp(1,5))=2;
 //                        Visual_range.cell_label((int)cell_temp(1,1),(int)cell_temp(1,5))=cell_label;
-//                        cell_array(i,20)=0;
+//                        migration_elapsed[row]=0;
 //                        cell_temp(1,20)=0;
 //                        cell_temp(1,16)=0;
-//                        cell_array(i,16)=0;
-//                        cell_array(i,13)=cell_array(i,13)+1;
-//                        cell_temp(1,Col)=cell_array(i,13);
-//                        cell_array(i,Col)=cell_array(i,13);
+//                        division_elapsed[row]=0;
+//                        random_labels[row]=random_labels[row]+1;
+//                        cell_temp(1,Col)=random_labels[row];
+//                        col_values[row]=random_labels[row];
 //
 //                    }
 //                }
@@ -1591,32 +1613,32 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
 //            }
 //            if (cor_temp_length==0)
 //            {
-//                cell_array(i,22)=0;
+//                viability[row]=0;
 //            }
 //            else
 //            {
-//                cell_array(i,16)=cell_array(i,16)+deltah;
+//                division_elapsed[row]=division_elapsed[row]+deltah;
 //            }
 //            break;
 //        }
     }
     
-    int celltypes=(int)cell_array(i,9);
+    int celltypes=(int)types[row];
     switch (celltypes)
     {
         case 1:
         {
-            if (cell_array(i,10) > max_growth_rate_r)
+            if (growth_rates[row] > max_growth_rate_r)
             {
-                cell_array(i,10) = max_growth_rate_r;
+                growth_rates[row] = max_growth_rate_r;
             }
             break;
         }
         case 2:
         {
-            if(cell_array(i,10) > max_growth_rate_K)
+            if(growth_rates[row] > max_growth_rate_K)
             {
-                cell_array(i,10) = max_growth_rate_K;
+                growth_rates[row] = max_growth_rate_K;
             }
             break;
         }
@@ -1646,10 +1668,10 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
     if (cell_temp(1,1)==0 && cell_temp(1,5)==0)
     {
         cell_store_assign_row_from_array(cell_array, i, cell_temp, 2, Col);
-//        cell_array(i,22)=0;
+//        viability[row]=0;
 //        fprintf(fid2, "%s\n" ,"Cell division error: Daughter cell failed to get coordinates!");
 //        fprintf(fid2, "%s\n" ,"Mark cells as inviabile.");
-//        fprintf(fid2, "%s %d\n" ,"Cell label :",(int)cell_array(i,30));
+//        fprintf(fid2, "%s %d\n" ,"Cell label :",(int)parent_trace_labels[row]);
 //        fprintf(fid2, "%s\n" ,"*********************************************************");
     }
     
@@ -1660,9 +1682,9 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
         cell_trace_temp.resize(2,150);
         cell_trace_temp=0;
         cell_trace_temp(1,1)=(long)cell_array(1,15);
-        cell_trace_temp(1,2)=(long)cell_array(i,29);
-        cell_trace_temp(1,3)=(long)cell_array(i,30);
-        cell_trace_temp(1,4)=(long)cell_array(i,31);
+        cell_trace_temp(1,2)=(long)cell_trace_labels[row];
+        cell_trace_temp(1,3)=(long)parent_trace_labels[row];
+        cell_trace_temp(1,4)=(long)division_counts[row];
         
         cell_trace_temp(2,1)=(long)cell_temp(1,15);
         cell_trace_temp(2,2)=(long)cell_temp(1,29);
@@ -1701,7 +1723,7 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
             cell_trace_temp(1,GN+6)=cell_trace_temp(1,2);
             cell_trace_temp(2,GN+6)=cell_trace_temp(2,2);
             cell_trace_temp(1,4)=GN+1;
-            cell_array(i,4)=GN+1;
+            x4_values[row]=GN+1;
             fprintf(fid2, "%s\n" ,"Cell division counts error: Error type 1");
             fprintf(fid2, "%s %ld %s %ld %s %ld\n" ,"Parent cell label :",cell_trace_temp(1,3) ,"Daughter cells : ",cell_trace_temp(1,3), "and" , cell_trace_temp(2,3));
             fprintf(fid2, "%s\n" ,"*********************************************************");
@@ -1711,7 +1733,7 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
             cell_trace_temp(1,GN+7)=cell_trace_temp(1,2);
             cell_trace_temp(2,GN+7)=cell_trace_temp(2,2);
             cell_trace_temp(1,4)=GN+2;
-            cell_array(i,4)=GN+2;
+            x4_values[row]=GN+2;
             fprintf(fid2, "%s\n" ,"Cell division counts error: Error type 2");
             fprintf(fid2, "%s %ld %s %ld %s %ld\n" ,"Parent cell label :",cell_trace_temp(1,3) ,"Daughter cells : ",cell_trace_temp(1,3), "and" , cell_trace_temp(2,3));
             fprintf(fid2, "%s\n" ,"*********************************************************");

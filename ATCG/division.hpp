@@ -55,7 +55,34 @@ inline void append_cell(CellStore &cells, const CellRowBuffer &cell_temp, int Co
 template <typename CellArray>
 inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, VisualRange &Visual_range, CellRowBuffer &cell_temp,int &cell_label, double &deltah,int utralsmall,int Col, long rng_time_step)
 {
-    long cell_rng_id = (long)cell_array(i,15);
+    int row = i - 1;
+    auto &x1_values = cell_array.x1();
+    auto &x2_values = cell_array.x2();
+    auto &x3_values = cell_array.x3();
+    auto &x4_values = cell_array.x4();
+    auto &y1_values = cell_array.y1();
+    auto &y2_values = cell_array.y2();
+    auto &y3_values = cell_array.y3();
+    auto &y4_values = cell_array.y4();
+    auto &types = cell_array.type();
+    auto &growth_rates = cell_array.growth_rate();
+    auto &density_growth_rates = cell_array.density_growth_rate();
+    auto &migration_rate_bases = cell_array.migration_rate_base();
+    auto &random_labels = cell_array.random_label();
+    auto &stages = cell_array.stage();
+    auto &ids = cell_array.id();
+    auto &division_elapsed = cell_array.division_elapsed();
+    auto &death_times = cell_array.death_time();
+    auto &death_elapsed = cell_array.death_elapsed();
+    auto &migration_elapsed = cell_array.migration_elapsed();
+    auto &migration_intervals = cell_array.migration_interval();
+    auto &viability = cell_array.viability();
+    auto &migration_follow_flags = cell_array.migration_follow_flag();
+    auto &migration_active = cell_array.migration_active();
+    auto &migration_duration = cell_array.migration_duration();
+    auto &migration_passed = cell_array.migration_passed();
+    auto &migration_rates = cell_array.migration_rate();
+    long cell_rng_id = (long)ids[row];
     if (cell_rng_id == 0)
     {
         cell_rng_id = i;
@@ -71,8 +98,8 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
     IntMatrix cor_small_1(2, 8);
     cell_temp.resize(1, Col);
     cell_temp=0;
-    int x=(int)cell_array(i,1);
-    int y=(int)cell_array(i,5);
+    int x=(int)x1_values[row];
+    int y=(int)y1_values[row];
     int A=x-2;
     int B=x-1;
     int C=x;
@@ -141,30 +168,30 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
     cor_small_1.set_col(8, C, b);
     int cor_temp1[16]={0};
     
-    if (cell_array(i,14)==0)
+    if (stages[row]==0)
     {
-        double growth_rate_inherent=cell_array(i,10);
+        double growth_rate_inherent=growth_rates[row];
         double X1=growth_rate_inherent*(1-0.05);
         double X2=growth_rate_inherent*(1+0.05);
-        cell_array(i,10)=(X2-X1)*stateless_uniform(cell_rng_id, rng_time_step, rng_event++)+X1;
-        cell_temp(1,9)=cell_array(i,9);
-        cell_temp(1,10)=cell_array(i,10);
-        cell_temp(1,11)=cell_array(i,11);
-        cell_temp(1,12)=cell_array(i,12);
-        cell_temp(1,13)=cell_array(i,13);
-        cell_temp(1,15)=cell_array(i,15);
+        growth_rates[row]=(X2-X1)*stateless_uniform(cell_rng_id, rng_time_step, rng_event++)+X1;
+        cell_temp(1,9)=types[row];
+        cell_temp(1,10)=growth_rates[row];
+        cell_temp(1,11)=density_growth_rates[row];
+        cell_temp(1,12)=migration_rate_bases[row];
+        cell_temp(1,13)=random_labels[row];
+        cell_temp(1,15)=ids[row];
         cell_temp(1,18)=0;
-        cell_temp(1,19)=cell_array(i,19);
-        cell_temp(1,21)=cell_array(i,21);
-        cell_temp(1,22)=cell_array(i,22);
+        cell_temp(1,19)=death_elapsed[row];
+        cell_temp(1,21)=migration_intervals[row];
+        cell_temp(1,22)=viability[row];
         cell_temp(1,23)=0;
         cell_temp(1,24)=0;
-        cell_array(i,16)=0;
+        division_elapsed[row]=0;
         cell_temp(1,16)=0;
-        cell_temp(1,25)=cell_array(i,25);
-        cell_temp(1,26)=cell_array(i,26);
-        cell_temp(1,27)=cell_array(i,27);
-        cell_temp(1,28)=cell_array(i,28);
+        cell_temp(1,25)=migration_active[row];
+        cell_temp(1,26)=migration_duration[row];
+        cell_temp(1,27)=migration_passed[row];
+        cell_temp(1,28)=migration_rates[row];
         int cor_temp_length=0;
         for (int s=1; s<=16; s++)
         {
@@ -200,14 +227,14 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
             cell_temp(1,6)=cor_big_1(2,loci)+1;
             cell_temp(1,7)=cor_big_1(2,loci)+1;
             cell_temp(1,8)=cor_big_1(2,loci);
-            cell_temp(1,14)=cell_array(i,14);
-            cell_temp(1,22)=cell_array(i,22);
-            cell_temp(1,24)=cell_array(i,24);
-            cell_array(i,20)=0;
+            cell_temp(1,14)=stages[row];
+            cell_temp(1,22)=viability[row];
+            cell_temp(1,24)=migration_follow_flags[row];
+            migration_elapsed[row]=0;
             cell_temp(1,20)=0;
             cell_temp(1,16)=0;
-            cell_array(i,16)=0;
-            long cell_index= (int)cell_array(i,15);
+            division_elapsed[row]=0;
+            long cell_index= (int)ids[row];
             Visual_range.occupied((int)cell_temp(1,1),(int)cell_temp(1,5))=1;
             Visual_range.occupied((int)cell_temp(1,2),(int)cell_temp(1,6))=1;
             Visual_range.occupied((int)cell_temp(1,3),(int)cell_temp(1,7))=1;
@@ -216,10 +243,10 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
             Visual_range.density_label((int)cell_temp(1,2),(int)cell_temp(1,6))=cell_index;
             Visual_range.density_label((int)cell_temp(1,3),(int)cell_temp(1,7))=cell_index;
             Visual_range.density_label((int)cell_temp(1,4),(int)cell_temp(1,8))=cell_index;
-            Visual_range.stage((int)cell_temp(1,1),(int)cell_temp(1,5))=(int)cell_array(i,14);
-            Visual_range.stage((int)cell_temp(1,2),(int)cell_temp(1,6))=(int)cell_array(i,14);
-            Visual_range.stage((int)cell_temp(1,3),(int)cell_temp(1,7))=(int)cell_array(i,14);
-            Visual_range.stage((int)cell_temp(1,4),(int)cell_temp(1,8))=(int)cell_array(i,14);
+            Visual_range.stage((int)cell_temp(1,1),(int)cell_temp(1,5))=(int)stages[row];
+            Visual_range.stage((int)cell_temp(1,2),(int)cell_temp(1,6))=(int)stages[row];
+            Visual_range.stage((int)cell_temp(1,3),(int)cell_temp(1,7))=(int)stages[row];
+            Visual_range.stage((int)cell_temp(1,4),(int)cell_temp(1,8))=(int)stages[row];
             Visual_range.cell_label((int)cell_temp(1,1),(int)cell_temp(1,5))=cell_label;
             Visual_range.cell_label((int)cell_temp(1,2),(int)cell_temp(1,6))=cell_label;
             Visual_range.cell_label((int)cell_temp(1,3),(int)cell_temp(1,7))=cell_label;
@@ -324,10 +351,10 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
             int pro_loci_number2=siz2;
             if (pro_loci_number>1)
             {
-                cell_array(i,20)=0;
+                migration_elapsed[row]=0;
                 cell_temp(1,20)=0;
                 cell_temp(1,16)=0;
-                cell_array(i,16)=0;
+                division_elapsed[row]=0;
                 long cell_label_1=Visual_range.cell_label(x,y);
                 long cellstage=Visual_range.stage(x,y);
                 cell_label=cell_label+1;
@@ -352,13 +379,13 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                             {
                                 int cor_cell_y=cor_cell+4;
-                                cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
+                                cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                             }
-                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                         }
                         else if (proloci1==3)
                         {
@@ -366,13 +393,13 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                             {
                                 int cor_cell_y=cor_cell+4;
-                                cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
+                                cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                             }
-                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                         }
                         else if (proloci1==5)
                         {
@@ -380,13 +407,13 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                             {
                                 int cor_cell_y=cor_cell+4;
-                                cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
+                                cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                             }
-                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                         }
                         else if (proloci1==7)
                         {
@@ -394,13 +421,13 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                             {
                                 int cor_cell_y=cor_cell+4;
-                                cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
+                                cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                             }
-                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                         }
                         if (proloci2==1)
                         {
@@ -413,11 +440,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,6)=cell_temp(1,5)+1;
                             cell_temp(1,7)=cell_temp(1,5)+1;
                             cell_temp(1,8)=cell_temp(1,5);
-                            cell_temp(1,14)=cell_array(i,14);
-                            cell_temp(1,22)=cell_array(i,22);
-                            cell_temp(1,24)=cell_array(i,24);
+                            cell_temp(1,14)=stages[row];
+                            cell_temp(1,22)=viability[row];
+                            cell_temp(1,24)=migration_follow_flags[row];
                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                             Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
@@ -432,11 +459,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,6)=cell_temp(1,5)+1;
                             cell_temp(1,7)=cell_temp(1,5)+1;
                             cell_temp(1,8)=cell_temp(1,5);
-                            cell_temp(1,14)=cell_array(i,14);
-                            cell_temp(1,22)=cell_array(i,22);
-                            cell_temp(1,24)=cell_array(i,24);
+                            cell_temp(1,14)=stages[row];
+                            cell_temp(1,22)=viability[row];
+                            cell_temp(1,24)=migration_follow_flags[row];
                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                             Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
@@ -451,11 +478,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,6)=cell_temp(1,5)+1;
                             cell_temp(1,7)=cell_temp(1,5)+1;
                             cell_temp(1,8)=cell_temp(1,5);
-                            cell_temp(1,14)=cell_array(i,14);
-                            cell_temp(1,22)=cell_array(i,22);
-                            cell_temp(1,24)=cell_array(i,24);
+                            cell_temp(1,14)=stages[row];
+                            cell_temp(1,22)=viability[row];
+                            cell_temp(1,24)=migration_follow_flags[row];
                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                             Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
@@ -470,11 +497,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,6)=cell_temp(1,5)+1;
                             cell_temp(1,7)=cell_temp(1,5)+1;
                             cell_temp(1,8)=cell_temp(1,5);
-                            cell_temp(1,14)=cell_array(i,14);
-                            cell_temp(1,22)=cell_array(i,22);
-                            cell_temp(1,24)=cell_array(i,24);
+                            cell_temp(1,14)=stages[row];
+                            cell_temp(1,22)=viability[row];
+                            cell_temp(1,24)=migration_follow_flags[row];
                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                             Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
@@ -495,48 +522,48 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             Visual_range.clear_square(x,y);
                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                             {
-                                cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
+                                cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
                             }
-                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                         }
                         else if (proloci1==4)
                         {
                             Visual_range.clear_square(x,y);
                             for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                             {
-                                cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                             }
-                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                         }
                         else if (proloci1==6)
                         {
                             Visual_range.clear_square(x,y);
                             for (int cor_cell=1; cor_cell<=4;cor_cell++)
                             {
-                                cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
+                                cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
                             }
-                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                         }
                         else if (proloci1==8)
                         {
                             Visual_range.clear_square(x,y);
                             for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                             {
-                                cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                             }
-                            Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                            Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                            Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                            Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                            Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                            Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                            Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                            Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                         }
                         if (proloci2==2)
                         {
@@ -549,11 +576,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,6)=cell_temp(1,5)+1;
                             cell_temp(1,7)=cell_temp(1,5)+1;
                             cell_temp(1,8)=cell_temp(1,5);
-                            cell_temp(1,14)=cell_array(i,14);
-                            cell_temp(1,22)=cell_array(i,22);
-                            cell_temp(1,24)=cell_array(i,24);
+                            cell_temp(1,14)=stages[row];
+                            cell_temp(1,22)=viability[row];
+                            cell_temp(1,24)=migration_follow_flags[row];
                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                             Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
@@ -568,11 +595,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,6)=cell_temp(1,5)+1;
                             cell_temp(1,7)=cell_temp(1,5)+1;
                             cell_temp(1,8)=cell_temp(1,5);
-                            cell_temp(1,14)=cell_array(i,14);
-                            cell_temp(1,22)=cell_array(i,22);
-                            cell_temp(1,24)=cell_array(i,24);
+                            cell_temp(1,14)=stages[row];
+                            cell_temp(1,22)=viability[row];
+                            cell_temp(1,24)=migration_follow_flags[row];
                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                             Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
@@ -587,11 +614,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,6)=cell_temp(1,5)+1;
                             cell_temp(1,7)=cell_temp(1,5)+1;
                             cell_temp(1,8)=cell_temp(1,5);
-                            cell_temp(1,14)=cell_array(i,14);
-                            cell_temp(1,22)=cell_array(i,22);
-                            cell_temp(1,24)=cell_array(i,24);
+                            cell_temp(1,14)=stages[row];
+                            cell_temp(1,22)=viability[row];
+                            cell_temp(1,24)=migration_follow_flags[row];
                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                             Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
@@ -606,11 +633,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                             cell_temp(1,6)=cell_temp(1,5)+1;
                             cell_temp(1,7)=cell_temp(1,5)+1;
                             cell_temp(1,8)=cell_temp(1,5);
-                            cell_temp(1,14)=cell_array(i,14);
-                            cell_temp(1,22)=cell_array(i,22);
-                            cell_temp(1,24)=cell_array(i,24);
+                            cell_temp(1,14)=stages[row];
+                            cell_temp(1,22)=viability[row];
+                            cell_temp(1,24)=migration_follow_flags[row];
                             Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                            Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                             Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                             Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         }
@@ -633,13 +660,13 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                         {
                             int cor_cell_y=cor_cell+4;
-                            cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                            cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                            cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
+                            cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                         }
-                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                     }
                     else if (proloci1==3)
                     {
@@ -647,13 +674,13 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                         {
                             int cor_cell_y=cor_cell+4;
-                            cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                            cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                            cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
+                            cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                         }
-                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                     }
                     else if (proloci1==5)
                     {
@@ -661,13 +688,13 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                         {
                             int cor_cell_y=cor_cell+4;
-                            cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                            cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                            cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
+                            cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                         }
-                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                     }
                     else if (proloci1==7)
                     {
@@ -675,13 +702,13 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                         {
                             int cor_cell_y=cor_cell+4;
-                            cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                            cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                            cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
+                            cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                         }
-                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                     }
                     if (proloci2==1)
                     {
@@ -694,11 +721,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,6)=cell_temp(1,5)+1;
                         cell_temp(1,7)=cell_temp(1,5)+1;
                         cell_temp(1,8)=cell_temp(1,5);
-                        cell_temp(1,14)=cell_array(i,14);
-                        cell_temp(1,22)=cell_array(i,22);
-                        cell_temp(1,24)=cell_array(i,24);
+                        cell_temp(1,14)=stages[row];
+                        cell_temp(1,22)=viability[row];
+                        cell_temp(1,24)=migration_follow_flags[row];
                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                         Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                     }
@@ -713,11 +740,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,6)=cell_temp(1,5)+1;
                         cell_temp(1,7)=cell_temp(1,5)+1;
                         cell_temp(1,8)=cell_temp(1,5);
-                        cell_temp(1,14)=cell_array(i,14);
-                        cell_temp(1,22)=cell_array(i,22);
-                        cell_temp(1,24)=cell_array(i,24);
+                        cell_temp(1,14)=stages[row];
+                        cell_temp(1,22)=viability[row];
+                        cell_temp(1,24)=migration_follow_flags[row];
                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                         Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                     }
@@ -732,11 +759,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,6)=cell_temp(1,5)+1;
                         cell_temp(1,7)=cell_temp(1,5)+1;
                         cell_temp(1,8)=cell_temp(1,5);
-                        cell_temp(1,14)=cell_array(i,14);
-                        cell_temp(1,22)=cell_array(i,22);
-                        cell_temp(1,24)=cell_array(i,24);
+                        cell_temp(1,14)=stages[row];
+                        cell_temp(1,22)=viability[row];
+                        cell_temp(1,24)=migration_follow_flags[row];
                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                         Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                     }
@@ -751,11 +778,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,6)=cell_temp(1,5)+1;
                         cell_temp(1,7)=cell_temp(1,5)+1;
                         cell_temp(1,8)=cell_temp(1,5);
-                        cell_temp(1,14)=cell_array(i,14);
-                        cell_temp(1,22)=cell_array(i,22);
-                        cell_temp(1,24)=cell_array(i,24);
+                        cell_temp(1,14)=stages[row];
+                        cell_temp(1,22)=viability[row];
+                        cell_temp(1,24)=migration_follow_flags[row];
                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                         Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                     }
@@ -776,48 +803,48 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         Visual_range.clear_square(x,y);
                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                         {
-                            cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
+                            cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
                         }
-                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                     }
                     else if (proloci1==4)
                     {
                         Visual_range.clear_square(x,y);
                         for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                         {
-                            cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                            cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                         }
-                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                     }
                     else if (proloci1==6)
                     {
                         Visual_range.clear_square(x,y);
                         for (int cor_cell=1; cor_cell<=4;cor_cell++)
                         {
-                            cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
+                            cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
                         }
-                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                     }
                     else if (proloci1==8)
                     {
                         Visual_range.clear_square(x,y);
                         for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                         {
-                            cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                            cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                         }
-                        Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                        Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                        Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                        Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                        Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                        Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                        Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                        Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                     }
                     if (proloci2==2)
                     {
@@ -830,11 +857,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,6)=cell_temp(1,5)+1;
                         cell_temp(1,7)=cell_temp(1,5)+1;
                         cell_temp(1,8)=cell_temp(1,5);
-                        cell_temp(1,14)=cell_array(i,14);
-                        cell_temp(1,22)=cell_array(i,22);
-                        cell_temp(1,24)=cell_array(i,24);
+                        cell_temp(1,14)=stages[row];
+                        cell_temp(1,22)=viability[row];
+                        cell_temp(1,24)=migration_follow_flags[row];
                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                         Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                         
@@ -850,11 +877,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,6)=cell_temp(1,5)+1;
                         cell_temp(1,7)=cell_temp(1,5)+1;
                         cell_temp(1,8)=cell_temp(1,5);
-                        cell_temp(1,14)=cell_array(i,14);
-                        cell_temp(1,22)=cell_array(i,22);
-                        cell_temp(1,24)=cell_array(i,24);
+                        cell_temp(1,14)=stages[row];
+                        cell_temp(1,22)=viability[row];
+                        cell_temp(1,24)=migration_follow_flags[row];
                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                         Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                     }
@@ -869,11 +896,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,6)=cell_temp(1,5)+1;
                         cell_temp(1,7)=cell_temp(1,5)+1;
                         cell_temp(1,8)=cell_temp(1,5);
-                        cell_temp(1,14)=cell_array(i,14);
-                        cell_temp(1,22)=cell_array(i,22);
-                        cell_temp(1,24)=cell_array(i,24);
+                        cell_temp(1,14)=stages[row];
+                        cell_temp(1,22)=viability[row];
+                        cell_temp(1,24)=migration_follow_flags[row];
                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                         Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                     }
@@ -888,11 +915,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                         cell_temp(1,6)=cell_temp(1,5)+1;
                         cell_temp(1,7)=cell_temp(1,5)+1;
                         cell_temp(1,8)=cell_temp(1,5);
-                        cell_temp(1,14)=cell_array(i,14);
-                        cell_temp(1,22)=cell_array(i,22);
-                        cell_temp(1,24)=cell_array(i,24);
+                        cell_temp(1,14)=stages[row];
+                        cell_temp(1,22)=viability[row];
+                        cell_temp(1,24)=migration_follow_flags[row];
                         Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                        Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                         Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                         Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                     }
@@ -913,13 +940,13 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
                                     int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                    cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
+                                    cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                             }
                             else if (proloci1==3)
                             {
@@ -927,13 +954,13 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
                                     int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                    cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
+                                    cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                             }
                             else if (proloci1==5)
                             {
@@ -941,13 +968,13 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
                                     int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                    cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
+                                    cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                             }
                             else if (proloci1==7)
                             {
@@ -955,13 +982,13 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
                                     int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                    cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
+                                    cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                             }
                             if (proloci2==2)
                             {
@@ -974,11 +1001,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                                 Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                                 
@@ -994,11 +1021,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                                 Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                             }
@@ -1013,11 +1040,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                                 Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                             }
@@ -1032,11 +1059,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                                 Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                             }
@@ -1050,48 +1077,48 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 Visual_range.clear_square(x,y);
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
+                                    cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]-1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                             }
                             else if (proloci1==4)
                             {
                                 Visual_range.clear_square(x,y);
                                 for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                                 {
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
+                                    cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]+1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                             }
                             else if (proloci1==6)
                             {
                                 Visual_range.clear_square(x,y);
                                 for (int cor_cell=1; cor_cell<=4;cor_cell++)
                                 {
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
+                                    cell_array.column(cor_cell)[row]=cell_array.column(cor_cell)[row]+1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                             }
                             else if (proloci1==8)
                             {
                                 Visual_range.clear_square(x,y);
                                 for (int cor_cell_y=5; cor_cell_y<=8;cor_cell_y++)
                                 {
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
+                                    cell_array.column(cor_cell_y)[row]=cell_array.column(cor_cell_y)[row]-1;
                                 }
-                                Visual_range.set_square_occupied(cell_array(i,1),cell_array(i,5),1);
-                                Visual_range.set_square_density_label(cell_array(i,1),cell_array(i,5),(int)cell_array(i,15));
-                                Visual_range.set_square_stage(cell_array(i,1),cell_array(i,5),cellstage);
-                                Visual_range.set_square_cell_label(cell_array(i,1),cell_array(i,5),cell_label_1);
+                                Visual_range.set_square_occupied(x1_values[row],y1_values[row],1);
+                                Visual_range.set_square_density_label(x1_values[row],y1_values[row],(int)ids[row]);
+                                Visual_range.set_square_stage(x1_values[row],y1_values[row],cellstage);
+                                Visual_range.set_square_cell_label(x1_values[row],y1_values[row],cell_label_1);
                             }
                             if (proloci2==1)
                             {
@@ -1104,11 +1131,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                                 Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                             }
@@ -1123,11 +1150,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                                 Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                             }
@@ -1142,11 +1169,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                                 Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                             }
@@ -1161,11 +1188,11 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                                 cell_temp(1,6)=cell_temp(1,5)+1;
                                 cell_temp(1,7)=cell_temp(1,5)+1;
                                 cell_temp(1,8)=cell_temp(1,5);
-                                cell_temp(1,14)=cell_array(i,14);
-                                cell_temp(1,22)=cell_array(i,22);
-                                cell_temp(1,24)=cell_array(i,24);
+                                cell_temp(1,14)=stages[row];
+                                cell_temp(1,22)=viability[row];
+                                cell_temp(1,24)=migration_follow_flags[row];
                                 Visual_range.set_square_occupied(cell_temp(1,1),cell_temp(1,5),1);
-                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)cell_array(i,15));
+                                Visual_range.set_square_density_label(cell_temp(1,1),cell_temp(1,5),(int)ids[row]);
                                 Visual_range.set_square_stage(cell_temp(1,1),cell_temp(1,5),cellstage);
                                 Visual_range.set_square_cell_label(cell_temp(1,1),cell_temp(1,5),cell_label);
                             }
@@ -1224,37 +1251,37 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                     cell_temp(1,1)=(double)cor_pro_1(1,random_pro_loci_1[0]);
                     cell_temp(1,5)=(double)cor_pro_1(2,random_pro_loci_1[0]);
                     cell_temp(1,14)=1;
-                    cell_temp(1,15)=cell_array(i,15);
-                    cell_array(i,1)=(double)cor_pro_1(1,random_pro_loci_1[1]);
-                    cell_array(i,5)=(double)cor_pro_1(2,random_pro_loci_1[1]);
+                    cell_temp(1,15)=ids[row];
+                    x1_values[row]=(double)cor_pro_1(1,random_pro_loci_1[1]);
+                    y1_values[row]=(double)cor_pro_1(2,random_pro_loci_1[1]);
                     if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
                     {
                         Visual_range.occupied((int)cell_temp(1,1),(int)cell_temp(1,5))=1;
-                        Visual_range.density_label((int)cell_temp(1,1),(int)cell_temp(1,5))=(int)cell_array(i,15);
+                        Visual_range.density_label((int)cell_temp(1,1),(int)cell_temp(1,5))=(int)ids[row];
                         Visual_range.stage((int)cell_temp(1,1),(int)cell_temp(1,5))=cellstage;
                         Visual_range.cell_label((int)cell_temp(1,1),(int)cell_temp(1,5))=cell_label;
-                        Visual_range.occupied((int)cell_array(i,1),(int)cell_array(i,5))=1;
-                        Visual_range.density_label((int)cell_array(i,1),(int)cell_array(i,5))=(int)cell_array(i,15);
-                        Visual_range.stage((int)cell_array(i,1),(int)cell_array(i,5))=cellstage;
-                        Visual_range.cell_label((int)cell_array(i,1),(int)cell_array(i,5))=cell_label_1;
+                        Visual_range.occupied((int)x1_values[row],(int)y1_values[row])=1;
+                        Visual_range.density_label((int)x1_values[row],(int)y1_values[row])=(int)ids[row];
+                        Visual_range.stage((int)x1_values[row],(int)y1_values[row])=cellstage;
+                        Visual_range.cell_label((int)x1_values[row],(int)y1_values[row])=cell_label_1;
                     }
-                    cell_array(i,14)=1;
-                    cell_array(i,2)=0;
-                    cell_array(i,3)=0;
-                    cell_array(i,4)=0;
-                    cell_array(i,6)=0;
-                    cell_array(i,7)=0;
-                    cell_array(i,8)=0;
+                    stages[row]=1;
+                    x2_values[row]=0;
+                    x3_values[row]=0;
+                    x4_values[row]=0;
+                    y2_values[row]=0;
+                    y3_values[row]=0;
+                    y4_values[row]=0;
                     delete[] random_pro_loci_1;
                     random_pro_loci_1 = NULL;
                 }
             }
             else
             {
-                cell_array(i,20)=0;
+                migration_elapsed[row]=0;
                 cell_temp(1,20)=0;
                 cell_temp(1,16)=0;
-                cell_array(i,16)=0;
+                division_elapsed[row]=0;
                 long cell_label_1=Visual_range.cell_label(x,y);
                 long cellstage=Visual_range.stage(x,y);
                 cell_label=cell_label+1;
@@ -1308,27 +1335,27 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
                 cell_temp(1,1)=(double)pro_loci_small(1,random_pro_loci_1[0]);
                 cell_temp(1,5)=(double)pro_loci_small(2,random_pro_loci_1[0]);
                 cell_temp(1,14)=1;
-                cell_temp(1,15)=cell_array(i,15);
-                cell_array(i,1)=(double)pro_loci_small(1,random_pro_loci_1[1]);
-                cell_array(i,5)=(double)pro_loci_small(2,random_pro_loci_1[1]);
+                cell_temp(1,15)=ids[row];
+                x1_values[row]=(double)pro_loci_small(1,random_pro_loci_1[1]);
+                y1_values[row]=(double)pro_loci_small(2,random_pro_loci_1[1]);
                 if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
                 {
                     Visual_range.occupied((int)cell_temp(1,1),(int)cell_temp(1,5))=1;
-                    Visual_range.density_label((int)cell_temp(1,1),(int)cell_temp(1,5))=(int)cell_array(i,15);
+                    Visual_range.density_label((int)cell_temp(1,1),(int)cell_temp(1,5))=(int)ids[row];
                     Visual_range.stage((int)cell_temp(1,1),(int)cell_temp(1,5))=cellstage;
                     Visual_range.cell_label((int)cell_temp(1,1),(int)cell_temp(1,5))=cell_label;
-                    Visual_range.occupied((int)cell_array(i,1),(int)cell_array(i,5))=1;
-                    Visual_range.density_label((int)cell_array(i,1),(int)cell_array(i,5))=(int)cell_array(i,15);
-                    Visual_range.stage((int)cell_array(i,1),(int)cell_array(i,5))=cellstage;
-                    Visual_range.cell_label((int)cell_array(i,1),(int)cell_array(i,5))=cell_label_1;
+                    Visual_range.occupied((int)x1_values[row],(int)y1_values[row])=1;
+                    Visual_range.density_label((int)x1_values[row],(int)y1_values[row])=(int)ids[row];
+                    Visual_range.stage((int)x1_values[row],(int)y1_values[row])=cellstage;
+                    Visual_range.cell_label((int)x1_values[row],(int)y1_values[row])=cell_label_1;
                 }
-                cell_array(i,14)=1;
-                cell_array(i,2)=0;
-                cell_array(i,3)=0;
-                cell_array(i,4)=0;
-                cell_array(i,6)=0;
-                cell_array(i,7)=0;
-                cell_array(i,8)=0;
+                stages[row]=1;
+                x2_values[row]=0;
+                x3_values[row]=0;
+                x4_values[row]=0;
+                y2_values[row]=0;
+                y3_values[row]=0;
+                y4_values[row]=0;
                 delete[] random_pro_loci_1;
                 random_pro_loci_1 = NULL;
             }
@@ -1336,26 +1363,26 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
             pro_loci_new = NULL;
         }
     }
-    else if (cell_array(i,14)==1)
+    else if (stages[row]==1)
     {
-        double growth_rate_inherent=cell_array(i,10);
+        double growth_rate_inherent=growth_rates[row];
         double X1=growth_rate_inherent*(1-0.05);
         double X2=growth_rate_inherent*(1+0.05);
-        cell_array(i,10)=(X2-X1)*stateless_uniform(cell_rng_id, rng_time_step, rng_event++)+X1;
-        cell_temp(1,9)=cell_array(i,9);
-        cell_temp(1,10)=cell_array(i,10);
-        cell_temp(1,11)=cell_array(i,11);
-        cell_temp(1,12)=cell_array(i,12);
-        cell_temp(1,13)=cell_array(i,13);
-        cell_temp(1,15)=cell_array(i,15);
-        cell_temp(1,18)=cell_array(i,18);
-        cell_temp(1,19)=cell_array(i,19);
-        cell_temp(1,21)=cell_array(i,21);
-        cell_temp(1,22)=cell_array(i,22);
-        cell_temp(1,25)=cell_array(i,25);
-        cell_temp(1,26)=cell_array(i,26);
-        cell_temp(1,27)=cell_array(i,27);
-        cell_temp(1,28)=cell_array(i,28);
+        growth_rates[row]=(X2-X1)*stateless_uniform(cell_rng_id, rng_time_step, rng_event++)+X1;
+        cell_temp(1,9)=types[row];
+        cell_temp(1,10)=growth_rates[row];
+        cell_temp(1,11)=density_growth_rates[row];
+        cell_temp(1,12)=migration_rate_bases[row];
+        cell_temp(1,13)=random_labels[row];
+        cell_temp(1,15)=ids[row];
+        cell_temp(1,18)=death_times[row];
+        cell_temp(1,19)=death_elapsed[row];
+        cell_temp(1,21)=migration_intervals[row];
+        cell_temp(1,22)=viability[row];
+        cell_temp(1,25)=migration_active[row];
+        cell_temp(1,26)=migration_duration[row];
+        cell_temp(1,27)=migration_passed[row];
+        cell_temp(1,28)=migration_rates[row];
         IntMatrix cor_temp_2(1, 8);
         cor_temp_2=0;
         int cor_temp_length=1;
@@ -1394,39 +1421,39 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
             int loci=cor_temp_3[cor_temp[0]];
             cell_temp(1,1)=cor_small_1(1,loci);
             cell_temp(1,5)=cor_small_1(2,loci);
-            long cell_index=cell_array(i,15);
+            long cell_index=ids[row];
             Visual_range.occupied((int)cell_temp(1,1),(int)cell_temp(1,5))=1;
             Visual_range.density_label((int)cell_temp(1,1),(int)cell_temp(1,5))=cell_index;
             Visual_range.stage((int)cell_temp(1,1),(int)cell_temp(1,5))=cellstage;
             Visual_range.cell_label((int)cell_temp(1,1),(int)cell_temp(1,5))=cell_label;
             cell_temp(1,14)=1;
-            cell_array(i,20)=0;
+            migration_elapsed[row]=0;
             cell_temp(1,20)=0;
             cell_temp(1,16)=0;
-            cell_array(i,16)=0;
+            division_elapsed[row]=0;
         }
         else
         {
-            if (cell_array(i,9)==1)
+            if (types[row]==1)
             {
-                cell_array(i,22)=0;
-                Visual_range.clear_site(cell_array(i,1),cell_array(i,5));
+                viability[row]=0;
+                Visual_range.clear_site(x1_values[row],y1_values[row]);
                 cell_temp(1,22)=0;
             }
             else
             {
                 if (utralsmall==1)
                 {
-                cell_temp(1,1)=cell_array(i,1);
-                cell_temp(1,5)=cell_array(i,5);
-                cell_array(i,14)=2;
+                cell_temp(1,1)=x1_values[row];
+                cell_temp(1,5)=y1_values[row];
+                stages[row]=2;
                 cell_temp(1,14)=2;
                 Visual_range.stage((int)cell_temp(1,1),(int)cell_temp(1,5))=2;
                 Visual_range.cell_label((int)cell_temp(1,1),(int)cell_temp(1,5))=cell_label;
-                cell_array(i,20)=0;
+                migration_elapsed[row]=0;
                 cell_temp(1,20)=0;
                 cell_temp(1,16)=0;
-                cell_array(i,16)=0;
+                division_elapsed[row]=0;
                 }
             }
         }
@@ -1435,7 +1462,7 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
         delete[] cor_temp_3;
         cor_temp_3 = NULL;
     }
-    else if (cell_array(i,14)==2)
+    else if (stages[row]==2)
     {
         int cor_temp_length=0;
         for (int s=1;s<=8;s++)
@@ -1449,25 +1476,25 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
         }
         if (cor_temp_length==0)
         {
-            cell_array(i,22)=0;
+            viability[row]=0;
         }
         else
         {
-            cell_array(i,16)=cell_array(i,16)+deltah;
+            division_elapsed[row]=division_elapsed[row]+deltah;
         }
     }
-    if (cell_array(i,9)==1)
+    if (types[row]==1)
     {
-        if (cell_array(i,10) > max_growth_rate_r)
+        if (growth_rates[row] > max_growth_rate_r)
         {
-            cell_array(i,10) = max_growth_rate_r;
+            growth_rates[row] = max_growth_rate_r;
         }
     }
-    else if(cell_array(i,9)==2)
+    else if(types[row]==2)
     {
-        if(cell_array(i,10) > max_growth_rate_K)
+        if(growth_rates[row] > max_growth_rate_K)
         {
-            cell_array(i,10) = max_growth_rate_K;
+            growth_rates[row] = max_growth_rate_K;
         }
     }
     if (cell_temp(1,9)==1)
