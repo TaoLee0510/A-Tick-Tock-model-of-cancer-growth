@@ -45,6 +45,21 @@ using std::chrono::high_resolution_clock;
 template <typename CellArray>
 inline void cell_type_transform(CellRowBuffer &cell_temp, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,int i,const VisualRange &Visual_range,CellArray &cell_array, double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,long &r_label,double K_formation_rate, long cell_rng_id, long rng_time_step, long &rng_event)
 {
+    int row = i - 1;
+    auto &types = cell_array.type();
+    auto &growth_rates = cell_array.growth_rate();
+    auto &density_growth_rates = cell_array.density_growth_rate();
+    auto &migration_rate_bases = cell_array.migration_rate_base();
+    auto &random_labels = cell_array.random_label();
+    auto &stages = cell_array.stage();
+    auto &division_elapsed = cell_array.division_elapsed();
+    auto &death_times = cell_array.death_time();
+    auto &death_elapsed = cell_array.death_elapsed();
+    auto &migration_intervals = cell_array.migration_interval();
+    auto &viability = cell_array.viability();
+    auto &migration_active = cell_array.migration_active();
+    auto &migration_duration = cell_array.migration_duration();
+    auto &migration_passed = cell_array.migration_passed();
     double Dr1=density_calculation(i, Visual_range, cell_array);
     double initial_K_growth_rate1;
     double migration_rate_K2;
@@ -52,9 +67,9 @@ inline void cell_type_transform(CellRowBuffer &cell_temp, double beta_distributi
     {
         cell_rng_id = i;
     }
-    if(cell_array(i,14)==0)
+    if(stages[row]==0)
     {
-        if (cell_array(i,9)==1)
+        if (types[row]==1)
         {
             if (Dr1>=0.5)
             {
@@ -72,35 +87,35 @@ inline void cell_type_transform(CellRowBuffer &cell_temp, double beta_distributi
                     cell_temp(1,11)=initial_K_growth_rate1;// $11: density growth rate
                     migration_rate_K2=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
                     cell_temp(1,12)=migration_rate_K2;// $12: inherent migration rate
-//                    cell_temp(1,13)=cell_array(i,13);// $13: mass absorb rate
+//                    cell_temp(1,13)=random_labels[row];// $13: mass absorb rate
                     cell_temp(1,14)=0;// $14: cell_array stage
                     cell_temp(1,15)=K_label;// $15: cell_array index
                     cell_temp(1,22)=1;//    $22: cell_array viability
                     cell_temp(1,23)=0;
                     cell_temp(1,24)=0;
-                    cell_array(i,16)=0;//    $16: pass time to next division
+                    division_elapsed[row]=0;//    $16: pass time to next division
                     cell_temp(1,16)=0;//    $16: pass time to next division
-                    cell_temp(1,25)=cell_array(i,25);//    $25: migration judgement lables:  0: non_migration  1: migration
-                    cell_temp(1,26)=cell_array(i,26);//    $26: migration lasted time
-                    cell_temp(1,27)=cell_array(i,27);//    $27: passed time of migration
+                    cell_temp(1,25)=migration_active[row];//    $25: migration judgement lables:  0: non_migration  1: migration
+                    cell_temp(1,26)=migration_duration[row];//    $26: migration lasted time
+                    cell_temp(1,27)=migration_passed[row];//    $27: passed time of migration
                     cell_temp(1,28)=migration_rate_K2;//    $28: migration rate
                     
                 }
                 else
                 {
-                    cell_temp(1,9)=cell_array(i,9);
-                    cell_temp(1,10)=cell_array(i,10);
-                    cell_temp(1,11)=cell_array(i,11);
+                    cell_temp(1,9)=types[row];
+                    cell_temp(1,10)=growth_rates[row];
+                    cell_temp(1,11)=density_growth_rates[row];
                     
                     
                     double mig=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
                     if (mig<=migration_rate_r_mean_quia)
                     {
-                        cell_array(i,12)=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
+                        migration_rate_bases[row]=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
                     }
                     else
                     {
-                        cell_array(i,12)=mig;
+                        migration_rate_bases[row]=mig;
                     }
                     
                     double mig1=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
@@ -113,88 +128,88 @@ inline void cell_type_transform(CellRowBuffer &cell_temp, double beta_distributi
                         cell_temp(1,12)=mig1;
                     }
                     
-//                    cell_temp(1,13)=cell_array(i,13);
+//                    cell_temp(1,13)=random_labels[row];
                     cell_temp(1,15)=r_label+1;
                     cell_temp(1,18)=0;
-                    cell_temp(1,19)=cell_array(i,19);
-                    cell_temp(1,21)=cell_array(i,21);
-                    cell_temp(1,22)=cell_array(i,22);
+                    cell_temp(1,19)=death_elapsed[row];
+                    cell_temp(1,21)=migration_intervals[row];
+                    cell_temp(1,22)=viability[row];
                     cell_temp(1,23)=0;
                     cell_temp(1,24)=0;
-                    cell_array(i,16)=0;
+                    division_elapsed[row]=0;
                     cell_temp(1,16)=0;
-                    cell_temp(1,25)=cell_array(i,25);
-                    cell_temp(1,26)=cell_array(i,26);
-                    cell_temp(1,27)=cell_array(i,27);
+                    cell_temp(1,25)=migration_active[row];
+                    cell_temp(1,26)=migration_duration[row];
+                    cell_temp(1,27)=migration_passed[row];
                     cell_temp(1,28)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
                 }
             }
             else
             {
-                cell_temp(1,9)=cell_array(i,9);
-                cell_temp(1,10)=cell_array(i,10);
-                cell_temp(1,11)=cell_array(i,11);
+                cell_temp(1,9)=types[row];
+                cell_temp(1,10)=growth_rates[row];
+                cell_temp(1,11)=density_growth_rates[row];
                 
                 
                 double mig=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
                 if (mig<=migration_rate_r_mean_quia)
                 {
-                    cell_array(i,12)=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
+                    migration_rate_bases[row]=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
                 }
                 else
                 {
-                    cell_array(i,12)=mig;
+                    migration_rate_bases[row]=mig;
                 }
                 
                 
-                cell_temp(1,12)=cell_array(i,12);
-//                cell_temp(1,13)=cell_array(i,13);
+                cell_temp(1,12)=migration_rate_bases[row];
+//                cell_temp(1,13)=random_labels[row];
                 cell_temp(1,15)=r_label+1;
                 cell_temp(1,18)=0;
-                cell_temp(1,19)=cell_array(i,19);
-                cell_temp(1,21)=cell_array(i,21);
-                cell_temp(1,22)=cell_array(i,22);
+                cell_temp(1,19)=death_elapsed[row];
+                cell_temp(1,21)=migration_intervals[row];
+                cell_temp(1,22)=viability[row];
                 cell_temp(1,23)=0;
                 cell_temp(1,24)=0;
-                cell_array(i,16)=0;
+                division_elapsed[row]=0;
                 cell_temp(1,16)=0;
-                cell_temp(1,25)=cell_array(i,25);
-                cell_temp(1,26)=cell_array(i,26);
-                cell_temp(1,27)=cell_array(i,27);
+                cell_temp(1,25)=migration_active[row];
+                cell_temp(1,26)=migration_duration[row];
+                cell_temp(1,27)=migration_passed[row];
                 cell_temp(1,28)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
             }
         }
-        else if (cell_array(i,9)==2)
+        else if (types[row]==2)
         {
             K_label=K_label+1;
            
-            cell_array(i,12)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
+            migration_rate_bases[row]=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
             
-            cell_temp(1,9)=cell_array(i,9);
-            cell_temp(1,10)=cell_array(i,10);
-            cell_temp(1,11)=cell_array(i,11);
+            cell_temp(1,9)=types[row];
+            cell_temp(1,10)=growth_rates[row];
+            cell_temp(1,11)=density_growth_rates[row];
             
-            cell_temp(1,12)=cell_array(i,12)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
+            cell_temp(1,12)=migration_rate_bases[row]=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
             
-//            cell_temp(1,13)=cell_array(i,13);
+//            cell_temp(1,13)=random_labels[row];
             cell_temp(1,15)=K_label;
             cell_temp(1,18)=0;
-            cell_temp(1,19)=cell_array(i,19);
-            cell_temp(1,21)=cell_array(i,21);
-            cell_temp(1,22)=cell_array(i,22);
+            cell_temp(1,19)=death_elapsed[row];
+            cell_temp(1,21)=migration_intervals[row];
+            cell_temp(1,22)=viability[row];
             cell_temp(1,23)=0;
             cell_temp(1,24)=0;
-            cell_array(i,16)=0;
+            division_elapsed[row]=0;
             cell_temp(1,16)=0;
-            cell_temp(1,25)=cell_array(i,25);
-            cell_temp(1,26)=cell_array(i,26);
-            cell_temp(1,27)=cell_array(i,27);
-            cell_temp(1,28)=cell_array(i,12);
+            cell_temp(1,25)=migration_active[row];
+            cell_temp(1,26)=migration_duration[row];
+            cell_temp(1,27)=migration_passed[row];
+            cell_temp(1,28)=migration_rate_bases[row];
         }
     }
-    else if(cell_array(i,14)==1)
+    else if(stages[row]==1)
     {
-        if (cell_array(i,9)==1)
+        if (types[row]==1)
         {
             if(Dr1>=0.5)
             {
@@ -212,32 +227,32 @@ inline void cell_type_transform(CellRowBuffer &cell_temp, double beta_distributi
                     cell_temp(1,11)=initial_K_growth_rate1;// $11: density growth rate
                     migration_rate_K2=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
                     cell_temp(1,12)=migration_rate_K2;// $12: inherent migration rate
-//                    cell_temp(1,13)=cell_array(i,13);// $13: mass absorb rate
+//                    cell_temp(1,13)=random_labels[row];// $13: mass absorb rate
                     cell_temp(1,15)=K_label;// $15: cell_array index
                     cell_temp(1,22)=1;//    $22: cell_array viability
                     cell_temp(1,23)=0;
                     cell_temp(1,24)=0;
-                    cell_array(i,16)=0;//    $16: pass time to next division
+                    division_elapsed[row]=0;//    $16: pass time to next division
                     cell_temp(1,16)=0;//    $16: pass time to next division
-                    cell_temp(1,25)=cell_array(i,25);//    $25: migration judgement lables:  0: non_migration  1: migration
-                    cell_temp(1,26)=cell_array(i,26);//    $26: migration lasted time
-                    cell_temp(1,27)=cell_array(i,27);//    $27: passed time of migration
+                    cell_temp(1,25)=migration_active[row];//    $25: migration judgement lables:  0: non_migration  1: migration
+                    cell_temp(1,26)=migration_duration[row];//    $26: migration lasted time
+                    cell_temp(1,27)=migration_passed[row];//    $27: passed time of migration
                     cell_temp(1,28)=migration_rate_K2;//    $28: migration rate
                 }
                 else
                 {
-                    cell_temp(1,9)=cell_array(i,9);
-                    cell_temp(1,10)=cell_array(i,10);
-                    cell_temp(1,11)=cell_array(i,11);
+                    cell_temp(1,9)=types[row];
+                    cell_temp(1,10)=growth_rates[row];
+                    cell_temp(1,11)=density_growth_rates[row];
                     
                     double mig=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
                     if (mig<=migration_rate_r_mean_quia)
                     {
-                        cell_array(i,12)=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
+                        migration_rate_bases[row]=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
                     }
                     else
                     {
-                        cell_array(i,12)=mig;
+                        migration_rate_bases[row]=mig;
                     }
                     
                     double mig1=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
@@ -250,32 +265,32 @@ inline void cell_type_transform(CellRowBuffer &cell_temp, double beta_distributi
                         cell_temp(1,12)=mig1;
                     }
                     
-//                    cell_temp(1,13)=cell_array(i,13);
+//                    cell_temp(1,13)=random_labels[row];
                     cell_temp(1,15)=r_label+1;
-                    cell_temp(1,18)=cell_array(i,18);
-                    cell_temp(1,19)=cell_array(i,19);
-                    cell_temp(1,21)=cell_array(i,21);
-                    cell_temp(1,22)=cell_array(i,22);
-                    cell_temp(1,25)=cell_array(i,25);
-                    cell_temp(1,26)=cell_array(i,26);
-                    cell_temp(1,27)=cell_array(i,27);
+                    cell_temp(1,18)=death_times[row];
+                    cell_temp(1,19)=death_elapsed[row];
+                    cell_temp(1,21)=migration_intervals[row];
+                    cell_temp(1,22)=viability[row];
+                    cell_temp(1,25)=migration_active[row];
+                    cell_temp(1,26)=migration_duration[row];
+                    cell_temp(1,27)=migration_passed[row];
                     cell_temp(1,28)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
                 }
             }
             else
             {
-                cell_temp(1,9)=cell_array(i,9);
-                cell_temp(1,10)=cell_array(i,10);
-                cell_temp(1,11)=cell_array(i,11);
+                cell_temp(1,9)=types[row];
+                cell_temp(1,10)=growth_rates[row];
+                cell_temp(1,11)=density_growth_rates[row];
                 
                 double mig=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
                 if (mig<=migration_rate_r_mean_quia)
                 {
-                    cell_array(i,12)=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
+                    migration_rate_bases[row]=migration_rate_r_mean_quia*beta_distribution_expected_for_normal_migration;
                 }
                 else
                 {
-                    cell_array(i,12)=mig;
+                    migration_rate_bases[row]=mig;
                 }
                 
                 double mig1=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
@@ -288,43 +303,43 @@ inline void cell_type_transform(CellRowBuffer &cell_temp, double beta_distributi
                     cell_temp(1,12)=mig1;
                 }
                 
-//                cell_temp(1,13)=cell_array(i,13);
+//                cell_temp(1,13)=random_labels[row];
                 cell_temp(1,15)=r_label+1;
-                cell_temp(1,18)=cell_array(i,18);
-                cell_temp(1,19)=cell_array(i,19);
-                cell_temp(1,21)=cell_array(i,21);
-                cell_temp(1,22)=cell_array(i,22);
-                cell_temp(1,25)=cell_array(i,25);
-                cell_temp(1,26)=cell_array(i,26);
-                cell_temp(1,27)=cell_array(i,27);
+                cell_temp(1,18)=death_times[row];
+                cell_temp(1,19)=death_elapsed[row];
+                cell_temp(1,21)=migration_intervals[row];
+                cell_temp(1,22)=viability[row];
+                cell_temp(1,25)=migration_active[row];
+                cell_temp(1,26)=migration_duration[row];
+                cell_temp(1,27)=migration_passed[row];
                 cell_temp(1,28)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
             }
         }
-        else if (cell_array(i,9)==2)
+        else if (types[row]==2)
         {
             K_label=K_label+1;
          
-            cell_array(i,12)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
+            migration_rate_bases[row]=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
             
-            cell_temp(1,9)=cell_array(i,9);
-            cell_temp(1,10)=cell_array(i,10);
-            cell_temp(1,11)=cell_array(i,11);
+            cell_temp(1,9)=types[row];
+            cell_temp(1,10)=growth_rates[row];
+            cell_temp(1,11)=density_growth_rates[row];
             
             cell_temp(1,12)=stateless_beta(cell_rng_id, rng_time_step, rng_event++, beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_K_mean;
-//            cell_temp(1,13)=cell_array(i,13);
+//            cell_temp(1,13)=random_labels[row];
             cell_temp(1,15)=K_label;
             cell_temp(1,18)=0;
-            cell_temp(1,19)=cell_array(i,19);
-            cell_temp(1,21)=cell_array(i,21);
-            cell_temp(1,22)=cell_array(i,22);
+            cell_temp(1,19)=death_elapsed[row];
+            cell_temp(1,21)=migration_intervals[row];
+            cell_temp(1,22)=viability[row];
             cell_temp(1,23)=0;
             cell_temp(1,24)=0;
-            cell_array(i,16)=0;
+            division_elapsed[row]=0;
             cell_temp(1,16)=0;
-            cell_temp(1,25)=cell_array(i,25);
-            cell_temp(1,26)=cell_array(i,26);
-            cell_temp(1,27)=cell_array(i,27);
-            cell_temp(1,28)=cell_array(i,12);
+            cell_temp(1,25)=migration_active[row];
+            cell_temp(1,26)=migration_duration[row];
+            cell_temp(1,27)=migration_passed[row];
+            cell_temp(1,28)=migration_rate_bases[row];
         }
     }
 }
