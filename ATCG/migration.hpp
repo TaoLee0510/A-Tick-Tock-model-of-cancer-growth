@@ -345,55 +345,84 @@ inline double small_migration_density(int x1, int y1, const VisualRange &Visual_
 template <typename CellArray>
 inline void apply_big_migration_move(int i, CellArray &cell_array, VisualRange &Visual_range, int x1, int y1, int order)
 {
+    int row = i - 1;
+    auto &x1_values = cell_array.x1();
+    auto &x2_values = cell_array.x2();
+    auto &x3_values = cell_array.x3();
+    auto &x4_values = cell_array.x4();
+    auto &y1_values = cell_array.y1();
+    auto &y2_values = cell_array.y2();
+    auto &y3_values = cell_array.y3();
+    auto &y4_values = cell_array.y4();
+    auto &ids = cell_array.id();
+    auto &migration_directions = cell_array.migration_direction();
+    auto &migration_elapsed = cell_array.migration_elapsed();
     long cell_label_1=Visual_range.cell_label(x1,y1);
     long cellstage=Visual_range.stage(x1,y1);
     Visual_range.clear_square(x1,y1);
     int dx = migration_direction_dx(order);
     int dy = migration_direction_dy(order);
-    for (int cor_cell=1; cor_cell<=4; cor_cell++)
-    {
-        int cor_cell_y=cor_cell+4;
-        cell_array(i,cor_cell)=cell_array(i,cor_cell)+dx;
-        cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+dy;
-    }
-    Visual_range.write_square((int)cell_array(i,1), (int)cell_array(i,5), (long)cell_array(i,15), cellstage, cell_label_1);
-    cell_array(i,23)=order;
-    cell_array(i,20)=0;
+    x1_values[row] += dx;
+    x2_values[row] += dx;
+    x3_values[row] += dx;
+    x4_values[row] += dx;
+    y1_values[row] += dy;
+    y2_values[row] += dy;
+    y3_values[row] += dy;
+    y4_values[row] += dy;
+    Visual_range.write_square((int)x1_values[row], (int)y1_values[row], (long)ids[row], cellstage, cell_label_1);
+    migration_directions[row]=order;
+    migration_elapsed[row]=0;
 }
 
 template <typename CellArray>
 inline void apply_small_migration_move(int i, CellArray &cell_array, VisualRange &Visual_range, int x1, int y1, int order)
 {
+    int row = i - 1;
+    auto &x1_values = cell_array.x1();
+    auto &y1_values = cell_array.y1();
+    auto &ids = cell_array.id();
+    auto &migration_directions = cell_array.migration_direction();
+    auto &migration_elapsed = cell_array.migration_elapsed();
     long cell_label_1=Visual_range.cell_label(x1,y1);
     long cellstage=Visual_range.stage(x1,y1);
     Visual_range.clear_site(x1,y1);
     int dx = migration_direction_dx(order);
     int dy = migration_direction_dy(order);
-    cell_array(i,1)=cell_array(i,1)+dx;
-    cell_array(i,5)=cell_array(i,5)+dy;
-    Visual_range.write_site((int)cell_array(i,1), (int)cell_array(i,5), (long)cell_array(i,15), cellstage, cell_label_1);
-    cell_array(i,23)=order;
-    cell_array(i,20)=0;
+    x1_values[row] += dx;
+    y1_values[row] += dy;
+    Visual_range.write_site((int)x1_values[row], (int)y1_values[row], (long)ids[row], cellstage, cell_label_1);
+    migration_directions[row]=order;
+    migration_elapsed[row]=0;
 }
 
 template <typename CellArray>
 inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &Visual_range, double &migration_judgement, long rng_time_step, long rng_event_base)
 {
     (void)deltah;
-    int x1=cell_array(i,cell_col::kX1);
-    int y1=cell_array(i,cell_col::kY1);
-    long cell_rng_id = (long)cell_array(i,cell_col::kId);
+    int row = i - 1;
+    auto &x1_values = cell_array.x1();
+    auto &y1_values = cell_array.y1();
+    auto &types = cell_array.type();
+    auto &stages = cell_array.stage();
+    auto &ids = cell_array.id();
+    auto &migration_elapsed = cell_array.migration_elapsed();
+    auto &migration_directions = cell_array.migration_direction();
+    auto &migration_follow_flags = cell_array.migration_follow_flag();
+    int x1=(int)x1_values[row];
+    int y1=(int)y1_values[row];
+    long cell_rng_id = (long)ids[row];
     if (cell_rng_id == 0)
     {
         cell_rng_id = i;
     }
-    long rng_event = rng_event_base + ((long)cell_array(i,cell_col::kType) * 10000) + ((long)cell_array(i,cell_col::kStage) * 1000);
-    int cell_type=(int)cell_array(i,cell_col::kType);
+    long rng_event = rng_event_base + ((long)types[row] * 10000) + ((long)stages[row] * 1000);
+    int cell_type=(int)types[row];
     switch (cell_type)
     {
         case 1://r cells
         {
-            int cell_shape=cell_array(i,cell_col::kStage);
+            int cell_shape=stages[row];
             switch (cell_shape)
             {
                 case 0: //big
@@ -424,7 +453,7 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
                         int order=0;
                         double mean_density=0.6;
                         ////////////////////////////////////////////////initial migration direction dudgement////////////////////////////////////////////
-                        int migration_direction=cell_array(i,cell_col::kMigrationDirection);
+                        int migration_direction=migration_directions[row];
                         switch (migration_direction)
                         {
                             case 0:
@@ -482,7 +511,7 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
                                     new_direction_for_migration = NULL;
                                     delete[] new_loci_for_migration;
                                     new_loci_for_migration = NULL;
-                                    cell_array(i,24)=1;
+                                    migration_follow_flags[row]=1;
                                 }
                                 break;
                             }
@@ -573,8 +602,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=7;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -665,8 +694,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=6;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -757,8 +786,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=8;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -850,8 +879,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=5;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -942,8 +971,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=2;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -1035,8 +1064,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=3;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -1127,8 +1156,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=4;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -1219,8 +1248,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=5;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -1232,12 +1261,12 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
                         }
                         else
                         {
-                            cell_array(i,23)=0;
-                            cell_array(i,20)=0;
+                            migration_directions[row]=0;
+                            migration_elapsed[row]=0;
                         }
                         delete[] direction1;
                         direction1 = NULL;
-                        //                        cell_array(i,20)=0;
+                        //                        migration_elapsed[row]=0;
                     }
                     break;
                 }
@@ -1269,7 +1298,7 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
                         int order=0;
                         double mean_density=0.6;
                         ////////////////////////////////////////////////////initial migration direction dudgement/////////////////////////////////////////////////////////////
-                        int migration_direction=(int)cell_array(i,23);
+                        int migration_direction=(int)migration_directions[row];
                         switch (migration_direction)
                         {
                             case 0:
@@ -1327,7 +1356,7 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
                                     new_direction_for_migration = NULL;
                                     delete[] new_loci_for_migration;
                                     new_loci_for_migration = NULL;
-                                    cell_array(i,24)=1;
+                                    migration_follow_flags[row]=1;
                                 }
                                 break;
                             }
@@ -1418,8 +1447,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=1;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -1510,8 +1539,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=6;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -1602,8 +1631,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=8;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -1695,8 +1724,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=1;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -1787,8 +1816,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=2;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -1880,8 +1909,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=3;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -1972,8 +2001,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=4;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -2064,8 +2093,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
 //                                    {
 //                                        order=5;
 //                                    }
-//                                    //                                    cell_array(i,20)=0;
-//                                    //                                    cell_array(i,23)=0;
+//                                    //                                    migration_elapsed[row]=0;
+//                                    //                                    migration_directions[row]=0;
 //                                }
                                 break;
                             }
@@ -2077,12 +2106,12 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
                         }
                         else
                         {
-                            cell_array(i,23)=0;
-                            cell_array(i,20)=0;
+                            migration_directions[row]=0;
+                            migration_elapsed[row]=0;
                         }
                         delete[] direction1;
                         direction1 = NULL;
-                        //                        cell_array(i,20)=0;
+                        //                        migration_elapsed[row]=0;
                     }
                     break;
                 }
@@ -2091,7 +2120,7 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
         }
         case 2://K cells
         {
-            int cell_shape=(int)cell_array(i,14);
+            int cell_shape=(int)stages[row];
             switch (cell_shape)
             {
                 case 0:
@@ -2138,13 +2167,13 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
                         }
                         else
                         {
-                            cell_array(i,23)=0;
-                            cell_array(i,20)=0;
+                            migration_directions[row]=0;
+                            migration_elapsed[row]=0;
                         }
                         delete[] direction1;
                         direction1 = NULL;
-                        //                        cell_array(i,20)=0;
-                        cell_array(i,24)=1;
+                        //                        migration_elapsed[row]=0;
+                        migration_follow_flags[row]=1;
                     }
                     break;
                 }
@@ -2190,13 +2219,13 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
                         }
                         else
                         {
-                            cell_array(i,23)=0;
-                            cell_array(i,20)=0;
+                            migration_directions[row]=0;
+                            migration_elapsed[row]=0;
                         }
                         delete[] direction1;
                         direction1 = NULL;
-                        //                        cell_array(i,20)=0;
-                        cell_array(i,24)=1;
+                        //                        migration_elapsed[row]=0;
+                        migration_follow_flags[row]=1;
                     }
                     break;
                 }
