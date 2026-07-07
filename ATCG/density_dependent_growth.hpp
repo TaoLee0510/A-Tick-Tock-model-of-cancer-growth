@@ -118,8 +118,6 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     Range all = Range::all();
     Array<long,3> Visual_range(Vx,Vy,4,FortranArray<3>());
     Visual_range(all,all,all)=0;
-    Array<double,2> cell_array(1,28,FortranArray<2>());
-    cell_array=0;
     //    $9: cell_array type
     //    $10: inherent growth rate
     //    $11: density growth rate

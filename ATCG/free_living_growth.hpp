@@ -170,8 +170,6 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     Range all = Range::all();
     Array<long,3> Visual_range(Vx,Vy,4,FortranArray<3>());
     Visual_range(all,all,all)=0;
-    Array<double,2> cell_array(1,Col,FortranArray<2>());
-    cell_array=0;
     Array<double,2> cell_array1(1,Col,FortranArray<2>());
     cell_array1=0;
     Array<double,2> cell_array_temp(1,Col,FortranArray<2>());
