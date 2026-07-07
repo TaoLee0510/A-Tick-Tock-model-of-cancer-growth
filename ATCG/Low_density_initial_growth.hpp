@@ -57,6 +57,7 @@
 #include "density_calculation.hpp"
 #include "deltah_recalculation.hpp"
 #include "sortRow.hpp"
+#include "int_grid.hpp"
 #include <omp.h>
 
 
@@ -155,7 +156,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     CellRowBuffer cell_temp(1, Col);
     Array<long, 3> sub_visual(3,3,4,FortranArray<3>());
     sub_visual=0;
-    Array<int,2> A(Visual_range_x/2,Visual_range_y/2,FortranArray<2>());
+    IntGrid A(Visual_range_x/2, Visual_range_y/2);
     A=0;
     int NNy=Visual_range_x*Visual_range_y;
     ColorSpace colorspace(NNy, 4);

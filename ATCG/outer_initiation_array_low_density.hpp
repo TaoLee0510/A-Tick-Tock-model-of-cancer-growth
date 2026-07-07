@@ -32,9 +32,10 @@
 #include <blitz/array.h>
 #include "stateless_rng.hpp"
 #include "cell_store.hpp"
+#include "int_grid.hpp"
 using namespace blitz;
 
-inline CellStore outer_initiation_low_density_cell_store(int N0, int Visual_range_x, int Visual_range_y, const Array<int,2> &A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K)
+inline CellStore outer_initiation_low_density_cell_store(int N0, int Visual_range_x, int Visual_range_y, const IntGrid &A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K)
 {
     const long rng_context = 10002;
     double initial_r_growth_rate[N0r];

@@ -32,10 +32,11 @@
 #include <blitz/array.h>
 #include "stateless_rng.hpp"
 #include "cell_store.hpp"
+#include "int_grid.hpp"
 using namespace blitz;
 
 template <typename CellArray>
-inline void fill_outer_initiation_cells(CellArray &cell_array_out_1, int N0, int Visual_range_x, int Visual_range_y, const Array<int,2> &A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K,int Col)
+inline void fill_outer_initiation_cells(CellArray &cell_array_out_1, int N0, int Visual_range_x, int Visual_range_y, const IntGrid &A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K,int Col)
 {
     const long rng_context = 10001;
     double initial_r_growth_rate[N0r];
@@ -152,7 +153,7 @@ inline void fill_outer_initiation_cells(CellArray &cell_array_out_1, int N0, int
     }
 }
 
-inline CellStore outer_initiation_cell_store(int N0, int Visual_range_x, int Visual_range_y, const Array<int,2> &A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K,int Col)
+inline CellStore outer_initiation_cell_store(int N0, int Visual_range_x, int Visual_range_y, const IntGrid &A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K,int Col)
 {
     CellStore cells(Col);
     cells.resize(N0);

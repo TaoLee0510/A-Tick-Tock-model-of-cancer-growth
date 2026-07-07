@@ -102,6 +102,7 @@
 #include "SaveCellTraceArray.hpp"
 #include "SaveAllPNG.hpp"
 #include "cell_trace.hpp"
+#include "int_grid.hpp"
 
 
 
@@ -193,7 +194,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     CellRowBuffer cell_temp(2, Col);
     Array<long, 3> sub_visual(3,3,4,FortranArray<3>());
     sub_visual=0;
-    Array<int,2> A(Visual_range_x/2,Visual_range_y/2,FortranArray<2>());
+    IntGrid A(Visual_range_x/2, Visual_range_y/2);
     A=0;
     
     
