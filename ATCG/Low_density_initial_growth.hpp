@@ -417,61 +417,78 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
         cells.sort_by_column(cell_col::kDivisionElapsed);///sort time division
         save_data(Visual_range_x, Visual_range_y, N0, N00, N01, MMR, H, T, alpha, beta, cells,migration_judgement, deltah, colorspace,DDM, allpng);
         int C1=cells.rows();
+        auto &x1 = cells.x1();
+        auto &y1 = cells.y1();
+        auto &growth_rate = cells.growth_rate();
+        auto &density_growth_rate = cells.density_growth_rate();
+        auto &migration_rate_base = cells.migration_rate_base();
+        auto &id = cells.id();
+        auto &division_elapsed = cells.division_elapsed();
+        auto &division_time = cells.division_time();
+        auto &death_time = cells.death_time();
+        auto &death_elapsed = cells.death_elapsed();
+        auto &migration_elapsed = cells.migration_elapsed();
+        auto &migration_interval = cells.migration_interval();
+        auto &migration_active = cells.migration_active();
+        auto &migration_duration = cells.migration_duration();
+        auto &migration_passed = cells.migration_passed();
+        auto &migration_rate = cells.migration_rate();
         for (int i=C1; i>=1; i--)
         {
-            long cell_rng_id = (long)cells(i,15);
+            int row = i - 1;
+            long cell_rng_id = (long)id[row];
             if (cell_rng_id == 0)
             {
                 cell_rng_id = i;
             }
             long rng_event = 100;
-            if (cells(i,1)>=100 && cells(i,5) >=100 && cells(i,1)<=borderx && cells(i,5)<=bordery)
+            if (x1[row]>=100 && y1[row] >=100 && x1[row]<=borderx && y1[row]<=bordery)
             {
-                if (cells(i,11)>deathjudge)
+                if (density_growth_rate[row]>deathjudge)
                 {
-                    if (cells(i,16)<cells(i,17))
+                    if (division_elapsed[row]<division_time[row])
                     {
-                        double expected_division_time=24/cells(i,11);
+                        double expected_division_time=24/density_growth_rate[row];
                         double undividing_time=0.9*expected_division_time;
-                        if (cells(i,16)<=undividing_time)
+                        if (division_elapsed[row]<=undividing_time)
                         {
-                            if (cells(i,25)==0)
+                            if (migration_active[row]==0)
                             {
                                 if (DDM==1)
                                 {
                                     double Dr=density_calculation(i, Visual_range, cells);
                                     if (Dr>=bunderD)
                                     {
-                                        cells(i,25)=1;
-                                        double inherent_migration_speed=cells(i,12);
-                                        cells(i,28)=inherent_migration_speed;
-                                        cells(i,26)=stateless_beta(cell_rng_id, H, rng_event++,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*(cells(i,17)-cells(i,16));
+                                        migration_active[row]=1;
+                                        double inherent_migration_speed=migration_rate_base[row];
+                                        migration_rate[row]=inherent_migration_speed;
+                                        migration_duration[row]=stateless_beta(cell_rng_id, H, rng_event++,beta_distribution_alpha_mig_time,beta_distribution_beta_mig_time)*(division_time[row]-division_elapsed[row]);
                                     }
-                                    cells(i,21)=1/cells(i,28);
+                                    migration_interval[row]=1/migration_rate[row];
                                 }
                                 else
                                 {
-                                    cells(i,21)=1/cells(i,28);
+                                    migration_interval[row]=1/migration_rate[row];
                                 }
-                                if (cells(i,20)>=cells(i,21))
+                                if (migration_elapsed[row]>=migration_interval[row])
                                 {
                                     random_migration(i, deltah, cells, Visual_range, migration_judgement, H, 1000 + rng_event++);
                                 }
                                 else
                                 {
-                                    cells(i,20)=cells(i,20)+deltah;
+                                    migration_elapsed[row]=migration_elapsed[row]+deltah;
                                 }
                             }
                             else
                             {
-                                if (cells(i,27)>=cells(i,26))
+                                if (migration_passed[row]>=migration_duration[row])
                                 {
-                                    cells(i,25)=0;
-                                    cells(i,26)=0;
-                                    cells(i,27)=0;
-                                    cells(i,28)=stateless_beta(cell_rng_id, H, rng_event++,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
-                                    cells(i,21)=1/cells(i,28);
-                                    if (cells(i,20)>=cells(i,21))
+                                    migration_active[row]=0;
+                                    migration_duration[row]=0;
+                                    migration_passed[row]=0;
+                                    migration_rate[row]=stateless_beta(cell_rng_id, H, rng_event++,beta_distribution_alpha_for_normal_migration,beta_distribution_beta_for_normal_migration)*migration_rate_r_mean_quia;
+                                    migration_interval[row]=1/migration_rate[row];
+                                    if (migration_elapsed[row]>=migration_interval[row])
                                     {
                                         if (chemotaxis==0)
                                         {
@@ -484,12 +501,12 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                                     }
                                     else
                                     {
-                                        cells(i,20)=cells(i,20)+deltah;
+                                        migration_elapsed[row]=migration_elapsed[row]+deltah;
                                     }
                                 }
                                 else
                                 {
-                                    if (cells(i,20)>=cells(i,21))
+                                    if (migration_elapsed[row]>=migration_interval[row])
                                     {
                                         if (chemotaxis==0)
                                         {
@@ -502,16 +519,16 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                                     }
                                     else
                                     {
-                                        cells(i,20)=cells(i,20)+deltah;
-                                        cells(i,27)=cells(i,27)+deltah;
-                                        cells(i,28)=cells(i,12);
+                                        migration_elapsed[row]=migration_elapsed[row]+deltah;
+                                        migration_passed[row]=migration_passed[row]+deltah;
+                                        migration_rate[row]=migration_rate_base[row];
                                     }
                                 }
                             }
                             
                             
                         }
-                        cells(i,16)=cells(i,16)+deltah;
+                        division_elapsed[row]=division_elapsed[row]+deltah;
                     }
                     else
                     {
@@ -520,8 +537,8 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                 }
                 else
                 {
-                    double D_time_1=1.5*(24/cells(i,10));
-                    double D_time_2=0.9*cells(i,18);
+                    double D_time_1=1.5*(24/growth_rate[row]);
+                    double D_time_2=0.9*death_time[row];
                     double D_time = 0;
                     if (D_time_1<=D_time_2)
                     {
@@ -531,9 +548,9 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                     {
                         D_time = D_time_2;
                     }
-                    if (cells(i,19)<=D_time)
+                    if (death_elapsed[row]<=D_time)
                     {
-                        if (cells(i,20)>=cells(i,21))
+                        if (migration_elapsed[row]>=migration_interval[row])
                         {
                             if (chemotaxis==0)
                             {
@@ -541,7 +558,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                             }
                             else
                             {
-                                if(cells(i,25)==0)
+                                if(migration_active[row]==0)
                                 {
                                     random_migration(i, deltah, cells, Visual_range, migration_judgement, H, 1000 + rng_event++);
                                 }
@@ -553,12 +570,12 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                         }
                         else
                         {
-                            cells(i,20)=cells(i,20)+deltah;
+                            migration_elapsed[row]=migration_elapsed[row]+deltah;
                         }
                     }
                     else
                     {
-                        cells(i,20)=cells(i,20)+deltah;
+                        migration_elapsed[row]=migration_elapsed[row]+deltah;
                     }
                 }
             }
