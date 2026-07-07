@@ -231,30 +231,15 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     {
         if(cells(i,2)==0 && cells(i,6)==0)
         {
-            Visual_range(int(cells(i,1)),int(cells(i,5)),1)=1;
-            Visual_range(int(cells(i,1)),int(cells(i,5)),2)=cells(i,15);
-            Visual_range(int(cells(i,1)),int(cells(i,5)),3)=cells(i,14);
-            Visual_range(int(cells(i,1)),int(cells(i,5)),4)=cell_label;
+            Visual_range.write_site(int(cells(i,1)), int(cells(i,5)), cells(i,15), cells(i,14), cell_label);
             cell_label=cell_label+1;
         }
         else
         {
-            Visual_range(int(cells(i,1)),int(cells(i,5)),1)=1;
-            Visual_range(int(cells(i,2)),int(cells(i,6)),1)=1;
-            Visual_range(int(cells(i,3)),int(cells(i,7)),1)=1;
-            Visual_range(int(cells(i,4)),int(cells(i,8)),1)=1;
-            Visual_range(int(cells(i,1)),int(cells(i,5)),2)=cells(i,15);
-            Visual_range(int(cells(i,2)),int(cells(i,6)),2)=cells(i,15);
-            Visual_range(int(cells(i,3)),int(cells(i,7)),2)=cells(i,15);
-            Visual_range(int(cells(i,4)),int(cells(i,8)),2)=cells(i,15);
-            Visual_range(int(cells(i,1)),int(cells(i,5)),3)=cells(i,14);
-            Visual_range(int(cells(i,2)),int(cells(i,6)),3)=cells(i,14);
-            Visual_range(int(cells(i,3)),int(cells(i,7)),3)=cells(i,14);
-            Visual_range(int(cells(i,4)),int(cells(i,8)),3)=cells(i,14);
-            Visual_range(int(cells(i,1)),int(cells(i,5)),4)=cell_label;
-            Visual_range(int(cells(i,2)),int(cells(i,6)),4)=cell_label;
-            Visual_range(int(cells(i,3)),int(cells(i,7)),4)=cell_label;
-            Visual_range(int(cells(i,4)),int(cells(i,8)),4)=cell_label;
+            Visual_range.write_site(int(cells(i,1)), int(cells(i,5)), cells(i,15), cells(i,14), cell_label);
+            Visual_range.write_site(int(cells(i,2)), int(cells(i,6)), cells(i,15), cells(i,14), cell_label);
+            Visual_range.write_site(int(cells(i,3)), int(cells(i,7)), cells(i,15), cells(i,14), cell_label);
+            Visual_range.write_site(int(cells(i,4)), int(cells(i,8)), cells(i,15), cells(i,14), cell_label);
             cell_label=cell_label+1;
         }
 

@@ -262,10 +262,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
         int y1 = inner_cells(x,5);
         int cell_array_index=inner_cells(x,15);
         int cell_array_stage=inner_cells(x,14);
-        Visual_range(x1,y1,1)=1;
-        Visual_range(x1,y1,2)=cell_array_index;
-        Visual_range(x1,y1,3)=cell_array_stage;
-        Visual_range(x1,y1,4)=cell_label;
+        Visual_range.write_site(x1, y1, cell_array_index, cell_array_stage, cell_label);
         cell_label=cell_label+1;
     }
     //////////////////////////////////////////////////////////////////////////cell_array combine////////////////////////////////////////////////////////////
