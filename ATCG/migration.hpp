@@ -53,6 +53,7 @@
 #include <gsl/gsl_matrix.h>
 #include <blitz/blitz.h>
 #include <blitz/array.h>
+#include "cell_columns.hpp"
 #include "deltah_calculation.hpp"
 #include "cell_motion.hpp"
 #include "stateless_rng.hpp"
@@ -60,23 +61,24 @@
 
 using std::chrono::high_resolution_clock;
 using namespace blitz;
-void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3> &Visual_range, Array<int,2> cor_big, Array<int, 2> area_square, Array<int, 2> sub_area_square, Array<int, 2> cor_small, Array<int, 2> area_square_s, Array<int, 2>  sub_area_square_s,double &migration_judgement, long rng_time_step, long rng_event_base)
+inline void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3> &Visual_range, Array<int,2> &cor_big, Array<int, 2> &area_square, Array<int, 2> &sub_area_square, Array<int, 2> &cor_small, Array<int, 2> &area_square_s, Array<int, 2>  &sub_area_square_s,double &migration_judgement, long rng_time_step, long rng_event_base)
 {
+    (void)deltah;
     Range all = Range::all();
-    int x1=cell_array(i,1);
-    int y1=cell_array(i,5);
-    long cell_rng_id = (long)cell_array(i,15);
+    int x1=cell_array(i,cell_col::kX1);
+    int y1=cell_array(i,cell_col::kY1);
+    long cell_rng_id = (long)cell_array(i,cell_col::kId);
     if (cell_rng_id == 0)
     {
         cell_rng_id = i;
     }
-    long rng_event = rng_event_base + ((long)cell_array(i,9) * 10000) + ((long)cell_array(i,14) * 1000);
-    int cell_type=(int)cell_array(i,9);
+    long rng_event = rng_event_base + ((long)cell_array(i,cell_col::kType) * 10000) + ((long)cell_array(i,cell_col::kStage) * 1000);
+    int cell_type=(int)cell_array(i,cell_col::kType);
     switch (cell_type)
     {
         case 1://r cells
         {
-            int cell_shape=cell_array(i,14);
+            int cell_shape=cell_array(i,cell_col::kStage);
             switch (cell_shape)
             {
                 case 0: //big
@@ -144,7 +146,7 @@ void migration(int i, double deltah, Array<double, 2> &cell_array, Array<long, 3
                         int order=0;
                         double mean_density=0.6;
                         ////////////////////////////////////////////////initial migration direction dudgement////////////////////////////////////////////
-                        int migration_direction=cell_array(i,23);
+                        int migration_direction=cell_array(i,cell_col::kMigrationDirection);
                         switch (migration_direction)
                         {
                             case 0:
