@@ -70,6 +70,7 @@
 #include "SaveAllPNG.hpp"
 #include "read_files.hpp"
 #include "cell_trace.hpp"
+#include "recovery_parameters.hpp"
 #include "CountLines.hpp"
 
 #include <chrono>
@@ -234,17 +235,17 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     uniup_K=gsl_cdf_gaussian_P(max_growth_rate_K-muhatK, sigmahatK );
     ///////////////////////////////////////////////////////// read files //////////////////////////////////////////////////////////////////////////////////////
     
-    Array<double,2> Parameters_array(39,1,FortranArray<2>());
-    Parameters_array=0;
+    RecoveryParameters parameters(39);
+    parameters=0;
     
-    read_file(cells,cell_trace, Parameters_array, Cell_arry_file,Cell_trace_arry_file, Parameters);
+    read_file(cells,cell_trace, parameters, Cell_arry_file,Cell_trace_arry_file, Parameters);
     
     
 
-    Vx=Parameters_array(3,1)+200;
-    Vy=Parameters_array(4,1)+200;
+    Vx=parameters(3)+200;
+    Vy=parameters(4)+200;
     
-    division_interval=Parameters_array(39,1);
+    division_interval=parameters(39);
     
     
     int Cell_number = cells.rows();

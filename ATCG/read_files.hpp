@@ -18,10 +18,11 @@
 #include "CountLines.hpp"
 #include "cell_store.hpp"
 #include "cell_trace.hpp"
+#include "recovery_parameters.hpp"
 
 using namespace std;
 using namespace blitz;
-inline void read_file(CellStore &cells,CellTraceStore &cell_trace, Array<double,2> &Parameters_array, string Cell_arry_file,string Cell_trace_arry_file,string Parameters)
+inline void read_file(CellStore &cells,CellTraceStore &cell_trace, RecoveryParameters &parameters, string Cell_arry_file,string Cell_trace_arry_file,string Parameters)
 {
     ifstream file;
     int LINES;
@@ -99,7 +100,7 @@ inline void read_file(CellStore &cells,CellTraceStore &cell_trace, Array<double,
         }
     for (int i=0;i<39;++i)
     {
-        Parameters_array(i+1,1)=array2D[i][0];
+        parameters(i+1)=array2D[i][0];
     }
 
 }
