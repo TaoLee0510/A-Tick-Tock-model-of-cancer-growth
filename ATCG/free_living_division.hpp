@@ -1681,7 +1681,7 @@ inline void free_living_division(int i, double max_growth_rate_r, double max_gro
         ++ndcells;
         cell_trace_temp.resize(2,150);
         cell_trace_temp=0;
-        cell_trace_temp(1,1)=(long)cell_array(1,15);
+        cell_trace_temp(1,1)=(long)cell_array.id()[0];
         cell_trace_temp(1,2)=(long)cell_trace_labels[row];
         cell_trace_temp(1,3)=(long)parent_trace_labels[row];
         cell_trace_temp(1,4)=(long)division_counts[row];
