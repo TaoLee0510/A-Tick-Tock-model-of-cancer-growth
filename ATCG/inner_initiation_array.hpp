@@ -50,7 +50,7 @@ inline void fill_inner_initiation_cells(int N0,int N01,int R0,int Visual_range_x
         {
             if(pow((x-Visual_range_x/2),2)+pow((y-Visual_range_y/2),2)<=pow(R0-5,2))
             {
-                if (Visual_range(x,y,1)==0)
+                if (Visual_range.occupied(x,y)==0)
                 {
                     cor_x[number_cor]=x;
                     cor_y[number_cor]=y;

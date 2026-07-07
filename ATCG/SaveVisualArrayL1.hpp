@@ -30,11 +30,11 @@ void SaveVisualArrayL1(int T, double alpha, double beta, const VisualRange &Visu
         {
             if(co<Vy)
             {
-                fprintf(fid8,"%ld\t",Visual_range(i,co,1));
+                fprintf(fid8,"%ld\t",Visual_range.occupied(i,co));
             }
             else
             {
-                fprintf(fid8,"%ld\n",Visual_range(i,co,1));
+                fprintf(fid8,"%ld\n",Visual_range.occupied(i,co));
             }
         }
     }

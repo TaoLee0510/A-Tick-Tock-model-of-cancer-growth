@@ -46,7 +46,7 @@ inline int select_random_migration_direction(int x1, int y1, int cell_stage, con
 {
     int direction[8]={0};
     auto is_empty = [&](int dx, int dy) {
-        return Visual_range(x1 + dx, y1 + dy, 1) == 0;
+        return Visual_range.occupied(x1 + dx, y1 + dy) == 0;
     };
     if (cell_stage==0)
     {

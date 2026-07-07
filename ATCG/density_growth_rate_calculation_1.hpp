@@ -64,8 +64,8 @@ inline DensityGrowthCounts density_growth_neighborhood_counts(int x1, int y1, in
         {
             int visual_x = x1 - 3 + cxx;
             int visual_y = y1 - 3 + cyy;
-            long density_label = Visual_range(visual_x, visual_y, 2);
-            long cell_label = Visual_range(visual_x, visual_y, 4);
+            long density_label = Visual_range.density_label(visual_x, visual_y);
+            long cell_label = Visual_range.cell_label(visual_x, visual_y);
             if(is_r_density_label(density_label, N00, N01))
             {
                 subcell_r[r_cells_number]=cell_label;
@@ -77,7 +77,7 @@ inline DensityGrowthCounts density_growth_neighborhood_counts(int x1, int y1, in
                 K_cells_number=K_cells_number+1;
             }
 
-            if (Visual_range(visual_x, visual_y, 3)==2)
+            if (Visual_range.stage(visual_x, visual_y)==2)
             {
                 stage_sum=stage_sum+1;
             }

@@ -50,7 +50,7 @@ inline int choose_large_stage_square(int x1, int y1, const VisualRange &Visual_r
     {
         for (int yy = y1 - 1; yy <= y1 + 1; ++yy)
         {
-            loci_cor[loci_direction] = Visual_range(xx, yy, 1);
+            loci_cor[loci_direction] = Visual_range.occupied(xx, yy);
             ++loci_direction;
         }
     }
@@ -121,13 +121,10 @@ inline void apply_large_stage_square(int row, CellStore &cells, VisualRange &Vis
     cells.y4()[row - 1] = ys[3];
 
     const long cell_id = (long)cells.id()[row - 1];
-    const long cell_label = Visual_range(x1, y1, 4);
+    const long cell_label = Visual_range.cell_label(x1, y1);
     for (int idx = 0; idx < 4; ++idx)
     {
-        Visual_range(xs[idx], ys[idx], 1) = 1;
-        Visual_range(xs[idx], ys[idx], 2) = cell_id;
-        Visual_range(xs[idx], ys[idx], 3) = 0;
-        Visual_range(xs[idx], ys[idx], 4) = cell_label;
+        Visual_range.write_site(xs[idx], ys[idx], cell_id, 0, cell_label);
     }
 }
 
@@ -135,14 +132,14 @@ inline int choose_small_stage_direction(int x1, int y1, const VisualRange &Visua
 {
     int candidates[8] = {0};
     int count = 0;
-    if (Visual_range(x1 - 1, y1 - 1, 1) == 0) { candidates[count++] = 1; }
-    if (Visual_range(x1 - 1, y1,     1) == 0) { candidates[count++] = 2; }
-    if (Visual_range(x1 - 1, y1 + 1, 1) == 0) { candidates[count++] = 3; }
-    if (Visual_range(x1,     y1 + 1, 1) == 0) { candidates[count++] = 4; }
-    if (Visual_range(x1 + 1, y1 + 1, 1) == 0) { candidates[count++] = 5; }
-    if (Visual_range(x1 + 1, y1,     1) == 0) { candidates[count++] = 6; }
-    if (Visual_range(x1 + 1, y1 - 1, 1) == 0) { candidates[count++] = 7; }
-    if (Visual_range(x1,     y1 - 1, 1) == 0) { candidates[count++] = 8; }
+    if (Visual_range.occupied(x1 - 1, y1 - 1) == 0) { candidates[count++] = 1; }
+    if (Visual_range.occupied(x1 - 1, y1) == 0) { candidates[count++] = 2; }
+    if (Visual_range.occupied(x1 - 1, y1 + 1) == 0) { candidates[count++] = 3; }
+    if (Visual_range.occupied(x1, y1 + 1) == 0) { candidates[count++] = 4; }
+    if (Visual_range.occupied(x1 + 1, y1 + 1) == 0) { candidates[count++] = 5; }
+    if (Visual_range.occupied(x1 + 1, y1) == 0) { candidates[count++] = 6; }
+    if (Visual_range.occupied(x1 + 1, y1 - 1) == 0) { candidates[count++] = 7; }
+    if (Visual_range.occupied(x1, y1 - 1) == 0) { candidates[count++] = 8; }
 
     if (count == 0)
     {
@@ -167,15 +164,12 @@ inline void apply_small_stage_direction(int row, CellStore &cells, VisualRange &
     direction_locus(direction, x1, y1, x2, y2);
 
     const int cell_label_1 = cell_label + 1;
-    Visual_range(x2, y2, 1) = 1;
-    Visual_range(x2, y2, 2) = (long)cells.id()[row - 1];
-    Visual_range(x2, y2, 3) = 1;
-    Visual_range(x2, y2, 4) = cell_label_1;
+    Visual_range.write_site(x2, y2, (long)cells.id()[row - 1], 1, cell_label_1);
 
     cells.x1()[row - 1] = x2;
     cells.y1()[row - 1] = y2;
     cells.stage()[row - 1] = 1;
-    Visual_range(x1, y1, 3) = 1;
+    Visual_range.stage(x1, y1) = 1;
 
     const int row_count = cells.rows();
     CellStore::Column &xs = cells.x1();

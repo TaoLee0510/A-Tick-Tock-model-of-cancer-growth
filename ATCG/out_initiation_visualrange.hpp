@@ -19,22 +19,10 @@ using namespace blitz;
 
 inline void set_outer_visual_range_row(VisualRange &Visual_range, int x1, int y1, int x2, int y2, int x3, int y3, int x4, int y4, int cell_array_index, int cell_array_stage, int cell_label)
 {
-    Visual_range(x1,y1,1)=1;
-    Visual_range(x1,y1,2)=cell_array_index;
-    Visual_range(x1,y1,3)=cell_array_stage;
-    Visual_range(x1,y1,4)=cell_label;
-    Visual_range(x2,y2,1)=1;
-    Visual_range(x2,y2,2)=cell_array_index;
-    Visual_range(x2,y2,3)=cell_array_stage;
-    Visual_range(x2,y2,4)=cell_label;
-    Visual_range(x3,y3,1)=1;
-    Visual_range(x3,y3,2)=cell_array_index;
-    Visual_range(x3,y3,3)=cell_array_stage;
-    Visual_range(x3,y3,4)=cell_label;
-    Visual_range(x4,y4,1)=1;
-    Visual_range(x4,y4,2)=cell_array_index;
-    Visual_range(x4,y4,3)=cell_array_stage;
-    Visual_range(x4,y4,4)=cell_label;
+    Visual_range.write_site(x1, y1, cell_array_index, cell_array_stage, cell_label);
+    Visual_range.write_site(x2, y2, cell_array_index, cell_array_stage, cell_label);
+    Visual_range.write_site(x3, y3, cell_array_index, cell_array_stage, cell_label);
+    Visual_range.write_site(x4, y4, cell_array_index, cell_array_stage, cell_label);
 }
 
 inline VisualRange outer_initiation_visualrange(const CellStore &cells,int N0,int Vx,int Vy,int &cell_label)

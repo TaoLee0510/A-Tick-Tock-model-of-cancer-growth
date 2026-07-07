@@ -28,11 +28,11 @@ void SaveVisualArrayL3(int T, double alpha, double beta, const VisualRange &Visu
         {
             if(co<Vy)
             {
-                fprintf(fid8,"%ld\t",Visual_range(i,co,3));
+                fprintf(fid8,"%ld\t",Visual_range.stage(i,co));
             }
             else
             {
-                fprintf(fid8,"%ld\n",Visual_range(i,co,3));
+                fprintf(fid8,"%ld\n",Visual_range.stage(i,co));
             }
         }
     }

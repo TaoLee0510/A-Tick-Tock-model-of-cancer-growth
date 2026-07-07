@@ -35,18 +35,17 @@ inline bool death_judgement_live_cell(const CellArray &cell_array, int row)
 template <typename CellArray>
 inline void clear_dead_cell_visual(int site, CellArray &cell_array, VisualRange &Visual_range, int C)
 {
-    Range all = Range::all();
     int stage = (int)cell_array(site,cell_col::kStage);
     if(stage==0)
     {
-        Visual_range((int)cell_array(site,cell_col::kX1),(int)cell_array(site,cell_col::kY1),all)=0;
-        Visual_range((int)cell_array(site,cell_col::kX2),(int)cell_array(site,cell_col::kY2),all)=0;
-        Visual_range((int)cell_array(site,cell_col::kX3),(int)cell_array(site,cell_col::kY3),all)=0;
-        Visual_range((int)cell_array(site,cell_col::kX4),(int)cell_array(site,cell_col::kY4),all)=0;
+        Visual_range.clear_site((int)cell_array(site,cell_col::kX1),(int)cell_array(site,cell_col::kY1));
+        Visual_range.clear_site((int)cell_array(site,cell_col::kX2),(int)cell_array(site,cell_col::kY2));
+        Visual_range.clear_site((int)cell_array(site,cell_col::kX3),(int)cell_array(site,cell_col::kY3));
+        Visual_range.clear_site((int)cell_array(site,cell_col::kX4),(int)cell_array(site,cell_col::kY4));
     }
     else if(stage==1)
     {
-        Visual_range((int)cell_array(site,cell_col::kX1),(int)cell_array(site,cell_col::kY1),all)=0;
+        Visual_range.clear_site((int)cell_array(site,cell_col::kX1),(int)cell_array(site,cell_col::kY1));
     }
     else if(stage==2)
     {
@@ -60,7 +59,7 @@ inline void clear_dead_cell_visual(int site, CellArray &cell_array, VisualRange 
             {
                 if(cell_array(us,cell_col::kX1)==usx && cell_array(us,cell_col::kY1)==usy)
                 {
-                    Visual_range((int)cell_array(us,cell_col::kX1),(int)cell_array(us,cell_col::kY1),3)=1;
+                    Visual_range.stage((int)cell_array(us,cell_col::kX1),(int)cell_array(us,cell_col::kY1))=1;
                     cell_array(us,cell_col::kStage)=1;
                 }
             }

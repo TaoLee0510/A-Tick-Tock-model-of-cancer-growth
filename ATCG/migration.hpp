@@ -65,7 +65,7 @@ using namespace blitz;
 
 inline bool migration_visual_site_empty(const VisualRange &Visual_range, int x, int y)
 {
-    return Visual_range(x, y, 1) == 0;
+    return Visual_range.occupied(x, y) == 0;
 }
 
 inline void fill_big_migration_directions(int x1, int y1, const VisualRange &Visual_range, int direction[8])
@@ -170,7 +170,7 @@ inline void add_unique_migration_label(int labels[100], int &count, int label)
 
 inline void add_migration_density_site(const VisualRange &Visual_range, int x1, int y1, int local_x, int local_y, int labels[100], int &count)
 {
-    add_unique_migration_label(labels, count, (int)Visual_range(x1 - 5 + local_x, y1 - 5 + local_y, 4));
+    add_unique_migration_label(labels, count, (int)Visual_range.cell_label(x1 - 5 + local_x, y1 - 5 + local_y));
 }
 
 inline double big_migration_density(int x1, int y1, const VisualRange &Visual_range, int direction_index)

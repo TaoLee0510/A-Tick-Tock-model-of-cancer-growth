@@ -22,7 +22,7 @@ int inner_count_low_density(int Visual_range_x, int Visual_range_y, const Visual
         {
             if (pow((x-Visual_range_x/2),2)+pow((y-Visual_range_y/2),2)<=pow(R1,2))
             {
-                if (Visual_range(x,y,1)==0)
+                if (Visual_range.occupied(x,y)==0)
                 {
                     N01=N01+1;
                 }

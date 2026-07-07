@@ -28,11 +28,11 @@ void SaveVisualArrayL2(int T, double alpha, double beta, const VisualRange &Visu
         {
             if(co<Vy)
             {
-                fprintf(fid8,"%ld\t",Visual_range(i,co,2));
+                fprintf(fid8,"%ld\t",Visual_range.density_label(i,co));
             }
             else
             {
-                fprintf(fid8,"%ld\n",Visual_range(i,co,2));
+                fprintf(fid8,"%ld\n",Visual_range.density_label(i,co));
             }
         }
     }

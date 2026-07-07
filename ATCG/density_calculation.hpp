@@ -54,7 +54,7 @@ inline double density_calculation_from_position(int x1, int y1, int cell_stage, 
     {
         for(int cy=0; cy<ar; cy++)
         {
-            cell_count[cc]=Visual_range(x1 - xar + cx, y1 - xar + cy, 4);
+            cell_count[cc]=Visual_range.cell_label(x1 - xar + cx, y1 - xar + cy);
             cc++;
         }
     }
@@ -72,7 +72,7 @@ inline double density_calculation_from_position(int x1, int y1, int cell_stage, 
     {
         for(int cy=0; cy<ar; cy++)
         {
-            if (Visual_range(x1 - xar + cx, y1 - xar + cy, 3)==2)
+            if (Visual_range.stage(x1 - xar + cx, y1 - xar + cy)==2)
             {
             cell_count_small=cell_count_small+1;
             }

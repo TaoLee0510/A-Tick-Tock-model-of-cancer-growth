@@ -53,6 +53,18 @@ public:
         return layer_value(x, y, layer);
     }
 
+    long &occupied(int x, int y) { return occupied_[index(x, y)]; }
+    long occupied(int x, int y) const { return occupied_[index(x, y)]; }
+
+    long &density_label(int x, int y) { return density_label_[index(x, y)]; }
+    long density_label(int x, int y) const { return density_label_[index(x, y)]; }
+
+    long &stage(int x, int y) { return stage_[index(x, y)]; }
+    long stage(int x, int y) const { return stage_[index(x, y)]; }
+
+    long &cell_label(int x, int y) { return cell_label_[index(x, y)]; }
+    long cell_label(int x, int y) const { return cell_label_[index(x, y)]; }
+
     void clear_site(int x, int y)
     {
         set_layers(x, y, 1, 4, 0);
