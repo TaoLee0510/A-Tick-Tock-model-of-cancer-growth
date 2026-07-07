@@ -37,6 +37,7 @@ using namespace blitz;
 
 Array<double,2> outer_initiation_array_low_density(int N0, int Visual_range_x, int Visual_range_y, const Array<int,2> &A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K)
 {
+    Range all = Range::all();
     const long rng_context = 10002;
     double initial_r_growth_rate[N0r];
     double initial_K_growth_rate[N0K];
@@ -146,7 +147,29 @@ Array<double,2> outer_initiation_array_low_density(int N0, int Visual_range_x, i
             a++;
         }
     }
-    return cell_array_out_1;
+
+    int populated_rows=0;
+    for (int x=1; x<=N0; x++)
+    {
+        if (cell_array_out_1(x,cell_col::kType)!=0 && cell_array_out_1(x,cell_col::kX1)>=1 && cell_array_out_1(x,cell_col::kY1)>=1)
+        {
+            populated_rows++;
+        }
+    }
+
+    Array<double,2> cell_array_out(populated_rows,28,FortranArray<2>());
+    cell_array_out=0;
+    int target_row=1;
+    for (int x=1; x<=N0; x++)
+    {
+        if (cell_array_out_1(x,cell_col::kType)!=0 && cell_array_out_1(x,cell_col::kX1)>=1 && cell_array_out_1(x,cell_col::kY1)>=1)
+        {
+            cell_array_out(target_row,all)=cell_array_out_1(x,all);
+            cell_array_out(target_row,cell_col::kId)=target_row;
+            target_row++;
+        }
+    }
+    return cell_array_out;
 }
 
 inline CellStore outer_initiation_low_density_cell_store(int N0, int Visual_range_x, int Visual_range_y, const Array<int,2> &A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K)

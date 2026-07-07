@@ -239,7 +239,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     outer_corr(Visual_range_x,Visual_range_y,R0,R1,A);
     outer_cell_count(Visual_range_x,Visual_range_y,N0,R0,R1);
     N0r=N0*mix_ratio_initial;
-    N0K=N0*(1-mix_ratio_initial);
+    N0K=N0-N0r;
     double migration_rate_r[N0r];
     double migration_rate_K[N0K];
     double unilow_r=gsl_cdf_gaussian_P(min_growth_rate_r-muhatr, sigmahatr );
@@ -275,7 +275,7 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     int NN=N0+N01;
     //////////////////////////*Parameters calculation*////////////////////
     int N0r1=N01*mix_ratio_initial;
-    int N0K1=N01*(1-mix_ratio_initial);
+    int N0K1=N01-N0r1;
     double migration_rate_r1[N0r1];
     double migration_rate_K1[N0K1];
     double unilow_r1=gsl_cdf_gaussian_P(min_growth_rate_r-muhatr, sigmahatr );

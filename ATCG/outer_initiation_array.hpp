@@ -116,7 +116,10 @@ Array<double,2> outer_initiation_array(int N0, int Visual_range_x, int Visual_ra
             cell_array_out_1(x,14)=0;
             cell_array_out_1(x,15)=x;
             cell_array_out_1(x,22)=1;
-            cell_array_out_1(x,29)=x;
+            if (Col>=cell_col::kCellTraceLabel)
+            {
+                cell_array_out_1(x,cell_col::kCellTraceLabel)=x;
+            }
         }
         else
         {
@@ -144,7 +147,10 @@ Array<double,2> outer_initiation_array(int N0, int Visual_range_x, int Visual_ra
             cell_array_out_1(x,14)=0;
             cell_array_out_1(x,15)=x;
             cell_array_out_1(x,22)=1;
-            cell_array_out_1(x,29)=x;
+            if (Col>=cell_col::kCellTraceLabel)
+            {
+                cell_array_out_1(x,cell_col::kCellTraceLabel)=x;
+            }
             a++;
         }
     }
