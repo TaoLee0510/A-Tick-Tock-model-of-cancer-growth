@@ -69,6 +69,7 @@
 #include "SaveCellTraceArray.hpp"
 #include "SaveAllPNG.hpp"
 #include "read_files.hpp"
+#include "cell_trace.hpp"
 #include "CountLines.hpp"
 
 #include <chrono>
@@ -164,10 +165,10 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     A=0;
     
     
-    Array<long,2> cell_trace(1,150,FortranArray<2>());
+    CellTraceStore cell_trace(1,150);
     cell_trace=0;
     
-    Array<long,2> cell_trace_temp(1,150,FortranArray<2>());
+    CellTraceStore cell_trace_temp(1,150);
     cell_trace_temp=0;
     
     int NNy=Visual_range_x*Visual_range_y;
@@ -600,9 +601,9 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
                 double programTimes15 = 0;
                 start06=omp_get_wtime();
 
-                Array<long,2> cell_trace_ndcells(1,150,FortranArray<2>());
+                CellTraceStore cell_trace_ndcells(1,150);
                 cell_trace_ndcells=0;
-                Array<double,2> cell_array_ndcells(1,Col,FortranArray<2>());
+                CellRowBuffer cell_array_ndcells(1,Col);
                 cell_array_ndcells=0;
                 int ndcells(0);
                 
@@ -615,10 +616,7 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
 //                //////////////// add offsprings to the cell trace array and cell array
                 if (ndcells!=0)
                 {
-                    int current_size_trace=cell_trace.rows();
-                    int current_size_trace_ndcells=cell_trace_ndcells.rows();
-                    cell_trace.resizeAndPreserve(current_size_trace+current_size_trace_ndcells,150);
-                    cell_trace(Range(current_size_trace+1,toEnd),all)=cell_trace_ndcells(all,all);
+                    cell_trace.append_from(cell_trace_ndcells);
                     
                     int current_size_ndcells=cell_array_ndcells.rows();
                     cells.reserve(C1+current_size_ndcells-1);

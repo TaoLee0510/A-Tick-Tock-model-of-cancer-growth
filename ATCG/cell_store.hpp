@@ -253,6 +253,23 @@ public:
         values_.assign((row_count_ + 1) * (column_count_ + 1), 0.0);
     }
 
+    void resizeAndPreserve(int row_count, int column_count)
+    {
+        std::vector<double> resized((row_count + 1) * (column_count + 1), 0.0);
+        int copied_rows = std::min(row_count_, row_count);
+        int copied_cols = std::min(column_count_, column_count);
+        for (int row = 1; row <= copied_rows; ++row)
+        {
+            for (int col = 1; col <= copied_cols; ++col)
+            {
+                resized[row * (column_count + 1) + col] = (*this)(row, col);
+            }
+        }
+        row_count_ = row_count;
+        column_count_ = column_count;
+        values_.swap(resized);
+    }
+
     int rows() const
     {
         return row_count_;
@@ -352,6 +369,16 @@ inline void cell_store_assign_row_from_array(CellStore &target, int target_row, 
     }
 }
 
+inline void cell_store_assign_row_from_array(CellRowBuffer &target, int target_row, const CellRowBuffer &source, int source_row, int column_count)
+{
+    int copied_cols = std::min(column_count, target.column_count());
+    copied_cols = std::min(copied_cols, source.column_count());
+    for (int col = 1; col <= copied_cols; ++col)
+    {
+        target(target_row, col) = source(source_row, col);
+    }
+}
+
 inline void cell_store_append_row_from_array(Array<double, 2> &target, const Array<double, 2> &source, int source_row, int column_count)
 {
     Range all = Range::all();
@@ -377,6 +404,13 @@ inline void cell_store_append_row_from_array(CellStore &target, const CellRowBuf
 {
     target.push_empty();
     cell_store_assign_row_from_array(target, target.rows(), source, source_row, column_count);
+}
+
+inline void cell_store_append_row_from_array(CellRowBuffer &target, const CellRowBuffer &source, int source_row, int column_count)
+{
+    int current_size = target.rows();
+    target.resizeAndPreserve(current_size + 1, column_count);
+    cell_store_assign_row_from_array(target, current_size + 1, source, source_row, column_count);
 }
 
 #endif /* cell_store_hpp */

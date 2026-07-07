@@ -41,6 +41,7 @@
 #include "deltah_calculation.hpp"
 #include "cell_type_transform.hpp"
 #include "cell_store.hpp"
+#include "cell_trace.hpp"
 #include "stateless_rng.hpp"
 #include <chrono>
 #include <omp.h>
@@ -50,7 +51,7 @@ using std::chrono::high_resolution_clock;
 using namespace std;
 using namespace blitz;
 template <typename CellArray>
-inline void free_living_division_single_thread(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, CellRowBuffer cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,Array<long,2> &cell_trace,Array<long,2> cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads, long rng_time_step)
+inline void free_living_division_single_thread(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, CellRowBuffer cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,Array<long, 3> sub_visual,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,CellTraceStore &cell_trace,CellTraceStore cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads, long rng_time_step)
 {
     Range all = Range::all();
     long cell_rng_id = (long)cell_array(i,15);
@@ -1662,9 +1663,6 @@ inline void free_living_division_single_thread(int i, double max_growth_rate_r, 
     {
         cell_trace_temp.resize(2,150);
         cell_trace_temp=0;
-//        cell_trace_temp(1,Range(2,4))=cell_array(i,Range(29,Col));
-//        cell_trace_temp(2,Range(2,4))=cell_temp(1,Range(29,Col));
-        
         cell_trace_temp(1,1)=(long)cell_array(1,15);
         cell_trace_temp(1,2)=(long)cell_array(i,29);
         cell_trace_temp(1,3)=(long)cell_array(i,30);
@@ -1678,19 +1676,6 @@ inline void free_living_division_single_thread(int i, double max_growth_rate_r, 
 
         int current_size_trace=cell_trace.rows();
         long division_parents=0;
-//        for (int rows=current_size_trace;rows>=1;rows--)
-//        {
-//            if(cell_trace_temp(1,3) == cell_trace(rows,2))
-//            {
-//                cell_trace_temp(1,Range(6,150))=cell_trace(rows,Range(6,150));
-//                cell_trace_temp(2,Range(6,150))=cell_trace(rows,Range(6,150));
-//                division_parents=cell_trace(rows,4);
-//                break;
-//            }
-//        }
-        
-        
-        
         int trace_row=0;
         //omp_set_num_threads(threads);
         //#pragma omp parallel for schedule(dynamic)
@@ -1704,8 +1689,8 @@ inline void free_living_division_single_thread(int i, double max_growth_rate_r, 
                 }
             }
         //}
-        cell_trace_temp(1,Range(6,150))=cell_trace(trace_row,Range(6,150));
-        cell_trace_temp(2,Range(6,150))=cell_trace(trace_row,Range(6,150));
+        cell_trace_temp.copy_columns_from(cell_trace, trace_row, 1, 6, 150);
+        cell_trace_temp.copy_columns_from(cell_trace, trace_row, 2, 6, 150);
         division_parents=cell_trace(trace_row,4);
         
 
@@ -1737,8 +1722,8 @@ inline void free_living_division_single_thread(int i, double max_growth_rate_r, 
         }
         
         cell_trace.resizeAndPreserve(current_size_trace+2,150);
-        cell_trace(current_size_trace+1,all)=cell_trace_temp(1,all);
-        cell_trace(current_size_trace+2,all)=cell_trace_temp(2,all);
+        cell_trace.copy_row_from(cell_trace_temp, 1, current_size_trace+1);
+        cell_trace.copy_row_from(cell_trace_temp, 2, current_size_trace+2);
         
         cell_temp(1,13)=stateless_uniform(cell_rng_id, rng_time_step, rng_event++);
         
