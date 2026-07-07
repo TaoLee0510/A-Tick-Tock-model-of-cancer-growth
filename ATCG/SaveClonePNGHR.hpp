@@ -14,10 +14,11 @@
 #include <blitz/array.h>
 #include <pngwriter.h>
 #include <cmath>
+#include "color_space.hpp"
 
 using namespace blitz;
 template <typename CellArray>
-inline void SaveClonePNGHR(int Visual_range_x, int Visual_range_y, const CellArray &cell_array, int H, int &T, double alpha, double beta,double deltah, const Array<double,2> &colorspace)
+inline void SaveClonePNGHR(int Visual_range_x, int Visual_range_y, const CellArray &cell_array, int H, int &T, double alpha, double beta,double deltah, const ColorSpace &colorspace)
 {
     double TT=deltah*(double)3600*(double)H;
     

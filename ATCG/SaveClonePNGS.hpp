@@ -14,10 +14,11 @@
 #include <blitz/array.h>
 #include <pngwriter.h>
 #include <cmath>
+#include "color_space.hpp"
 
 using namespace blitz;
 template <typename CellArray>
-inline void SaveClonePNGS(int Visual_range_x, int Visual_range_y, int &T, double alpha, double beta, const CellArray &cell_array, const Array<double,2> &colorspace)
+inline void SaveClonePNGS(int Visual_range_x, int Visual_range_y, int &T, double alpha, double beta, const CellArray &cell_array, const ColorSpace &colorspace)
 {
     char filedir10 [100] = {'\0'};
     sprintf(filedir10, "./a_%.1f_b_%.1f_clonepics/%.1d.png",alpha,beta,T);

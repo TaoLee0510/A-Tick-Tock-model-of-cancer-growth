@@ -203,7 +203,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     cell_trace_temp=0;
     
     int NNy=Visual_range_x*Visual_range_y;
-    Array<double,2> colorspace(NNy,4,FortranArray<2>());
+    ColorSpace colorspace(NNy, 4);
     colorspace=0;
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     for (int i=1;i<=NNy;i++)
