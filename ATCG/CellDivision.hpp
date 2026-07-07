@@ -51,6 +51,7 @@
 #include "save_data_free_living.hpp"
 #include "random_migration.hpp"
 #include "migration.hpp"
+#include "division.hpp"
 #include "free_living_division.hpp"
 #include "migrate_activation.hpp"
 #include "density_calculation.hpp"
@@ -58,7 +59,8 @@
 #include "sortRow.hpp"
 #include <omp.h>
 
-void CellDivision(int i, double max_growth_rate_r, double max_growth_rate_K, Array<double, 2> &cell_array, Array<double,2> cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall,int Col,double deathjudge,int borderx,int bordery, long rng_time_step)
+template <typename CellArray>
+inline void CellDivision(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<double,2> &cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> &cor_big_1, Array<int, 2> &cor_big_1_change_shape, Array<int, 2> &cor_small_1, Array<int, 2> &proliferation_loci, Array<double, 2> &cell_temp,int &cell_label, double &deltah,int utralsmall,int Col,double deathjudge,int borderx,int bordery, long rng_time_step)
 {
     if(cell_array(i,1)==0 && cell_array(i,5) ==0)
     {

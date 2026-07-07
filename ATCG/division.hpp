@@ -36,11 +36,36 @@
 #include <blitz/array.h>
 #include "deltah_calculation.hpp"
 #include "stateless_rng.hpp"
+#include "cell_store.hpp"
 #include <chrono>
 
 using std::chrono::high_resolution_clock;
 using namespace blitz;
-void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<double, 2> &cell_array, Array<double,2> cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> cor_big_1, Array<int, 2> cor_big_1_change_shape, Array<int, 2> cor_small_1, Array<int, 2> proliferation_loci, Array<double, 2> cell_temp,int &cell_label, double &deltah,int utralsmall,int Col, long rng_time_step)
+
+namespace division_detail
+{
+inline void append_cell(Array<double, 2> &cell_array, const Array<double, 2> &cell_temp, int Col)
+{
+    Range all = Range::all();
+    int current_size = cell_array.rows();
+    cell_array.resizeAndPreserve(current_size + 1, Col);
+    cell_array(current_size + 1, all) = cell_temp(1, all);
+}
+
+inline void append_cell(CellStore &cells, const Array<double, 2> &cell_temp, int Col)
+{
+    cells.push_empty();
+    int row = cells.rows();
+    int copied_cols = std::min(Col, cells.column_count());
+    for (int col = 1; col <= copied_cols; ++col)
+    {
+        cells(row, col) = cell_temp(1, col);
+    }
+}
+}
+
+template <typename CellArray>
+inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<double,2> &cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> &cor_big_1, Array<int, 2> &cor_big_1_change_shape, Array<int, 2> &cor_small_1, Array<int, 2> &proliferation_loci, Array<double, 2> &cell_temp,int &cell_label, double &deltah,int utralsmall,int Col, long rng_time_step)
 {
     Range all = Range::all();
     long cell_rng_id = (long)cell_array(i,15);
@@ -1479,7 +1504,6 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
     }
     if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
     {
-        int current_size=cell_array.rows();
 //        cell_array_temp.resize(current_size+1,Col);
 //        cell_array_temp=0;
 //
@@ -1491,8 +1515,7 @@ void division(int i, double max_growth_rate_r, double max_growth_rate_K, Array<d
 //        cell_array(all,all)=cell_array_temp(all,all);
 //
 //
-        cell_array.resizeAndPreserve(current_size+1,Col);
-        cell_array(current_size+1,all)=cell_temp(1,all);
+        division_detail::append_cell(cell_array, cell_temp, Col);
         
     }
 }
