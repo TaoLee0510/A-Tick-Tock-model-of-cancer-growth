@@ -39,9 +39,7 @@ inline void set_outer_visual_range_row(VisualRange &Visual_range, int x1, int y1
 
 inline VisualRange outer_initiation_visualrange(const CellStore &cells,int N0,int Vx,int Vy,int &cell_label)
 {
-    Range all = Range::all();
-    VisualRange Visual_range(Vx,Vy,4,FortranArray<3>());
-    Visual_range(all,all,all)=0;
+    VisualRange Visual_range(Vx,Vy);
     N0=cells.rows();
     for (int x=1; x<=N0; x++)
     {

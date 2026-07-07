@@ -168,9 +168,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     const long rng_context = 20001;
     //////////////////////////////////////////////////////////////array definition///////////////////////////////////////////////////////////////////////
-    Range all = Range::all();
-    VisualRange Visual_range(Vx,Vy,4,FortranArray<3>());
-    Visual_range(all,all,all)=0;
+    VisualRange Visual_range(Vx,Vy);
     CellRowBuffer cell_temp(2, Col);
     IntGrid A(Visual_range_x/2, Visual_range_y/2);
     A=0;

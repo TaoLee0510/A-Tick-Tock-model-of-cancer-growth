@@ -21,12 +21,6 @@ public:
         resize(width, height);
     }
 
-    template <typename Storage>
-    VisualRange(int width, int height, int, const Storage &)
-    {
-        resize(width, height);
-    }
-
     void resize(int width, int height)
     {
         width_ = width;
