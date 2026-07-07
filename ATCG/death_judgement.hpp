@@ -66,7 +66,7 @@ inline void clear_dead_cell_visual(int site, CellArray &cell_array, Array<long,3
     }
 }
 
-inline void compact_after_death_judgement(Array<double, 2> &cell_array, Array<double,2> &cell_array_temp, Array<long,3> &Visual_range, int Col, int nthreads, int C)
+inline void compact_after_death_judgement(Array<double, 2> &cell_array, Array<long,3> &Visual_range, int Col, int nthreads, int C)
 {
     Range all = Range::all();
     int current_size=cell_array.rows();
@@ -82,7 +82,7 @@ inline void compact_after_death_judgement(Array<double, 2> &cell_array, Array<do
             }
         }
     }
-    cell_array_temp.resize(sum,Col);
+    Array<double,2> cell_array_temp(sum,Col,FortranArray<2>());
     cell_array_temp=0;
     int site1=1;
     for (int site=1; site<= current_size; ++site)
@@ -102,7 +102,7 @@ inline void compact_after_death_judgement(Array<double, 2> &cell_array, Array<do
     cell_array(all,all)=cell_array_temp(all,all);
 }
 
-inline void compact_after_death_judgement(CellStore &cells, Array<double,2> &, Array<long,3> &Visual_range, int, int nthreads, int C)
+inline void compact_after_death_judgement(CellStore &cells, Array<long,3> &Visual_range, int, int nthreads, int C)
 {
     int current_size=cells.rows();
     omp_set_num_threads(nthreads);
@@ -134,7 +134,7 @@ inline void compact_after_death_judgement(CellStore &cells, Array<double,2> &, A
 }
 
 template <typename CellArray>
-inline void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, CellArray &cell_array, Array<double,2> &cell_array_temp, Array<long, 3> &sub_visual, Array<long,3> &Visual_range, double deathjudge, int Col,int nthreads,long rng_time_step)
+inline void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, double r_limit, double K_limit, double lambda_r, double lambda_K, double alpha, double beta, double carrying_capacity_r, double carrying_capacity_K, double Cr, double CK, double death_time_range_r, double death_time_range_K, double deltah, double &h, CellArray &cell_array, Array<long, 3> &sub_visual, Array<long,3> &Visual_range, double deathjudge, int Col,int nthreads,long rng_time_step)
 {
     Range all = Range::all();
     int C= cell_array.rows();
@@ -630,6 +630,6 @@ inline void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int
             }
         }
 //    }
-    compact_after_death_judgement(cell_array, cell_array_temp, Visual_range, Col, nthreads, C);
+    compact_after_death_judgement(cell_array, Visual_range, Col, nthreads, C);
 }
 #endif /* death_judgement_hpp */

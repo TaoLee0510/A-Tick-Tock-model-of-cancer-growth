@@ -132,8 +132,6 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     //    $26: migration lasted time
     //    $27: passed time of migration
     //    $28: migration rate
-    Array<double,2> cell_array_temp(1,Col,FortranArray<2>());
-    cell_array_temp=0;
     Array<int,2> cor_big(1,4,FortranArray<2>());
     cor_big=0;
     Array<int, 2> area_square(1,10,FortranArray<2>());
@@ -438,7 +436,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         ///
         int nthreads = 1;
-        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cells, cell_array_temp, sub_visual, Visual_range, deathjudge,Col,nthreads,H);
+        death_judgement(Visual_range_x, Visual_range_y, N00, N01, r_limit, K_limit, lambda_r, lambda_K, alpha, beta, carrying_capacity_r, carrying_capacity_K, Cr, CK, death_time_range_r,death_time_range_K, deltah, h, cells, sub_visual, Visual_range, deathjudge,Col,nthreads,H);
         cells.sort_by_column(cell_col::kType);///sort cell type
         stage_convert(Visual_range_x, Visual_range_y, cells, Visual_range, cell_label,utralsmall,H);
         deltah_recalculation(deltah, cells, MMR, DDM);
@@ -543,7 +541,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                     }
                     else
                     {
-                        division(i, max_growth_rate_r, max_growth_rate_K, cells, cell_array_temp, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp,cell_label,deltah,utralsmall,Col, H);
+                        division(i, max_growth_rate_r, max_growth_rate_K, cells, Visual_range, cor_big_1, cor_big_1_change_shape, cor_small_1, proliferation_loci, cell_temp,cell_label,deltah,utralsmall,Col, H);
                     }
                 }
                 else

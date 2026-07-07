@@ -65,7 +65,7 @@ inline void append_cell(CellStore &cells, const Array<double, 2> &cell_temp, int
 }
 
 template <typename CellArray>
-inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<double,2> &cell_array_temp, Array<long, 3> &Visual_range, Array<int,2> &cor_big_1, Array<int, 2> &cor_big_1_change_shape, Array<int, 2> &cor_small_1, Array<int, 2> &proliferation_loci, Array<double, 2> &cell_temp,int &cell_label, double &deltah,int utralsmall,int Col, long rng_time_step)
+inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, CellArray &cell_array, Array<long, 3> &Visual_range, Array<int,2> &cor_big_1, Array<int, 2> &cor_big_1_change_shape, Array<int, 2> &cor_small_1, Array<int, 2> &proliferation_loci, Array<double, 2> &cell_temp,int &cell_label, double &deltah,int utralsmall,int Col, long rng_time_step)
 {
     Range all = Range::all();
     long cell_rng_id = (long)cell_array(i,15);
@@ -1504,17 +1504,6 @@ inline void division(int i, double max_growth_rate_r, double max_growth_rate_K, 
     }
     if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
     {
-//        cell_array_temp.resize(current_size+1,Col);
-//        cell_array_temp=0;
-//
-//        cell_array_temp(Range(1,current_size),all)=cell_array(Range(1,current_size),all);
-//        cell_array_temp(current_size+1,all)=cell_temp(1,all);
-//
-//        cell_array.resize(current_size+1,Col);
-//        cell_array=0;
-//        cell_array(all,all)=cell_array_temp(all,all);
-//
-//
         division_detail::append_cell(cell_array, cell_temp, Col);
         
     }
