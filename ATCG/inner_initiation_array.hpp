@@ -35,8 +35,7 @@
 #include "visual_range.hpp"
 using namespace blitz;
 
-template <typename CellArray>
-inline void fill_inner_initiation_cells(int N0,int N01,int R0,int Visual_range_x, int Visual_range_y, CellArray &cell_array_inner, const VisualRange &Visual_range, double uniup_r1, double unilow_r1, double sigmahatr,double muhatr, double uniup_K1, double unilow_K1, double sigmahatK,double muhatK, int N0r1,int N0K1, double *migration_rate_r1, double *migration_rate_K1, int Col)
+inline void fill_inner_initiation_cells(int N0,int N01,int R0,int Visual_range_x, int Visual_range_y, CellStore &cell_array_inner, const VisualRange &Visual_range, double uniup_r1, double unilow_r1, double sigmahatr,double muhatr, double uniup_K1, double unilow_K1, double sigmahatK,double muhatK, int N0r1,int N0K1, double *migration_rate_r1, double *migration_rate_K1, int Col)
 {
     const long rng_context = 10003;
     double initial_r_growth_rate[N0r1];
@@ -93,36 +92,38 @@ inline void fill_inner_initiation_cells(int N0,int N01,int R0,int Visual_range_x
         {
             int x1=cell_cor_x[i];
             int y1=cell_cor_y[i];
-            cell_array_inner(i,1)=x1;
-            cell_array_inner(i,5)=y1;
-            cell_array_inner(i,9)=1;
-            cell_array_inner(i,10)=initial_r_growth_rate[i-1];
-            cell_array_inner(i,11)=initial_r_growth_rate[i-1];
-            cell_array_inner(i,12)=migration_rate_r1[i-1];
-            cell_array_inner(i,14)=1;
-            cell_array_inner(i,15)=i+N0;
-            cell_array_inner(i,22)=1;
+            int row = i - 1;
+            cell_array_inner.x1()[row]=x1;
+            cell_array_inner.y1()[row]=y1;
+            cell_array_inner.type()[row]=1;
+            cell_array_inner.growth_rate()[row]=initial_r_growth_rate[i-1];
+            cell_array_inner.density_growth_rate()[row]=initial_r_growth_rate[i-1];
+            cell_array_inner.migration_rate_base()[row]=migration_rate_r1[i-1];
+            cell_array_inner.stage()[row]=1;
+            cell_array_inner.id()[row]=i+N0;
+            cell_array_inner.viability()[row]=1;
             if (Col>=cell_col::kCellTraceLabel)
             {
-                cell_array_inner(i,cell_col::kCellTraceLabel)=i+N0;
+                cell_array_inner.cell_trace_label()[row]=i+N0;
             }
         }
         else
         {
             int x1=cell_cor_x[i];
             int y1=cell_cor_y[i];
-            cell_array_inner(i,1)=x1;
-            cell_array_inner(i,5)=y1;
-            cell_array_inner(i,9)=2;
-            cell_array_inner(i,10)=initial_K_growth_rate[a];
-            cell_array_inner(i,11)=initial_K_growth_rate[a];
-            cell_array_inner(i,12)=migration_rate_K1[a];
-            cell_array_inner(i,14)=1;
-            cell_array_inner(i,15)=i+N0;
-            cell_array_inner(i,22)=1;
+            int row = i - 1;
+            cell_array_inner.x1()[row]=x1;
+            cell_array_inner.y1()[row]=y1;
+            cell_array_inner.type()[row]=2;
+            cell_array_inner.growth_rate()[row]=initial_K_growth_rate[a];
+            cell_array_inner.density_growth_rate()[row]=initial_K_growth_rate[a];
+            cell_array_inner.migration_rate_base()[row]=migration_rate_K1[a];
+            cell_array_inner.stage()[row]=1;
+            cell_array_inner.id()[row]=i+N0;
+            cell_array_inner.viability()[row]=1;
             if (Col>=cell_col::kCellTraceLabel)
             {
-                cell_array_inner(i,cell_col::kCellTraceLabel)=i+N0;
+                cell_array_inner.cell_trace_label()[row]=i+N0;
             }
             a=a+1;
         }

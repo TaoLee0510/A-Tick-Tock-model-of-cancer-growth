@@ -35,8 +35,7 @@
 #include "int_grid.hpp"
 using namespace blitz;
 
-template <typename CellArray>
-inline void fill_outer_initiation_cells(CellArray &cell_array_out_1, int N0, int Visual_range_x, int Visual_range_y, const IntGrid &A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K,int Col)
+inline void fill_outer_initiation_cells(CellStore &cell_array_out_1, int N0, int Visual_range_x, int Visual_range_y, const IntGrid &A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K,int Col)
 {
     const long rng_context = 10001;
     double initial_r_growth_rate[N0r];
@@ -97,25 +96,26 @@ inline void fill_outer_initiation_cells(CellArray &cell_array_out_1, int N0, int
             int y2 = y1+1;
             int y3 = y1+1;
             int y4 = y1;
-            cell_array_out_1(x,1)=x1;
-            cell_array_out_1(x,2)=x2;
-            cell_array_out_1(x,3)=x3;
-            cell_array_out_1(x,4)=x4;
-            cell_array_out_1(x,5)=y1;
-            cell_array_out_1(x,6)=y2;
-            cell_array_out_1(x,7)=y3;
-            cell_array_out_1(x,8)=y4;
-            cell_array_out_1(x,9)=1;
-            cell_array_out_1(x,10)=initial_r_growth_rate[x-1];
-            cell_array_out_1(x,11)=initial_r_growth_rate[x-1];
-            cell_array_out_1(x,12)=migration_rate_r[x-1];
-            cell_array_out_1(x,13)=stateless_uniform(rng_context, 0, 3000 + x);
-            cell_array_out_1(x,14)=0;
-            cell_array_out_1(x,15)=x;
-            cell_array_out_1(x,22)=1;
+            int row = x - 1;
+            cell_array_out_1.x1()[row]=x1;
+            cell_array_out_1.x2()[row]=x2;
+            cell_array_out_1.x3()[row]=x3;
+            cell_array_out_1.x4()[row]=x4;
+            cell_array_out_1.y1()[row]=y1;
+            cell_array_out_1.y2()[row]=y2;
+            cell_array_out_1.y3()[row]=y3;
+            cell_array_out_1.y4()[row]=y4;
+            cell_array_out_1.type()[row]=1;
+            cell_array_out_1.growth_rate()[row]=initial_r_growth_rate[x-1];
+            cell_array_out_1.density_growth_rate()[row]=initial_r_growth_rate[x-1];
+            cell_array_out_1.migration_rate_base()[row]=migration_rate_r[x-1];
+            cell_array_out_1.random_label()[row]=stateless_uniform(rng_context, 0, 3000 + x);
+            cell_array_out_1.stage()[row]=0;
+            cell_array_out_1.id()[row]=x;
+            cell_array_out_1.viability()[row]=1;
             if (Col>=cell_col::kCellTraceLabel)
             {
-                cell_array_out_1(x,cell_col::kCellTraceLabel)=x;
+                cell_array_out_1.cell_trace_label()[row]=x;
             }
         }
         else
@@ -128,25 +128,26 @@ inline void fill_outer_initiation_cells(CellArray &cell_array_out_1, int N0, int
             int y2 = y1+1;
             int y3 = y1+1;
             int y4 = y1;
-            cell_array_out_1(x,1)=x1;
-            cell_array_out_1(x,2)=x2;
-            cell_array_out_1(x,3)=x3;
-            cell_array_out_1(x,4)=x4;
-            cell_array_out_1(x,5)=y1;
-            cell_array_out_1(x,6)=y2;
-            cell_array_out_1(x,7)=y3;
-            cell_array_out_1(x,8)=y4;
-            cell_array_out_1(x,9)=2;
-            cell_array_out_1(x,10)=initial_K_growth_rate[a];
-            cell_array_out_1(x,11)=initial_K_growth_rate[a];
-            cell_array_out_1(x,12)=migration_rate_K[a];
-            cell_array_out_1(x,13)=stateless_uniform(rng_context, 0, 3000 + x);
-            cell_array_out_1(x,14)=0;
-            cell_array_out_1(x,15)=x;
-            cell_array_out_1(x,22)=1;
+            int row = x - 1;
+            cell_array_out_1.x1()[row]=x1;
+            cell_array_out_1.x2()[row]=x2;
+            cell_array_out_1.x3()[row]=x3;
+            cell_array_out_1.x4()[row]=x4;
+            cell_array_out_1.y1()[row]=y1;
+            cell_array_out_1.y2()[row]=y2;
+            cell_array_out_1.y3()[row]=y3;
+            cell_array_out_1.y4()[row]=y4;
+            cell_array_out_1.type()[row]=2;
+            cell_array_out_1.growth_rate()[row]=initial_K_growth_rate[a];
+            cell_array_out_1.density_growth_rate()[row]=initial_K_growth_rate[a];
+            cell_array_out_1.migration_rate_base()[row]=migration_rate_K[a];
+            cell_array_out_1.random_label()[row]=stateless_uniform(rng_context, 0, 3000 + x);
+            cell_array_out_1.stage()[row]=0;
+            cell_array_out_1.id()[row]=x;
+            cell_array_out_1.viability()[row]=1;
             if (Col>=cell_col::kCellTraceLabel)
             {
-                cell_array_out_1(x,cell_col::kCellTraceLabel)=x;
+                cell_array_out_1.cell_trace_label()[row]=x;
             }
             a++;
         }

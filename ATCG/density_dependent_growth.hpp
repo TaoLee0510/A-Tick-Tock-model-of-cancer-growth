@@ -258,10 +258,11 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
     CellStore inner_cells = inner_initiation_cell_store(N0, N01, R0,Visual_range_x, Visual_range_y, Visual_range, uniup_r1, unilow_r1, sigmahatr, muhatr, uniup_K1, unilow_K1, sigmahatK, muhatK, N0r1, N0K1, migration_rate_r1, migration_rate_K1, Col);
     for (int x=1; x<=N01; x++)
     {
-        int x1 = inner_cells(x,1);
-        int y1 = inner_cells(x,5);
-        int cell_array_index=inner_cells(x,15);
-        int cell_array_stage=inner_cells(x,14);
+        int row = x - 1;
+        int x1 = inner_cells.x1()[row];
+        int y1 = inner_cells.y1()[row];
+        int cell_array_index=inner_cells.id()[row];
+        int cell_array_stage=inner_cells.stage()[row];
         Visual_range.write_site(x1, y1, cell_array_index, cell_array_stage, cell_label);
         cell_label=cell_label+1;
     }

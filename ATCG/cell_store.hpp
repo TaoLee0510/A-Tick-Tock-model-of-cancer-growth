@@ -73,7 +73,7 @@ public:
         int copied_cols = std::min(column_count_, source.column_count());
         for (int col = 1; col <= copied_cols; ++col)
         {
-            (*this)(row_count_, col) = source(source_row, col);
+            columns_[col][row_count_ - 1] = source.column(col)[source_row - 1];
         }
     }
 
@@ -140,16 +140,6 @@ public:
         });
 
         apply_permutation(order);
-    }
-
-    double &operator()(int row, int col)
-    {
-        return columns_[col][row - 1];
-    }
-
-    double operator()(int row, int col) const
-    {
-        return columns_[col][row - 1];
     }
 
     Column &column(int col)
@@ -303,7 +293,7 @@ inline void cell_store_copy_row_to_array(const CellStore &source, int source_row
     copied_cols = std::min(copied_cols, target.column_count());
     for (int col = 1; col <= copied_cols; ++col)
     {
-        target(target_row, col) = source(source_row, col);
+        target(target_row, col) = source.column(col)[source_row - 1];
     }
 }
 
@@ -313,7 +303,7 @@ inline void cell_store_assign_row_from_array(CellStore &target, int target_row, 
     copied_cols = std::min(copied_cols, source.column_count());
     for (int col = 1; col <= copied_cols; ++col)
     {
-        target(target_row, col) = source(source_row, col);
+        target.column(col)[target_row - 1] = source(source_row, col);
     }
 }
 
