@@ -343,10 +343,43 @@ inline double small_migration_density(int x1, int y1, const VisualRange &Visual_
 }
 
 template <typename CellArray>
+inline void apply_big_migration_move(int i, CellArray &cell_array, VisualRange &Visual_range, int x1, int y1, int order)
+{
+    long cell_label_1=Visual_range.cell_label(x1,y1);
+    long cellstage=Visual_range.stage(x1,y1);
+    Visual_range.clear_square(x1,y1);
+    int dx = migration_direction_dx(order);
+    int dy = migration_direction_dy(order);
+    for (int cor_cell=1; cor_cell<=4; cor_cell++)
+    {
+        int cor_cell_y=cor_cell+4;
+        cell_array(i,cor_cell)=cell_array(i,cor_cell)+dx;
+        cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+dy;
+    }
+    Visual_range.write_square((int)cell_array(i,1), (int)cell_array(i,5), (long)cell_array(i,15), cellstage, cell_label_1);
+    cell_array(i,23)=order;
+    cell_array(i,20)=0;
+}
+
+template <typename CellArray>
+inline void apply_small_migration_move(int i, CellArray &cell_array, VisualRange &Visual_range, int x1, int y1, int order)
+{
+    long cell_label_1=Visual_range.cell_label(x1,y1);
+    long cellstage=Visual_range.stage(x1,y1);
+    Visual_range.clear_site(x1,y1);
+    int dx = migration_direction_dx(order);
+    int dy = migration_direction_dy(order);
+    cell_array(i,1)=cell_array(i,1)+dx;
+    cell_array(i,5)=cell_array(i,5)+dy;
+    Visual_range.write_site((int)cell_array(i,1), (int)cell_array(i,5), (long)cell_array(i,15), cellstage, cell_label_1);
+    cell_array(i,23)=order;
+    cell_array(i,20)=0;
+}
+
+template <typename CellArray>
 inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &Visual_range, double &migration_judgement, long rng_time_step, long rng_event_base)
 {
     (void)deltah;
-    Range all = Range::all();
     int x1=cell_array(i,cell_col::kX1);
     int y1=cell_array(i,cell_col::kY1);
     long cell_rng_id = (long)cell_array(i,cell_col::kId);
@@ -1193,157 +1226,14 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
                             }
                         }
                         ////////////////////////////////////////////// migration ////////////////////////////////////
-                        switch (order)
+                                                if (order>=1 && order<=8)
                         {
-                            case 1:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell=1; cor_cell<=4; cor_cell++)
-                                {
-                                    int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=1;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 2:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell=1; cor_cell<=4; cor_cell++)
-                                {
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=2;///2
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 3:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell=1; cor_cell<=4; cor_cell++)
-                                {
-                                    int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=3;///3
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 4:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell_y=5;cor_cell_y<=8;cor_cell_y++)
-                                {
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=4;///4
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 5:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell=1; cor_cell<=4; cor_cell++)
-                                {
-                                    int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=5;///5
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 6:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell=1; cor_cell<=4; cor_cell++)
-                                {
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=6;///6
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 7:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell=1; cor_cell<=4; cor_cell++)
-                                {
-                                    int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=7;///7
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 8:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell_y=5;cor_cell_y<=8;cor_cell_y++)
-                                {
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=8;///8
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            default:
-                            {
-                                cell_array(i,23)=0;
-                                cell_array(i,20)=0;
-                            }
+                            apply_big_migration_move(i, cell_array, Visual_range, x1, y1, order);
+                        }
+                        else
+                        {
+                            cell_array(i,23)=0;
+                            cell_array(i,20)=0;
                         }
                         delete[] direction1;
                         direction1 = NULL;
@@ -2181,129 +2071,14 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
                             }
                         }
                         /////////////////////////////////////////////////////migration///////////////////////////////////////
-                        switch (order)
+                                                if (order>=1 && order<=8)
                         {
-                            case 1:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1-1,y1-1,1)=1;
-                                Visual_range(x1-1,y1-1,2)=cell_array(i,15);
-                                Visual_range(x1-1,y1-1,3)=cellstage;
-                                Visual_range(x1-1,y1-1,4)=cell_label_1;
-                                cell_array(i,1)=cell_array(i,1)-1;
-                                cell_array(i,5)=cell_array(i,5)-1;
-                                cell_array(i,23)=1;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 2:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1-1,y1,1)=1;
-                                Visual_range(x1-1,y1,2)=cell_array(i,15);
-                                Visual_range(x1-1,y1,3)=cellstage;
-                                Visual_range(x1-1,y1,4)=cell_label_1;
-                                cell_array(i,1)=cell_array(i,1)-1;
-                                cell_array(i,23)=2;///2
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 3:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1-1,y1+1,1)=1;
-                                Visual_range(x1-1,y1+1,2)=cell_array(i,15);
-                                Visual_range(x1-1,y1+1,3)=cellstage;
-                                Visual_range(x1-1,y1+1,4)=cell_label_1;
-                                cell_array(i,1)=cell_array(i,1)-1;
-                                cell_array(i,5)=cell_array(i,5)+1;
-                                cell_array(i,23)=3;///3
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 4:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1,y1+1,1)=1;
-                                Visual_range(x1,y1+1,2)=cell_array(i,15);
-                                Visual_range(x1,y1+1,3)=cellstage;
-                                Visual_range(x1,y1+1,4)=cell_label_1;
-                                cell_array(i,5)=cell_array(i,5)+1;
-                                cell_array(i,23)=4;///4
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 5:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1+1,y1+1,1)=1;
-                                Visual_range(x1+1,y1+1,2)=cell_array(i,15);
-                                Visual_range(x1+1,y1+1,3)=cellstage;
-                                Visual_range(x1+1,y1+1,4)=cell_label_1;
-                                cell_array(i,1)=cell_array(i,1)+1;
-                                cell_array(i,5)=cell_array(i,5)+1;
-                                cell_array(i,23)=5;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 6:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1+1,y1,1)=1;
-                                Visual_range(x1+1,y1,2)=cell_array(i,15);
-                                Visual_range(x1+1,y1,3)=cellstage;
-                                Visual_range(x1+1,y1,4)=cell_label_1;
-                                cell_array(i,1)=cell_array(i,1)+1;
-                                cell_array(i,23)=6;///6
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 7:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1+1,y1-1,1)=1;
-                                Visual_range(x1+1,y1-1,2)=cell_array(i,15);
-                                Visual_range(x1+1,y1-1,3)=cellstage;
-                                Visual_range(x1+1,y1-1,4)=cell_label_1;
-                                cell_array(i,1)=cell_array(i,1)+1;
-                                cell_array(i,5)=cell_array(i,5)-1;
-                                cell_array(i,23)=7;///7
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 8:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1,y1-1,1)=1;
-                                Visual_range(x1,y1-1,2)=cell_array(i,15);
-                                Visual_range(x1,y1-1,3)=cellstage;
-                                Visual_range(x1,y1-1,4)=cell_label_1;
-                                cell_array(i,5)=cell_array(i,5)-1;
-                                cell_array(i,23)=8;///8
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            default:
-                            {
-                                cell_array(i,20)=0;
-                                cell_array(i,23)=0;
-                            }
+                            apply_small_migration_move(i, cell_array, Visual_range, x1, y1, order);
+                        }
+                        else
+                        {
+                            cell_array(i,23)=0;
+                            cell_array(i,20)=0;
                         }
                         delete[] direction1;
                         direction1 = NULL;
@@ -2357,157 +2132,14 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
                             order=direction1[0];
                         }
                         ////////////////////////////////////////////////////////////////////migration//////////////////////////////////////////////////////
-                        switch (order)
+                                                if (order>=1 && order<=8)
                         {
-                            case 1:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell=1; cor_cell<=4; cor_cell++)
-                                {
-                                    int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=1;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 2:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell=1; cor_cell<=4; cor_cell++)
-                                {
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=2;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 3:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell=1; cor_cell<=4; cor_cell++)
-                                {
-                                    int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)-1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=3;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 4:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell_y=5; cor_cell_y<=8; cor_cell_y++)
-                                {
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=4;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 5:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell=1; cor_cell<=4; cor_cell++)
-                                {
-                                    int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)+1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=5;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 6:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell=1; cor_cell<=4; cor_cell++)
-                                {
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=6;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 7:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell=1; cor_cell<=4; cor_cell++)
-                                {
-                                    int cor_cell_y=cor_cell+4;
-                                    cell_array(i,cor_cell)=cell_array(i,cor_cell)+1;
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=7;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 8:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(Range(x1,x1+1),Range(y1,y1+1),all)=0;
-                                for (int cor_cell_y=5; cor_cell_y<=8; cor_cell_y++)
-                                {
-                                    cell_array(i,cor_cell_y)=cell_array(i,cor_cell_y)-1;
-                                }
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),1)=1;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),2)=cell_array(i,15);
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),3)=cellstage;
-                                Visual_range(Range(cell_array(i,1),cell_array(i,1)+1),Range(cell_array(i,5),cell_array(i,5)+1),4)=cell_label_1;
-                                cell_array(i,23)=8;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            default:
-                            {
-                                cell_array(i,20)=0;
-                                cell_array(i,23)=0;
-                            }
+                            apply_big_migration_move(i, cell_array, Visual_range, x1, y1, order);
+                        }
+                        else
+                        {
+                            cell_array(i,23)=0;
+                            cell_array(i,20)=0;
                         }
                         delete[] direction1;
                         direction1 = NULL;
@@ -2552,129 +2184,14 @@ inline void migration(int i, double deltah, CellArray &cell_array, VisualRange &
                             
                             order=direction1[0];
                         }
-                        switch (order)
+                                                if (order>=1 && order<=8)
                         {
-                            case 1:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1-1,y1-1,1)=1;
-                                Visual_range(x1-1,y1-1,2)=cell_array(i,15);
-                                Visual_range(x1-1,y1-1,3)=cellstage;
-                                Visual_range(x1-1,y1-1,4)=cell_label_1;
-                                cell_array(i,1)=cell_array(i,1)-1;
-                                cell_array(i,5)=cell_array(i,5)-1;
-                                cell_array(i,23)=1;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 2:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1-1,y1,1)=1;
-                                Visual_range(x1-1,y1,2)=cell_array(i,15);
-                                Visual_range(x1-1,y1,3)=cellstage;
-                                Visual_range(x1-1,y1,4)=cell_label_1;
-                                cell_array(i,1)=cell_array(i,1)-1;
-                                cell_array(i,23)=2;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 3:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1-1,y1+1,1)=1;
-                                Visual_range(x1-1,y1+1,2)=cell_array(i,15);
-                                Visual_range(x1-1,y1+1,3)=cellstage;
-                                Visual_range(x1-1,y1+1,4)=cell_label_1;
-                                cell_array(i,1)=cell_array(i,1)-1;
-                                cell_array(i,5)=cell_array(i,5)+1;
-                                cell_array(i,23)=3;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 4:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1,y1+1,1)=1;
-                                Visual_range(x1,y1+1,2)=cell_array(i,15);
-                                Visual_range(x1,y1+1,3)=cellstage;
-                                Visual_range(x1,y1+1,4)=cell_label_1;
-                                cell_array(i,5)=cell_array(i,5)+1;
-                                cell_array(i,23)=4;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 5:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1+1,y1+1,1)=1;
-                                Visual_range(x1+1,y1+1,2)=cell_array(i,15);
-                                Visual_range(x1+1,y1+1,3)=cellstage;
-                                Visual_range(x1+1,y1+1,4)=cell_label_1;
-                                cell_array(i,1)=cell_array(i,1)+1;
-                                cell_array(i,5)=cell_array(i,5)+1;
-                                cell_array(i,23)=5;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 6:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1+1,y1,1)=1;
-                                Visual_range(x1+1,y1,2)=cell_array(i,15);
-                                Visual_range(x1+1,y1,3)=cellstage;
-                                Visual_range(x1+1,y1,4)=cell_label_1;
-                                cell_array(i,1)=cell_array(i,1)+1;
-                                cell_array(i,23)=6;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 7:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1+1,y1-1,1)=1;
-                                Visual_range(x1+1,y1-1,2)=cell_array(i,15);
-                                Visual_range(x1+1,y1-1,3)=cellstage;
-                                Visual_range(x1+1,y1-1,4)=cell_label_1;
-                                cell_array(i,1)=cell_array(i,1)+1;
-                                cell_array(i,5)=cell_array(i,5)-1;
-                                cell_array(i,23)=7;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            case 8:
-                            {
-                                long cell_label_1=Visual_range(x1,y1,4);
-                                long cellstage=Visual_range(x1,y1,3);
-                                Visual_range(x1,y1,all)=0;
-                                Visual_range(x1,y1-1,1)=1;
-                                Visual_range(x1,y1-1,2)=cell_array(i,15);
-                                Visual_range(x1,y1-1,3)=cellstage;
-                                Visual_range(x1,y1-1,4)=cell_label_1;
-                                cell_array(i,5)=cell_array(i,5)-1;
-                                cell_array(i,23)=8;
-                                cell_array(i,20)=0;
-                                break;
-                            }
-                            default:
-                            {
-                                cell_array(i,20)=0;
-                                cell_array(i,23)=0;
-                            }
+                            apply_small_migration_move(i, cell_array, Visual_range, x1, y1, order);
+                        }
+                        else
+                        {
+                            cell_array(i,23)=0;
+                            cell_array(i,20)=0;
                         }
                         delete[] direction1;
                         direction1 = NULL;
