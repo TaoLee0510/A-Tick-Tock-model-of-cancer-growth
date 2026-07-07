@@ -30,7 +30,6 @@
 #include <gsl/gsl_matrix.h>
 #include <blitz/blitz.h>
 #include <blitz/array.h>
-#include "random_uniform.hpp"
 #include "stateless_rng.hpp"
 #include "cell_store.hpp"
 using namespace blitz;
@@ -69,20 +68,17 @@ inline CellStore outer_initiation_low_density_cell_store(int N0, int Visual_rang
         cell_array_cor(1,x)=cor(1,seed);
         cell_array_cor(2,x)=cor(2,seed);
     }
-    Array<double,2> radom_number(1,N0,FortranArray<2>());
-    radom_number=random_uniform(N0, rng_context, 0, 1000);
     double rangr2 = uniup_r - unilow_r;
     for (int x=1; x<=N0r; x++)
     {
-        double rand1 = (radom_number(1,x)*rangr2)+unilow_r;
+        double rand1 = (stateless_uniform(rng_context, 0, 1000 + x)*rangr2)+unilow_r;
         initial_r_growth_rate[x-1]=gsl_cdf_gaussian_Pinv(rand1, sigmahatr) + muhatr;
     }
-    radom_number=random_uniform(N0, rng_context, 0, 2000);
 
     double rangK2 = uniup_K - unilow_K;
     for (int x=1; x<=N0K; x++)
     {
-        double rand2 = (radom_number(1,x)*rangK2)+unilow_K;
+        double rand2 = (stateless_uniform(rng_context, 0, 2000 + x)*rangK2)+unilow_K;
         initial_K_growth_rate[x-1]=gsl_cdf_gaussian_Pinv(rand2, sigmahatK) + muhatK;
     }
 

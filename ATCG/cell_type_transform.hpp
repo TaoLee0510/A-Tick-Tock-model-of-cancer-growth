@@ -35,7 +35,6 @@
 #include <blitz/blitz.h>
 #include <blitz/array.h>
 #include "density_calculation.hpp"
-#include "random_uniform.hpp"
 #include "stateless_rng.hpp"
 #include <chrono>
 
@@ -62,12 +61,10 @@ inline void cell_type_transform(Array<double, 2> &cell_temp, double beta_distrib
                 {
                     K_label=K_label+1;
                     cell_temp(1,9)=2;//cell_array type
-                    Array<double,2> radom_number(1,100,FortranArray<2>());
-                    long random_uniform_event_base = rng_event;
+                    long uniform_event_base = rng_event;
                     rng_event += 101;
-                    radom_number=random_uniform(100, cell_rng_id, rng_time_step, random_uniform_event_base);
                     double rangK2 = uniup_K - unilow_K;
-                    double rand2 = (radom_number(1,50)*rangK2)+unilow_K;
+                    double rand2 = (stateless_uniform(cell_rng_id, rng_time_step, uniform_event_base + 50)*rangK2)+unilow_K;
                     initial_K_growth_rate1=gsl_cdf_gaussian_Pinv(rand2, sigmahatK) + muhatK;
                     cell_temp(1,10)=initial_K_growth_rate1;//    $10: inherent growth rate
                     cell_temp(1,11)=initial_K_growth_rate1;// $11: density growth rate
@@ -204,12 +201,10 @@ inline void cell_type_transform(Array<double, 2> &cell_temp, double beta_distrib
                 {
                     K_label=K_label+1;
                     cell_temp(1,9)=2;//cell_array type
-                    Array<double,2> radom_number(1,100,FortranArray<2>());
-                    long random_uniform_event_base = rng_event;
+                    long uniform_event_base = rng_event;
                     rng_event += 101;
-                    radom_number=random_uniform(100, cell_rng_id, rng_time_step, random_uniform_event_base);
                     double rangK2 = uniup_K - unilow_K;
-                    double rand2 = (radom_number(1,50)*rangK2)+unilow_K;
+                    double rand2 = (stateless_uniform(cell_rng_id, rng_time_step, uniform_event_base + 50)*rangK2)+unilow_K;
                     initial_K_growth_rate1=gsl_cdf_gaussian_Pinv(rand2, sigmahatK) + muhatK;
                     cell_temp(1,10)=initial_K_growth_rate1;//    $10: inherent growth rate
                     cell_temp(1,11)=initial_K_growth_rate1;// $11: density growth rate

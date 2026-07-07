@@ -71,7 +71,6 @@
 #define BZ_THREADSAFE_USE_OPENMP
 #include <blitz/blitz.h>
 #include <blitz/array.h>
-#include "random_uniform.hpp"
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
 #include "outer_corr.hpp"
@@ -281,7 +280,6 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
     double uniup_r=gsl_cdf_gaussian_P(max_growth_rate_r-muhatr, sigmahatr );
     unilow_K=gsl_cdf_gaussian_P(min_growth_rate_K-muhatK, sigmahatK );
     uniup_K=gsl_cdf_gaussian_P(max_growth_rate_K-muhatK, sigmahatK );
-    Array<double,2> radom_number(1,N0,FortranArray<2>());
     for (int x=1;x<=N0r;x++)
     {
         double mig=stateless_beta(rng_context, 0, 20000 + x, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;

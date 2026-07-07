@@ -36,7 +36,6 @@
 #define BZ_THREADSAFE_USE_OPENMP
 #include <blitz/blitz.h>
 #include <blitz/array.h>
-#include "random_uniform.hpp"
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
 #include "outer_corr.hpp"
@@ -233,7 +232,6 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     double uniup_r=gsl_cdf_gaussian_P(max_growth_rate_r-muhatr, sigmahatr );
     double unilow_K=gsl_cdf_gaussian_P(min_growth_rate_K-muhatK, sigmahatK );
     double uniup_K=gsl_cdf_gaussian_P(max_growth_rate_K-muhatK, sigmahatK );
-    Array<double,2> radom_number(1,N0,FortranArray<2>());
     for (int x=1;x<=N0r;x++)
     {
         double mig=stateless_beta(rng_context, 0, 20000 + x, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;
@@ -283,7 +281,6 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     double uniup_K1=gsl_cdf_gaussian_P(max_growth_rate_K-muhatK, sigmahatK );
     
     /////////////////////////*Migration seepd generation*/////////////////////
-    Array<double,2> radom_number1(1,N01,FortranArray<2>());
     for (int x=1;x<=N0r1;x++)
     {
         double mig=stateless_beta(rng_context, 0, 22000 + x, beta_distribution_alpha,beta_distribution_beta)*migration_rate_r_mean;

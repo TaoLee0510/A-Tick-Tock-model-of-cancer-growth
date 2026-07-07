@@ -38,7 +38,6 @@
 #define BZ_THREADSAFE_USE_OPENMP
 #include <blitz/blitz.h>
 #include <blitz/array.h>
-#include "random_uniform.hpp"
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
 #include "outer_corr.hpp"
@@ -245,8 +244,6 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     N0K=1;
     unilow_K=gsl_cdf_gaussian_P(min_growth_rate_K-muhatK, sigmahatK );
     uniup_K=gsl_cdf_gaussian_P(max_growth_rate_K-muhatK, sigmahatK );
-    Array<double,2> radom_number(1,N0,FortranArray<2>());
-
     ///////////////////////////////////////////////////////// read files //////////////////////////////////////////////////////////////////////////////////////
     
     Array<double,2> Parameters_array(39,1,FortranArray<2>());
