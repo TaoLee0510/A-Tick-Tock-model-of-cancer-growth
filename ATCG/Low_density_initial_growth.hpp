@@ -132,18 +132,6 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
     //    $26: migration lasted time
     //    $27: passed time of migration
     //    $28: migration rate
-    Array<int,2> cor_big(1,4,FortranArray<2>());
-    cor_big=0;
-    Array<int, 2> area_square(1,10,FortranArray<2>());
-    area_square=0;
-    Array<int, 2> sub_area_square(1,10,FortranArray<2>());
-    sub_area_square=0;
-    Array<int, 2> cor_small(1,3,FortranArray<2>());
-    cor_small=0;
-    Array<int, 2> area_square_s(9,9,FortranArray<2>());
-    area_square_s=0;
-    Array<int, 2>  sub_area_square_s(9,9,FortranArray<2>());
-    sub_area_square_s=0;
     Array<int, 2> cor_big_1(1,16,FortranArray<2>());
     cor_big_1=0;
     Array<int, 2> cor_big_1_change_shape(1,16,FortranArray<2>());
@@ -504,7 +492,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                                         }
                                         else
                                         {
-                                            migration(i, deltah,cells, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 2000 + rng_event++);
+                                            migration(i, deltah,cells, Visual_range, migration_judgement, H, 2000 + rng_event++);
                                         }
                                     }
                                     else
@@ -522,7 +510,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                                         }
                                         else
                                         {
-                                            migration(i, deltah,cells, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 2000 + rng_event++);
+                                            migration(i, deltah,cells, Visual_range, migration_judgement, H, 2000 + rng_event++);
                                         }
                                     }
                                     else
@@ -572,7 +560,7 @@ void Low_density_initial_growth(int Visual_range_x, int Visual_range_y, double R
                                 }
                                 else
                                 {
-                                    migration(i, deltah,cells, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, H, 2000 + rng_event++);
+                                    migration(i, deltah,cells, Visual_range, migration_judgement, H, 2000 + rng_event++);
                                 }
                             }
                         }

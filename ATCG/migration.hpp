@@ -61,8 +61,288 @@
 
 using std::chrono::high_resolution_clock;
 using namespace blitz;
+
+inline bool migration_visual_site_empty(const Array<long, 3> &Visual_range, int x, int y)
+{
+    return Visual_range(x, y, 1) == 0;
+}
+
+inline void fill_big_migration_directions(int x1, int y1, const Array<long, 3> &Visual_range, int direction[8])
+{
+    if (migration_visual_site_empty(Visual_range, x1, y1 - 1) &&
+        migration_visual_site_empty(Visual_range, x1 - 1, y1 - 1) &&
+        migration_visual_site_empty(Visual_range, x1 - 1, y1))
+    {
+        direction[0] = 1;
+    }
+    if (migration_visual_site_empty(Visual_range, x1 - 1, y1) &&
+        migration_visual_site_empty(Visual_range, x1 - 1, y1 + 1))
+    {
+        direction[1] = 2;
+    }
+    if (migration_visual_site_empty(Visual_range, x1 - 1, y1 + 1) &&
+        migration_visual_site_empty(Visual_range, x1 - 1, y1 + 2) &&
+        migration_visual_site_empty(Visual_range, x1, y1 + 2))
+    {
+        direction[2] = 3;
+    }
+    if (migration_visual_site_empty(Visual_range, x1, y1 + 2) &&
+        migration_visual_site_empty(Visual_range, x1 + 1, y1 + 2))
+    {
+        direction[3] = 4;
+    }
+    if (migration_visual_site_empty(Visual_range, x1 + 1, y1 + 2) &&
+        migration_visual_site_empty(Visual_range, x1 + 2, y1 + 2) &&
+        migration_visual_site_empty(Visual_range, x1 + 2, y1 + 1))
+    {
+        direction[4] = 5;
+    }
+    if (migration_visual_site_empty(Visual_range, x1 + 2, y1 + 1) &&
+        migration_visual_site_empty(Visual_range, x1 + 2, y1))
+    {
+        direction[5] = 6;
+    }
+    if (migration_visual_site_empty(Visual_range, x1 + 2, y1) &&
+        migration_visual_site_empty(Visual_range, x1 + 2, y1 - 1) &&
+        migration_visual_site_empty(Visual_range, x1 + 1, y1 - 1))
+    {
+        direction[6] = 7;
+    }
+    if (migration_visual_site_empty(Visual_range, x1 + 1, y1 - 1) &&
+        migration_visual_site_empty(Visual_range, x1, y1 - 1))
+    {
+        direction[7] = 8;
+    }
+}
+
+inline void fill_small_migration_directions(int x1, int y1, const Array<long, 3> &Visual_range, int direction[8])
+{
+    if (migration_visual_site_empty(Visual_range, x1 - 1, y1 - 1))
+    {
+        direction[0] = 1;
+    }
+    if (migration_visual_site_empty(Visual_range, x1 - 1, y1))
+    {
+        direction[1] = 2;
+    }
+    if (migration_visual_site_empty(Visual_range, x1 - 1, y1 + 1))
+    {
+        direction[2] = 3;
+    }
+    if (migration_visual_site_empty(Visual_range, x1, y1 + 1))
+    {
+        direction[3] = 4;
+    }
+    if (migration_visual_site_empty(Visual_range, x1 + 1, y1 + 1))
+    {
+        direction[4] = 5;
+    }
+    if (migration_visual_site_empty(Visual_range, x1 + 1, y1))
+    {
+        direction[5] = 6;
+    }
+    if (migration_visual_site_empty(Visual_range, x1 + 1, y1 - 1))
+    {
+        direction[6] = 7;
+    }
+    if (migration_visual_site_empty(Visual_range, x1, y1 - 1))
+    {
+        direction[7] = 8;
+    }
+}
+
+inline void add_unique_migration_label(int labels[100], int &count, int label)
+{
+    if (label == 0)
+    {
+        return;
+    }
+    for (int idx = 0; idx < count; ++idx)
+    {
+        if (labels[idx] == label)
+        {
+            return;
+        }
+    }
+    labels[count++] = label;
+}
+
+inline void add_migration_density_site(const Array<long, 3> &Visual_range, int x1, int y1, int local_x, int local_y, int labels[100], int &count)
+{
+    add_unique_migration_label(labels, count, (int)Visual_range(x1 - 5 + local_x, y1 - 5 + local_y, 4));
+}
+
+inline double big_migration_density(int x1, int y1, const Array<long, 3> &Visual_range, int direction_index)
+{
+    int labels[100] = {0};
+    int count = 0;
+    int denominator = 25;
+    switch (direction_index)
+    {
+        case 0:
+            for (int xss = 1; xss <= 5; ++xss)
+            {
+                for (int yss = 1; yss <= 5; ++yss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+        case 2:
+            for (int xss = 1; xss <= 5; ++xss)
+            {
+                for (int yss = 6; yss <= 10; ++yss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+        case 4:
+            for (int xss = 6; xss <= 10; ++xss)
+            {
+                for (int yss = 6; yss <= 10; ++yss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+        case 6:
+            for (int xss = 6; xss <= 10; ++xss)
+            {
+                for (int yss = 1; yss <= 5; ++yss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+        case 1:
+            denominator = 30;
+            for (int xss = 1, deltay = 0; xss <= 5; ++xss, ++deltay)
+            {
+                for (int yss = 1 + deltay; yss <= 10 - deltay; ++yss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+        case 3:
+            denominator = 30;
+            for (int yss = 10, deltay = 0; yss >= 6; --yss, ++deltay)
+            {
+                for (int xss = 10 - deltay; xss >= 1 + deltay; --xss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+        case 5:
+            denominator = 30;
+            for (int xss = 10, deltay = 0; xss >= 6; --xss, ++deltay)
+            {
+                for (int yss = 1 + deltay; yss <= 10 - deltay; ++yss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+        case 7:
+            denominator = 30;
+            for (int yss = 1, deltay = 0; yss <= 5; ++yss, ++deltay)
+            {
+                for (int xss = 1 + deltay; xss <= 10 - deltay; ++xss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+    }
+    return (double)count / (double)denominator;
+}
+
+inline double small_migration_density(int x1, int y1, const Array<long, 3> &Visual_range, int direction_index)
+{
+    int labels[100] = {0};
+    int count = 0;
+    switch (direction_index)
+    {
+        case 0:
+            for (int xss = 1; xss <= 5; ++xss)
+            {
+                for (int yss = 1; yss <= 5; ++yss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+        case 2:
+            for (int xss = 1; xss <= 5; ++xss)
+            {
+                for (int yss = 5; yss <= 9; ++yss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+        case 4:
+            for (int xss = 5; xss <= 9; ++xss)
+            {
+                for (int yss = 5; yss <= 9; ++yss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+        case 6:
+            for (int xss = 5; xss <= 9; ++xss)
+            {
+                for (int yss = 1; yss <= 5; ++yss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+        case 1:
+            for (int xss = 1, deltay = 0; xss <= 5; ++xss, ++deltay)
+            {
+                for (int yss = 1 + deltay; yss <= 9 - deltay; ++yss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+        case 3:
+            for (int yss = 9, deltay = 0; yss >= 5; --yss, ++deltay)
+            {
+                for (int xss = 1 + deltay; xss <= 9 - deltay; ++xss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+        case 5:
+            for (int xss = 9, deltay = 0; xss >= 5; --xss, ++deltay)
+            {
+                for (int yss = 1 + deltay; yss <= 9 - deltay; ++yss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+        case 7:
+            for (int yss = 1, deltay = 0; yss <= 5; ++yss, ++deltay)
+            {
+                for (int xss = 1 + deltay; xss <= 9 - deltay; ++xss)
+                {
+                    add_migration_density_site(Visual_range, x1, y1, xss, yss, labels, count);
+                }
+            }
+            break;
+    }
+    return (double)count / 25.0;
+}
+
 template <typename CellArray>
-inline void migration(int i, double deltah, CellArray &cell_array, Array<long, 3> &Visual_range, Array<int,2> &cor_big, Array<int, 2> &area_square, Array<int, 2> &sub_area_square, Array<int, 2> &cor_small, Array<int, 2> &area_square_s, Array<int, 2>  &sub_area_square_s,double &migration_judgement, long rng_time_step, long rng_event_base)
+inline void migration(int i, double deltah, CellArray &cell_array, Array<long, 3> &Visual_range, double &migration_judgement, long rng_time_step, long rng_event_base)
 {
     (void)deltah;
     Range all = Range::all();
@@ -84,42 +364,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, Array<long, 3
             {
                 case 0: //big
                 {
-                    cor_big.resize(4,4);
-                    cor_big=0;
-                    cor_big(all,all)=Visual_range(Range(x1-1,x1+2),Range(y1-1,y1+2),1);
                     int direction[8]={0};
-                    if (cor_big(2,1)==0 && cor_big(1,1)==0 && cor_big(1,2)==0)
-                    {
-                        direction[0]=1;
-                    }
-                    if (cor_big(1,2)==0 && cor_big(1,3)==0)
-                    {
-                        direction[1]=2;
-                    }
-                    if (cor_big(1,3)==0 && cor_big(1,4)==0 && cor_big(2,4)==0)
-                    {
-                        direction[2]=3;
-                    }
-                    if (cor_big(2,4)==0 && cor_big(3,4)==0)
-                    {
-                        direction[3]=4;
-                    }
-                    if (cor_big(3,4)==0 && cor_big(4,4)==0 && cor_big(4,3)==0)
-                    {
-                        direction[4]=5;
-                    }
-                    if (cor_big(4,3)==0 && cor_big(4,2)==0)
-                    {
-                        direction[5]=6;
-                    }
-                    if (cor_big(4,2)==0 && cor_big(4,1)==0 && cor_big(3,1)==0)
-                    {
-                        direction[6]=7;
-                    }
-                    if (cor_big(3,1)==0 && cor_big(2,1)==0)
-                    {
-                        direction[7]=8;
-                    }
+                    fill_big_migration_directions(x1, y1, Visual_range, direction);
                     int mloci=0;
                     for (int mlo=0; mlo<8; mlo++)
                     {
@@ -141,9 +387,6 @@ inline void migration(int i, double deltah, CellArray &cell_array, Array<long, 3
                             }
                         }
                         double density[8]={0};
-                        area_square.resize(10,10);
-                        area_square=0;
-                        area_square(all,all)=Visual_range(Range(x1-4,x1+5),Range(y1-4,y1+5),4);
                         int order=0;
                         double mean_density=0.6;
                         ////////////////////////////////////////////////initial migration direction dudgement////////////////////////////////////////////
@@ -155,257 +398,7 @@ inline void migration(int i, double deltah, CellArray &cell_array, Array<long, 3
                                 //////////////////////////////////////////////8 direction density calculation////////////////////////////////////
                                 for (int loci_for_mig=0; loci_for_mig<8;loci_for_mig++)
                                 {
-                                    switch (loci_for_mig)
-                                    {
-                                        case 0:
-                                        {
-                                            sub_area_square.resize(10,10);
-                                            sub_area_square=0;
-                                            sub_area_square(Range(1,5),Range(1,5))=area_square(Range(1,5),Range(1,5));
-                                            int cell_count[100]={0};
-                                            int cc=0;
-                                            for (int cx=0; cx<10; cx++)
-                                            {
-                                                for(int cy=0; cy<10; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[0]=(double)cells_number/(double)25;
-                                            break;
-                                        }
-                                        case 2:
-                                        {
-                                            sub_area_square.resize(10,10);
-                                            sub_area_square=0;
-                                            sub_area_square(Range(1,5),Range(6,10))=area_square(Range(1,5),Range(6,10));
-                                            int cell_count[100]={0};
-                                            int cc=0;
-                                            for (int cx=0; cx<10; cx++)
-                                            {
-                                                for(int cy=0; cy<10; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[2]=(double)cells_number/(double)25;
-                                            break;
-                                        }
-                                        case 4:
-                                        {
-                                            sub_area_square.resize(10,10);
-                                            sub_area_square=0;
-                                            sub_area_square(Range(6,10),Range(6,10))=area_square(Range(6,10),Range(6,10));
-                                            int cell_count[100]={0};
-                                            int cc=0;
-                                            for (int cx=0; cx<10; cx++)
-                                            {
-                                                for(int cy=0; cy<10; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[4]=(double)cells_number/(double)25;
-                                            break;
-                                        }
-                                        case 6:
-                                        {
-                                            sub_area_square.resize(10,10);
-                                            sub_area_square=0;
-                                            sub_area_square(Range(6,10),Range(1,5))=area_square(Range(6,10),Range(1,5));
-                                            int cell_count[100]={0};
-                                            int cc=0;
-                                            for (int cx=0; cx<10; cx++)
-                                            {
-                                                for(int cy=0; cy<10; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[6]=(double)cells_number/(double)25;
-                                            break;
-                                        }
-                                        case 1:
-                                        {
-                                            sub_area_square.resize(10,10);
-                                            sub_area_square=0;
-                                            int deltay=0;
-                                            for (int xss=1; xss<=5; xss++)
-                                            {
-                                                for (int yss=1+deltay; yss<=10-deltay; yss++)
-                                                {
-                                                    sub_area_square(xss,yss)=area_square(xss,yss);
-                                                }
-                                                deltay++;
-                                            }
-                                            int cell_count[100]={0};
-                                            int cc=0;
-                                            for (int cx=0; cx<10; cx++)
-                                            {
-                                                for(int cy=0; cy<10; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[1]=(double)cells_number/(double)30;
-                                            break;
-                                        }
-                                        case 3:
-                                        {
-                                            sub_area_square.resize(10,10);
-                                            sub_area_square=0;
-                                            int deltay=0;
-                                            for (int yss=10; yss>=6; yss--)
-                                            {
-                                                for (int xss=10-deltay; xss>=1+deltay; xss--)
-                                                {
-                                                    sub_area_square(xss,yss)=area_square(xss,yss);
-                                                }
-                                                deltay++;
-                                            }
-                                            int cell_count[100]={0};
-                                            int cc=0;
-                                            for (int cx=0; cx<10; cx++)
-                                            {
-                                                for(int cy=0; cy<10; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[3]=(double)cells_number/(double)30;
-                                            break;
-                                        }
-                                        case 5:
-                                        {
-                                            sub_area_square.resize(10,10);
-                                            sub_area_square=0;
-                                            int deltay=0;
-                                            for (int xss=10; xss>=6; xss--)
-                                            {
-                                                for (int yss=1+deltay; yss<=10-deltay; yss++)
-                                                {
-                                                    sub_area_square(xss,yss)=area_square(xss,yss);
-                                                }
-                                                deltay++;
-                                            }
-                                            int cell_count[100]={0};
-                                            int cc=0;
-                                            for (int cx=0; cx<10; cx++)
-                                            {
-                                                for(int cy=0; cy<10; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[5]=(double)cells_number/(double)30;
-                                            break;
-                                        }
-                                        case 7:
-                                        {
-                                            sub_area_square.resize(10,10);
-                                            sub_area_square=0;
-                                            int deltay=0;
-                                            for (int yss=1; yss<=5; yss++)
-                                            {
-                                                for (int xss=1+deltay; xss<=10-deltay; xss++)
-                                                {
-                                                    sub_area_square(xss,yss)=area_square(xss,yss);
-                                                }
-                                                deltay++;
-                                            }
-                                            int cell_count[100]={0};
-                                            int cc=0;
-                                            for (int cx=0; cx<10; cx++)
-                                            {
-                                                for(int cy=0; cy<10; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[7]=(double)cells_number/(double)30;
-                                            break;
-                                        }
-                                    }
+                                    density[loci_for_mig] = big_migration_density(x1, y1, Visual_range, loci_for_mig);
                                 }
                                 
                                 int new_direction_number=0;
@@ -1359,42 +1352,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, Array<long, 3
                 }
                 default ://small
                 {
-                    cor_small.resize(3, 3);
-                    cor_small=0;
-                    cor_small(all,all)=Visual_range(Range(x1-1,x1+1),Range(y1-1,y1+1),1);
                     int direction[8]={0};
-                    if (cor_small(1,1)==0)
-                    {
-                        direction[0]=1;
-                    }
-                    if (cor_small(1,2)==0)
-                    {
-                        direction[1]=2;
-                    }
-                    if (cor_small(1,3)==0)
-                    {
-                        direction[2]=3;
-                    }
-                    if (cor_small(2,3)==0)
-                    {
-                        direction[3]=4;
-                    }
-                    if (cor_small(3,3)==0)
-                    {
-                        direction[4]=5;
-                    }
-                    if (cor_small(3,2)==0)
-                    {
-                        direction[5]=6;
-                    }
-                    if (cor_small(3,1)==0)
-                    {
-                        direction[6]=7;
-                    }
-                    if (cor_small(2,1)==0)
-                    {
-                        direction[7]=8;
-                    }
+                    fill_small_migration_directions(x1, y1, Visual_range, direction);
                     int mloci=0;
                     for (int mlo=0; mlo<8; mlo++)
                     {
@@ -1416,9 +1375,6 @@ inline void migration(int i, double deltah, CellArray &cell_array, Array<long, 3
                             }
                         }
                         double density[8]={0};
-                        area_square.resize(9,9);
-                        area_square_s=0;
-                        area_square_s(all,all)=Visual_range(Range(x1-4,x1+4),Range(y1-4,y1+4),4);
                         int order=0;
                         double mean_density=0.6;
                         ////////////////////////////////////////////////////initial migration direction dudgement/////////////////////////////////////////////////////////////
@@ -1430,281 +1386,7 @@ inline void migration(int i, double deltah, CellArray &cell_array, Array<long, 3
                                 /////////////////////////////////////////////8 directions density dudgement/////////////////////////////////////
                                 for (int loci_for_mig=0; loci_for_mig<8;loci_for_mig++)
                                 {
-                                    switch (loci_for_mig)
-                                    {
-                                        case 0:
-                                        {
-                                            sub_area_square.resize(9,9);
-                                            sub_area_square_s=0;
-                                            for (int xss=1; xss<=5; xss++)
-                                            {
-                                                for (int yss=1; yss<=5; yss++)
-                                                {
-                                                    sub_area_square_s(xss,yss)=area_square_s(xss,yss);
-                                                }
-                                            }
-                                            int cell_count[81];
-                                            int cc=0;
-                                            for (int cx=0; cx<9; cx++)
-                                            {
-                                                for(int cy=0; cy<9; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square_s(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[0]=(double)cells_number/(double)25;
-                                            break;
-                                        }
-                                        case 2:
-                                        {
-                                            sub_area_square.resize(9,9);
-                                            sub_area_square_s=0;
-                                            for (int xss=1; xss<=5; xss++)
-                                            {
-                                                for (int yss=5; yss<=9; yss++)
-                                                {
-                                                    sub_area_square_s(xss,yss)=area_square_s(xss,yss);
-                                                }
-                                            }
-                                            int cell_count[81];
-                                            int cc=0;
-                                            for (int cx=0; cx<9; cx++)
-                                            {
-                                                for(int cy=0; cy<9; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square_s(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[2]=(double)cells_number/(double)25;
-                                            break;
-                                        }
-                                        case 4:
-                                        {
-                                            sub_area_square.resize(9,9);
-                                            sub_area_square_s=0;
-                                            for (int xss=5; xss<=9; xss++)
-                                            {
-                                                for (int yss=5; yss<=9; yss++)
-                                                {
-                                                    sub_area_square_s(xss,yss)=area_square_s(xss,yss);
-                                                }
-                                            }
-                                            int cell_count[81];
-                                            int cc=0;
-                                            for (int cx=0; cx<9; cx++)
-                                            {
-                                                for(int cy=0; cy<9; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square_s(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[4]=(double)cells_number/(double)25;
-                                            break;
-                                        }
-                                        case 6:
-                                        {
-                                            sub_area_square.resize(9,9);
-                                            sub_area_square_s=0;
-                                            for (int xss=5; xss<=9; xss++)
-                                            {
-                                                for (int yss=1; yss<=5; yss++)
-                                                {
-                                                    sub_area_square_s(xss,yss)=area_square_s(xss,yss);
-                                                }
-                                            }
-                                            int cell_count[81];
-                                            int cc=0;
-                                            for (int cx=0; cx<9; cx++)
-                                            {
-                                                for(int cy=0; cy<9; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square_s(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[6]=(double)cells_number/(double)25;
-                                            break;
-                                        }
-                                        case 1:
-                                        {
-                                            sub_area_square.resize(9,9);
-                                            sub_area_square_s=0;
-                                            int deltay=0;
-                                            for (int xss=1; xss<=5; xss++)
-                                            {
-                                                for (int yss=1+deltay; yss<=9-deltay; yss++)
-                                                {
-                                                    sub_area_square_s(xss,yss)=area_square_s(xss,yss);
-                                                }
-                                                deltay=deltay+1;
-                                            }
-                                            int cell_count[81];
-                                            int cc=0;
-                                            for (int cx=0; cx<9; cx++)
-                                            {
-                                                for(int cy=0; cy<9; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square_s(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[1]=(double)cells_number/(double)25;
-                                            break;
-                                        }
-                                        case 3:
-                                        {
-                                            sub_area_square.resize(9,9);
-                                            sub_area_square_s=0;
-                                            int deltay=0;
-                                            for (int yss=9; yss>=5; yss--)
-                                            {
-                                                for (int xss=1+deltay; xss<=9-deltay; xss++)
-                                                {
-                                                    sub_area_square_s(xss,yss)=area_square_s(xss,yss);
-                                                }
-                                                deltay=deltay+1;
-                                            }
-                                            int cell_count[81];
-                                            int cc=0;
-                                            for (int cx=0; cx<9; cx++)
-                                            {
-                                                for(int cy=0; cy<9; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square_s(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[3]=(double)cells_number/(double)25;
-                                            break;
-                                        }
-                                        case 5:
-                                        {
-                                            sub_area_square.resize(9,9);
-                                            sub_area_square_s=0;
-                                            int deltay=0;
-                                            for (int xss=9; xss>=5; xss--)
-                                            {
-                                                for (int yss=1+deltay; yss<=9-deltay; yss++)
-                                                {
-                                                    sub_area_square_s(xss,yss)=area_square_s(xss,yss);
-                                                }
-                                                deltay=deltay+1;
-                                            }
-                                            int cell_count[81];
-                                            int cc=0;
-                                            for (int cx=0; cx<9; cx++)
-                                            {
-                                                for(int cy=0; cy<9; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square_s(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[5]=(double)cells_number/(double)25;
-                                            break;
-                                        }
-                                        case 7:
-                                        {
-                                            sub_area_square.resize(9,9);
-                                            sub_area_square_s=0;
-                                            int deltay=0;
-                                            for (int yss=1; yss<=5; yss++)
-                                            {
-                                                for (int xss=1+deltay; xss<=9-deltay; xss++)
-                                                {
-                                                    sub_area_square_s(xss,yss)=area_square_s(xss,yss);
-                                                }
-                                                deltay=deltay+1;
-                                            }
-                                            int cell_count[81];
-                                            int cc=0;
-                                            for (int cx=0; cx<9; cx++)
-                                            {
-                                                for(int cy=0; cy<9; cy++)
-                                                {
-                                                    cell_count[cc]=sub_area_square_s(cx+1,cy+1);
-                                                    cc++;
-                                                }
-                                            }
-                                            vector<int> mycellcount (cell_count, cell_count+100);
-                                            sort(mycellcount.begin(),mycellcount.end());
-                                            mycellcount.erase(unique(mycellcount.begin(), mycellcount.end()), mycellcount.end());
-                                            long cells_number=0;
-                                            cells_number = mycellcount.size();
-                                            if (mycellcount[0]==0)
-                                            {
-                                                cells_number=cells_number-1;
-                                            }
-                                            density[7]=(double)cells_number/(double)25;
-                                            break;
-                                        }
-                                    }
+                                    density[loci_for_mig] = small_migration_density(x1, y1, Visual_range, loci_for_mig);
                                 }
                                 int new_direction_number=0;
                                 for (int dl=0;dl<8;dl++)
@@ -2638,42 +2320,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, Array<long, 3
             {
                 case 0:
                 {
-                    cor_big.resize(4,4);
-                    cor_big=0;
-                    cor_big(all,all)=Visual_range(Range(x1-1,x1+2),Range(y1-1,y1+2),1);
                     int direction[8]={0};
-                    if (cor_big(2,1)==0 && cor_big(1,1)==0 && cor_big(1,2)==0)
-                    {
-                        direction[0]=1;
-                    }
-                    if (cor_big(1,2)==0 && cor_big(1,3)==0)
-                    {
-                        direction[1]=2;
-                    }
-                    if (cor_big(1,3)==0 && cor_big(1,4)==0 && cor_big(2,4)==0)
-                    {
-                        direction[2]=3;
-                    }
-                    if (cor_big(2,4)==0 && cor_big(3,4)==0)
-                    {
-                        direction[3]=4;
-                    }
-                    if (cor_big(3,4)==0 && cor_big(4,4)==0 && cor_big(4,3)==0)
-                    {
-                        direction[4]=5;
-                    }
-                    if (cor_big(4,3)==0 && cor_big(4,2)==0)
-                    {
-                        direction[5]=6;
-                    }
-                    if (cor_big(4,2)==0 && cor_big(4,1)==0 && cor_big(3,1)==0)
-                    {
-                        direction[6]=7;
-                    }
-                    if (cor_big(3,1)==0 && cor_big(2,1)==0)
-                    {
-                        direction[7]=8;
-                    }
+                    fill_big_migration_directions(x1, y1, Visual_range, direction);
                     int mloci=0;
                     for (int mlo=0; mlo<8; mlo++)
                     {
@@ -2869,42 +2517,8 @@ inline void migration(int i, double deltah, CellArray &cell_array, Array<long, 3
                 }
                 default :
                 {
-                    cor_small.resize(3, 3);
-                    cor_small=0;
-                    cor_small(all,all)=Visual_range(Range(x1-1,x1+1),Range(y1-1,y1+1),1);
                     int direction[8]={0};
-                    if (cor_small(1,1)==0)
-                    {
-                        direction[0]=1;
-                    }
-                    if (cor_small(1,2)==0)
-                    {
-                        direction[1]=2;
-                    }
-                    if (cor_small(1,3)==0)
-                    {
-                        direction[2]=3;
-                    }
-                    if (cor_small(2,3)==0)
-                    {
-                        direction[3]=4;
-                    }
-                    if (cor_small(3,3)==0)
-                    {
-                        direction[4]=5;
-                    }
-                    if (cor_small(3,2)==0)
-                    {
-                        direction[5]=6;
-                    }
-                    if (cor_small(3,1)==0)
-                    {
-                        direction[6]=7;
-                    }
-                    if (cor_small(2,1)==0)
-                    {
-                        direction[7]=8;
-                    }
+                    fill_small_migration_directions(x1, y1, Visual_range, direction);
                     int mloci=0;
                     for (int mlo=0; mlo<8; mlo++)
                     {

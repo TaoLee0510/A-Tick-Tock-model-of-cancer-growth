@@ -61,7 +61,7 @@
 using std::chrono::high_resolution_clock;
 
 template <typename CellArray>
-inline void CellMigration(int &DDM, int i, double &deltah,CellArray &cell_array, Array<long, 3> &Visual_range, Array<int,2> &cor_big, Array<int, 2> &area_square, Array<int, 2> &sub_area_square, Array<int, 2> &cor_small, Array<int, 2> &area_square_s, Array<int, 2>  &sub_area_square_s,double &migration_judgement,double deathjudge, double beta_distribution_alpha_mig_time,double beta_distribution_beta_mig_time,int chemotaxis,double bunderD,Array<long, 3> &sub_visual,int borderx,int bordery,double beta_distribution_alpha_for_normal_migration,double migration_rate_r_mean_quia,double beta_distribution_beta_for_normal_migration,long rng_time_step)
+inline void CellMigration(int &DDM, int i, double &deltah,CellArray &cell_array, Array<long, 3> &Visual_range, double &migration_judgement,double deathjudge, double beta_distribution_alpha_mig_time,double beta_distribution_beta_mig_time,int chemotaxis,double bunderD,Array<long, 3> &sub_visual,int borderx,int bordery,double beta_distribution_alpha_for_normal_migration,double migration_rate_r_mean_quia,double beta_distribution_beta_for_normal_migration,long rng_time_step)
 {
     long cell_rng_id = (long)cell_array(i,15);
     if (cell_rng_id == 0)
@@ -136,7 +136,7 @@ inline void CellMigration(int &DDM, int i, double &deltah,CellArray &cell_array,
                                         }
                                         case 1:
                                         {
-                                            migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, rng_time_step, 2000 + rng_event++);
+                                            migration(i, deltah,cell_array, Visual_range, migration_judgement, rng_time_step, 2000 + rng_event++);
                                             break;
                                         }
                                     }
@@ -159,7 +159,7 @@ inline void CellMigration(int &DDM, int i, double &deltah,CellArray &cell_array,
                                         }
                                         case 1:
                                         {
-                                            migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, rng_time_step, 2000 + rng_event++);
+                                            migration(i, deltah,cell_array, Visual_range, migration_judgement, rng_time_step, 2000 + rng_event++);
                                             break;
                                         }
                                     }
@@ -211,7 +211,7 @@ inline void CellMigration(int &DDM, int i, double &deltah,CellArray &cell_array,
                             }
                             else
                             {
-                                migration(i, deltah,cell_array, Visual_range, cor_big, area_square, sub_area_square, cor_small, area_square_s, sub_area_square_s,migration_judgement, rng_time_step, 2000 + rng_event++);
+                                migration(i, deltah,cell_array, Visual_range, migration_judgement, rng_time_step, 2000 + rng_event++);
                             }
                             break;
                         }
