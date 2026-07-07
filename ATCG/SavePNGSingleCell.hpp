@@ -16,7 +16,8 @@
 #include <cmath>
 
 using namespace blitz;
-void SavePNGSingleCell(int Visual_range_x, int Visual_range_y, int T, double alpha, double beta, const Array<double,2> &cell_array)
+template <typename CellArray>
+inline void SavePNGSingleCell(int Visual_range_x, int Visual_range_y, int T, double alpha, double beta, const CellArray &cell_array)
 {
     /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////
     char filedir4 [100] = {'\0'};

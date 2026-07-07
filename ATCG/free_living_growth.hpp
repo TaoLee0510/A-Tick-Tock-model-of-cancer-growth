@@ -514,7 +514,6 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
         
         
         int C1=cells.rows();
-        cell_store_to_array(cells, cell_array, Col);
         
         double start04(0);
         double end04(0);
@@ -566,7 +565,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                     start09=omp_get_wtime();
                     if (H%MMR==0)
                     {
-                        SavePNGSingleCell(Visual_range_x, Visual_range_y, T, alpha, beta, cell_array);
+                        SavePNGSingleCell(Visual_range_x, Visual_range_y, T, alpha, beta, cells);
                     }
                     end09=omp_get_wtime();
                 }
@@ -575,7 +574,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                     start10=omp_get_wtime();
                     if (H%MMR==0)
                     {
-                        SaveCellArraySingleCell(T, alpha, beta, cell_array , Col);
+                        SaveCellArraySingleCell(T, alpha, beta, cells , Col);
                     }
                     end10=omp_get_wtime();
                 }
@@ -583,7 +582,7 @@ void free_living_growth(int Visual_range_x, int Visual_range_y, double R0, doubl
                 if (allpng==1)
                 {
                     start11=omp_get_wtime();
-                    SaveAllPNG( Visual_range_x,  Visual_range_y, cell_array,  H,  T,  alpha,  beta, deltah);
+                    SaveAllPNG( Visual_range_x,  Visual_range_y, cells,  H,  T,  alpha,  beta, deltah);
                     end11=omp_get_wtime();
                 }
 
