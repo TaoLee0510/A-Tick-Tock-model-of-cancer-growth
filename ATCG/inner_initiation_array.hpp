@@ -40,8 +40,8 @@ inline void fill_inner_initiation_cells(int N0,int N01,int R0,int Visual_range_x
     const long rng_context = 10003;
     double initial_r_growth_rate[N0r1];
     double initial_K_growth_rate[N0K1];
-    Array<double,2> cor(2,N01+1,FortranArray<2>());
-    cor=0;
+    std::vector<int> cor_x(N01 + 1, 0);
+    std::vector<int> cor_y(N01 + 1, 0);
     int number_cor=1;
     for (int x=1; x<=Visual_range_x; x++)
     {
@@ -51,25 +51,26 @@ inline void fill_inner_initiation_cells(int N0,int N01,int R0,int Visual_range_x
             {
                 if (Visual_range(x,y,1)==0)
                 {
-                    cor(1,number_cor)=x;
-                    cor(2,number_cor)=y;
+                    cor_x[number_cor]=x;
+                    cor_y[number_cor]=y;
                     number_cor=number_cor+1;
                 }
             }
         }
     }
-    double random_cor[N01];
+    std::vector<int> random_cor(N01);
     for (int x=0; x<N01; x++)
     {
         random_cor[x]=x+1;
     }
-    stateless_shuffle(random_cor, random_cor+N01, rng_context, N01, 1);
-    Array<double,2> cell_array_cor(2,N01,FortranArray<2>());
+    stateless_shuffle(random_cor.begin(), random_cor.end(), rng_context, N01, 1);
+    std::vector<int> cell_cor_x(N01 + 1, 0);
+    std::vector<int> cell_cor_y(N01 + 1, 0);
     for (int x=1; x<=N01; x++)
     {
         int seed = random_cor[x-1];
-        cell_array_cor(1,x)=cor(1,seed);
-        cell_array_cor(2,x)=cor(2,seed);
+        cell_cor_x[x]=cor_x[seed];
+        cell_cor_y[x]=cor_y[seed];
     }
     double rangr2 = uniup_r1 - unilow_r1;
     for (int x=1; x<=N0r1; x++)
@@ -89,8 +90,8 @@ inline void fill_inner_initiation_cells(int N0,int N01,int R0,int Visual_range_x
     {
         if (i<=N0r1)
         {
-            int x1=cell_array_cor(1,i);
-            int y1=cell_array_cor(2,i);
+            int x1=cell_cor_x[i];
+            int y1=cell_cor_y[i];
             cell_array_inner(i,1)=x1;
             cell_array_inner(i,5)=y1;
             cell_array_inner(i,9)=1;
@@ -107,8 +108,8 @@ inline void fill_inner_initiation_cells(int N0,int N01,int R0,int Visual_range_x
         }
         else
         {
-            int x1=cell_array_cor(1,i);
-            int y1=cell_array_cor(2,i);
+            int x1=cell_cor_x[i];
+            int y1=cell_cor_y[i];
             cell_array_inner(i,1)=x1;
             cell_array_inner(i,5)=y1;
             cell_array_inner(i,9)=2;

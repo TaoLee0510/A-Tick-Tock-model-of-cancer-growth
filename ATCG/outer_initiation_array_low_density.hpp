@@ -39,8 +39,8 @@ inline CellStore outer_initiation_low_density_cell_store(int N0, int Visual_rang
     const long rng_context = 10002;
     double initial_r_growth_rate[N0r];
     double initial_K_growth_rate[N0K];
-    Array<double,2> cor(2,N0+1,FortranArray<2>());
-    cor=0;
+    std::vector<int> cor_x(N0 + 1, 0);
+    std::vector<int> cor_y(N0 + 1, 0);
 
     int number_cor=1;
     for (int x=1; x<=Visual_range_x/2; x++)
@@ -49,24 +49,25 @@ inline CellStore outer_initiation_low_density_cell_store(int N0, int Visual_rang
         {
             if (A(x,y)==1)
             {
-                cor(1,number_cor)=x;
-                cor(2,number_cor)=y;
+                cor_x[number_cor]=x;
+                cor_y[number_cor]=y;
                 number_cor=number_cor+1;
             }
         }
     }
-    double random_cor[N0];
+    std::vector<int> random_cor(N0);
     for (int x=0; x<N0; x++)
     {
         random_cor[x]=x+1;
     }
-    stateless_shuffle(random_cor, random_cor+N0, rng_context, N0, 1);
-    Array<double,2> cell_array_cor(2,N0,FortranArray<2>());
+    stateless_shuffle(random_cor.begin(), random_cor.end(), rng_context, N0, 1);
+    std::vector<int> cell_cor_x(N0 + 1, 0);
+    std::vector<int> cell_cor_y(N0 + 1, 0);
     for (int x=1; x<=N0; x++)
     {
         int seed = random_cor[x-1];
-        cell_array_cor(1,x)=cor(1,seed);
-        cell_array_cor(2,x)=cor(2,seed);
+        cell_cor_x[x]=cor_x[seed];
+        cell_cor_y[x]=cor_y[seed];
     }
     double rangr2 = uniup_r - unilow_r;
     for (int x=1; x<=N0r; x++)
@@ -110,11 +111,11 @@ inline CellStore outer_initiation_low_density_cell_store(int N0, int Visual_rang
             continue;
         }
 
-        int x1 = (2*cell_array_cor(1,x))-1;
+        int x1 = (2*cell_cor_x[x])-1;
         int x2 = x1;
         int x3 = x1+1;
         int x4 = x1+1;
-        int y1 = (2*cell_array_cor(2,x))-1;
+        int y1 = (2*cell_cor_y[x])-1;
         int y2 = y1+1;
         int y3 = y1+1;
         int y4 = y1;
