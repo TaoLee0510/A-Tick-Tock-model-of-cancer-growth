@@ -79,15 +79,19 @@ add_executable(atcg
     ATCG/deltah_recalculation.cpp
     ATCG/density_calculation.cpp
     ATCG/density_growth_rate_calculation_1.cpp
+    ATCG/density_dependent_growth.cpp
     ATCG/division.cpp
     ATCG/free_living_division.cpp
     ATCG/free_living_division_single_thread.cpp
+    ATCG/free_living_growth.cpp
+    ATCG/free_living_growth_recovery.cpp
     ATCG/inner_count.cpp
     ATCG/inner_count_low_density.cpp
     ATCG/inner_initiation_array.cpp
     ATCG/int_grid.cpp
     ATCG/int_matrix.cpp
     ATCG/main.cpp
+    ATCG/Low_density_initial_growth.cpp
     ATCG/migrate_activation.cpp
     ATCG/migration.cpp
     ATCG/out_initiation_visualrange.cpp

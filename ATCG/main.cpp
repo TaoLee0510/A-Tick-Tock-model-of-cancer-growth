@@ -41,7 +41,6 @@
 
 
 using namespace std;
-using namespace blitz;
 #pragma pack(8)
 
 static const char *short_options = "x:y:R:r:m:a:b:d:c:M:S:K:q:t:p:g:D:T:u:z:L:F:k:O:Y:f:Z:W:H";
