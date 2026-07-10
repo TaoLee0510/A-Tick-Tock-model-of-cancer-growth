@@ -56,24 +56,33 @@ add_executable(atcg
     ATCG/cell_trace.cpp
     ATCG/cell_motion.cpp
     ATCG/color_space.cpp
+    ATCG/cell_type_transform.cpp
+    ATCG/death_judgement.cpp
     ATCG/deltah_calculation.cpp
     ATCG/deltah_recalculation.cpp
     ATCG/density_calculation.cpp
     ATCG/density_growth_rate_calculation_1.cpp
+    ATCG/division.cpp
+    ATCG/free_living_division.cpp
+    ATCG/free_living_division_single_thread.cpp
     ATCG/inner_count.cpp
     ATCG/inner_count_low_density.cpp
     ATCG/inner_initiation_array.cpp
     ATCG/int_grid.cpp
     ATCG/int_matrix.cpp
     ATCG/main.cpp
+    ATCG/migrate_activation.cpp
+    ATCG/migration.cpp
     ATCG/out_initiation_visualrange.cpp
     ATCG/outer_cell_count.cpp
     ATCG/outer_corr.cpp
     ATCG/outer_initiation_array.cpp
     ATCG/outer_initiation_array_low_density.cpp
     ATCG/read_files.cpp
+    ATCG/random_migration.cpp
     ATCG/recovery_parameters.cpp
     ATCG/stateless_rng.cpp
+    ATCG/stage_convert.cpp
     ATCG/visual_range.cpp
 )
 

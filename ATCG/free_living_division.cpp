@@ -1,15 +1,12 @@
 //
-//  free_living_division_single_thread.hpp
-//  ATCG
+//  free_living_division.hpp
+//  CCDS
 //
-//  Created by Tao Lee on 5/19/24.
-//  Copyright © 2024 Tao Lee. All rights reserved.
-//
-
-#include "free_living_division_single_thread.hpp"
-
+//  Created by Tao Lee on 11/10/22.
+//  Copyright © 2022 Tao Lee. All rights reserved.
 //
 
+#include "free_living_division.hpp"
 
 
 #include <stdio.h>
@@ -51,7 +48,7 @@
 using std::chrono::high_resolution_clock;
 using namespace std;
 using namespace blitz;
-void free_living_division_single_thread(int i, double max_growth_rate_r, double max_growth_rate_K, CellStore &cell_array, VisualRange &Visual_range, CellRowBuffer cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,CellTraceStore &cell_trace,CellTraceStore cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads, long rng_time_step)
+void free_living_division(int i, double max_growth_rate_r, double max_growth_rate_K, CellStore &cell_array, VisualRange &Visual_range, CellRowBuffer cell_temp,int &cell_label, double &deltah,int utralsmall, double beta_distribution_alpha_for_normal_migration,double beta_distribution_beta_for_normal_migration,double migration_rate_K_mean,double uniup_K, double unilow_K,double sigmahatK,double muhatK,long &K_label,double beta_distribution_alpha, double beta_distribution_beta, double migration_rate_r_mean,double migration_rate_r_mean_quia,double beta_distribution_expected_for_normal_migration,CellTraceStore &cell_trace,CellTraceStore cell_trace_temp, long &cell_index,long &r_label,int Col,double K_formation_rate,FILE * fid2, int threads,CellTraceStore &cell_trace_ndcells,int &ndcells,CellRowBuffer &cell_array_ndcells, long rng_time_step)
 {
     int row = i - 1;
     auto &x1_values = cell_array.x1();
@@ -1675,8 +1672,11 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
 //        fprintf(fid2, "%s %d\n" ,"Cell label :",(int)parent_trace_labels[row]);
 //        fprintf(fid2, "%s\n" ,"*********************************************************");
     }
+
+
     if (cell_temp(1,1)!=0 && cell_temp(1,5)!=0)
     {
+        ++ndcells;
         cell_trace_temp.resize(2,150);
         cell_trace_temp=0;
         cell_trace_temp(1,1)=(long)cell_array.id()[0];
@@ -1737,13 +1737,29 @@ void free_living_division_single_thread(int i, double max_growth_rate_r, double 
             fprintf(fid2, "%s\n" ,"*********************************************************");
         }
 
-        cell_trace.resizeAndPreserve(current_size_trace+2,150);
-        cell_trace.copy_row_from(cell_trace_temp, 1, current_size_trace+1);
-        cell_trace.copy_row_from(cell_trace_temp, 2, current_size_trace+2);
+
+        if (ndcells!=0)
+        {
+            int ndcells_number=cell_trace_ndcells.rows();
+            if(ndcells_number!=1)
+            {
+                cell_trace_ndcells.append_row_from(cell_trace_temp, 1);
+                cell_trace_ndcells.append_row_from(cell_trace_temp, 2);
+            }
+            else
+            {
+                cell_trace_ndcells.resize(2,150);
+                cell_trace_ndcells.copy_row_from(cell_trace_temp, 1, 1);
+                cell_trace_ndcells.copy_row_from(cell_trace_temp, 2, 2);
+            }
+
+
+        }
 
         cell_temp(1,13)=stateless_uniform(cell_rng_id, rng_time_step, rng_event++);
+        cell_store_append_row_from_array(cell_array_ndcells, cell_temp, 1, Col);
 
-        cell_store_append_row_from_array(cell_array, cell_temp, 1, Col);
+
 
     }
 }
