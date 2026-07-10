@@ -1,49 +1,8 @@
-//
-//  SaveCellArraySingleCell.hpp
-//  CCDS
-//
-//  Created by Tao Lee on 12/11/22.
-//  Copyright © 2022 Tao Lee. All rights reserved.
-//
-
 #ifndef SaveCellArraySingleCell_hpp
 #define SaveCellArraySingleCell_hpp
 
-#include <stdio.h>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
-#include <pngwriter.h>
-#include <cmath>
+#include "cell_store.hpp"
 
-using namespace blitz;
-template <typename CellArray>
-inline void SaveCellArraySingleCell(int T, double alpha, double beta, const CellArray &cell_array ,int Col)
-{
-    char filedir3 [100] = {'\0'};
-    sprintf(filedir3, "./a_%.1f_b_%.1f/Cell_array_a_%.1f_b_%.1f_h_%.1d.txt",alpha,beta,alpha,beta,T);
-    FILE * fid3;
-    fid3=fopen (filedir3,"w+");
-    int C0 = cell_array.rows();
-    for (int i=1;i<=C0;i++)
-    {
-        for(int co=1;co<=Col;co++)
-        {
-            if(co<29)
-            {
-                fprintf(fid3,"%g\t",cell_array.column(co)[i - 1]);
-            }
-            else if (co>=29 & co<Col)
-            {
-                fprintf(fid3,"%ld\t",(long)cell_array.column(co)[i - 1]);
-            }
-            else
-            {
-                fprintf(fid3,"%ld\n",(long)cell_array.column(co)[i - 1]);
-            }
-        }
-    }
-    fclose(fid3);
-    
-    
-}
-#endif /* SaveCellArraySingleCell_hpp */
+void SaveCellArraySingleCell(int T, double alpha, double beta, const CellStore &cell_array, int Col);
+
+#endif

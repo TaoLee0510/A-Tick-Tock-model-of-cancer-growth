@@ -1,12 +1,12 @@
 //
-//  SaveVisualArrayL1.hpp
+//  SaveVisualArrayL2.hpp
 //  ATCG
 //
 //  Created by Tao Lee on 5/23/24.
 //  Copyright © 2024 Tao Lee. All rights reserved.
 //
 
-#include "SaveVisualArrayL1.hpp"
+#include "SaveVisualArrayL2.hpp"
 
 #include <stdio.h>
 #include <blitz/blitz.h>
@@ -14,13 +14,11 @@
 #include "visual_range.hpp"
 #include <pngwriter.h>
 #include <cmath>
-
-
 using namespace blitz;
-void SaveVisualArrayL1(int T, double alpha, double beta, const VisualRange &Visual_range, int Vx, int Vy)
+void SaveVisualArrayL2(int T, double alpha, double beta, const VisualRange &Visual_range, int Vx, int Vy)
 {
     char filedir1 [100] = {'\0'};
-    sprintf(filedir1, "./a_%.1f_b_%.1f_Visual_range/Visual_range_layer_1_%.1d.txt",alpha,beta,T);
+    sprintf(filedir1, "./a_%.1f_b_%.1f_Visual_range/Visual_range_layer_2_%.1d.txt",alpha,beta,T);
     FILE * fid8;
     fid8=fopen (filedir1,"w+");
     for (int i=1;i<=Vx;i++)
@@ -29,11 +27,11 @@ void SaveVisualArrayL1(int T, double alpha, double beta, const VisualRange &Visu
         {
             if(co<Vy)
             {
-                fprintf(fid8,"%ld\t",Visual_range.occupied(i,co));
+                fprintf(fid8,"%ld\t",Visual_range.density_label(i,co));
             }
             else
             {
-                fprintf(fid8,"%ld\n",Visual_range.occupied(i,co));
+                fprintf(fid8,"%ld\n",Visual_range.density_label(i,co));
             }
         }
     }

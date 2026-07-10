@@ -1,0 +1,209 @@
+//
+//  save_data_free_living.hpp
+//  CCDS
+//
+//  Created by Tao Lee on 11/10/22.
+//  Copyright © 2022 Tao Lee. All rights reserved.
+//
+
+#include "save_data_free_living.hpp"
+
+#include <stdio.h>
+#include <blitz/blitz.h>
+#include <blitz/array.h>
+#include <pngwriter.h>
+#include <cmath>
+#include "cell_store.hpp"
+#include "cell_trace.hpp"
+#include "color_space.hpp"
+
+using namespace blitz;
+void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01, int MMR, int H, int T, double alpha, double beta, const CellStore &cell_array, int migration_judgement,double deltah, const ColorSpace &colorspace, int DDM, int allpng,int Col, const CellTraceStore &cell_trace)
+{
+    if (H%MMR==0)
+    {
+
+        /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////
+        char filedir4 [100] = {'\0'};
+        sprintf(filedir4, "./a_%.1f_b_%.1f_pics/%.1d.png",alpha,beta,T);
+        char filedir5 [100] = {'\0'};
+        sprintf(filedir5, "%.04d h",T);
+        char filedir6 [100] = {'\0'};
+        sprintf(filedir6, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+        FILE * fid4;
+        fid4=fopen (filedir4,"wb");
+        pngwriter image(Visual_range_x, Visual_range_y, 0, filedir4);
+        /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        char filedir3 [100] = {'\0'};
+        sprintf(filedir3, "./a_%.1f_b_%.1f/Cell_array_a_%.1f_b_%.1f_h_%.1d.txt",alpha,beta,alpha,beta,T);
+        FILE * fid3;
+        fid3=fopen (filedir3,"w+");
+        int C0 = cell_array.rows();
+        for (int i=1;i<=C0;i++)
+        {
+            int x= cell_array.x1()[i - 1];
+            int y= cell_array.y1()[i - 1];
+            int cell_type=cell_array.type()[i - 1];
+            int cell_stage=cell_array.stage()[i - 1];
+
+            if(cell_stage==0)
+            {
+                if(cell_type==1)
+                {
+                    image.plot(x, y, 0.0, 1.0, 0.0);
+                    image.plot(x+1, y+1, 0.0, 1.0, 0.0);
+                    image.plot(x+1, y, 0.0, 1.0, 0.0);
+                    image.plot(x, y+1, 0.0, 1.0, 0.0);
+                }
+                else
+                {
+                    image.plot(x, y, 1.0, 0.0, 0.0);
+                    image.plot(x+1, y+1, 1.0, 0.0, 0.0);
+                    image.plot(x+1, y, 1.0, 0.0, 0.0);
+                    image.plot(x, y+1, 1.0, 0.0, 0.0);
+                }
+            }
+            else
+            {
+                if(cell_type==1)
+                {
+                    image.plot(x, y, 0.0, 1.0, 0.0);
+                }
+                else
+                {
+                    image.plot(x, y, 1.0, 0.0, 0.0);
+                }
+            }
+            for(int co=1;co<=Col;co++)
+            {
+                if(co<Col)
+                {
+                    fprintf(fid3,"%g\t",cell_array.column(co)[i - 1]);
+                }
+                else
+                {
+                    fprintf(fid3,"%g\n",cell_array.column(co)[i - 1]);
+                }
+            }
+        }
+        int posx=Visual_range_x-(Visual_range_x * 0.15);
+        int posy=Visual_range_y-(Visual_range_y * 0.1);
+        image.plot_text(filedir6, 30, posx, posy, 0.0, filedir5, 1.0, 1.0, 1.0);
+        image.close();
+        fclose(fid4);
+        fclose(fid3);
+
+        char filedir1 [100] = {'\0'};
+        sprintf(filedir1, "./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,T);
+        FILE * fid8;
+        fid8=fopen (filedir1,"w+");
+        int C01 = cell_trace.rows();
+        for (int i=1;i<=C01;i++)
+        {
+            for(int co=1;co<=150;co++)
+            {
+                if(co<150)
+                {
+                    fprintf(fid8,"%ld\t",cell_trace(i,co));
+                }
+                else
+                {
+                    fprintf(fid8,"%ld\n",cell_trace(i,co));
+                }
+            }
+        }
+        fclose(fid8);
+
+        if (T > 0)
+        {
+            char filedir_prev [100] = {'\0'};
+            int tt=T-1;
+            sprintf(filedir_prev, "./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,tt);
+            remove(filedir_prev);
+        }
+
+        T++;
+
+    }
+    if (allpng==1)
+    {
+        int DELTA=10;
+        if (H%DELTA==0)
+        {
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////
+            double TT=deltah*(double)3600*(double)H;
+            int HH=H/DELTA;
+            char filedir7 [100] = {'\0'};
+            sprintf(filedir7, "./a_%.1f_b_%.1f_picsall/%.1d.png",alpha,beta,HH);
+            char filedir8 [100] = {'\0'};
+            sprintf(filedir8, "%.08d s",(int)TT);
+            char filedir9 [100] = {'\0'};
+            sprintf(filedir9, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+            FILE * fid5;
+            fid5=fopen (filedir7,"wb");
+            pngwriter image2(Visual_range_x, Visual_range_y, 0, filedir7);
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //        char filedir16 [100] = {'\0'};
+    //        sprintf(filedir16, "./a_%.1f_b_%.1f_all/Cell_array_%.1d.txt",alpha,beta,H);
+    //        FILE * fid8;
+    //        fid8=fopen (filedir16,"w+");
+
+            int C0 = cell_array.rows();
+            for (int i=1;i<=C0;i++)
+            {
+                int x= cell_array.x1()[i - 1];
+                int y= cell_array.y1()[i - 1];
+                int cell_type=cell_array.type()[i - 1];
+                int cell_stage=cell_array.stage()[i - 1];
+
+                if(cell_stage==0)
+                {
+                    if(cell_type==1)
+                    {
+                        image2.plot(x, y, 0.0, 1.0, 0.0);
+                        image2.plot(x+1, y+1, 0.0, 1.0, 0.0);
+                        image2.plot(x+1, y, 0.0, 1.0, 0.0);
+                        image2.plot(x, y+1, 0.0, 1.0, 0.0);
+                    }
+                    else
+                    {
+                        image2.plot(x, y, 1.0, 0.0, 0.0);
+                        image2.plot(x+1, y+1, 1.0, 0.0, 0.0);
+                        image2.plot(x+1, y, 1.0, 0.0, 0.0);
+                        image2.plot(x, y+1, 1.0, 0.0, 0.0);
+                    }
+                }
+                else
+                {
+                    if(cell_type==1)
+                    {
+                        image2.plot(x, y, 0.0, 1.0, 0.0);
+                    }
+                    else
+                    {
+                        image2.plot(x, y, 1.0, 0.0, 0.0);
+                    }
+                }
+    //            for(int co=1;co<=Col;co++)
+    //            {
+    //                if(co<Col)
+    //                {
+    //                    fprintf(fid8,"%g\t",cell_array.column(co)[i - 1]);
+    //                }
+    //                else
+    //                {
+    //                    fprintf(fid8,"%g\n",cell_array.column(co)[i - 1]);
+    //                }
+    //            }
+            }
+            int posx=Visual_range_x-(Visual_range_x * 0.15);
+            int posy=Visual_range_y-(Visual_range_y * 0.1);
+            image2.plot_text(filedir9, 30, posx, posy, 0.0, filedir8, 1.0, 1.0, 1.0);
+            image2.close();
+            fclose(fid5);
+    //        fclose(fid8);
+        }
+    }
+}

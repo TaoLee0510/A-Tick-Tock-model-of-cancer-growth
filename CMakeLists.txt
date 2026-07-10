@@ -57,6 +57,18 @@ add_executable(atcg
     ATCG/CellMigrationDivision.cpp
     ATCG/CellMigrationDivisionSingleCell.cpp
     ATCG/CountLines.cpp
+    ATCG/SaveAllPNG.cpp
+    ATCG/SaveCellArray.cpp
+    ATCG/SaveCellArraySingleCell.cpp
+    ATCG/SaveCellTraceArray.cpp
+    ATCG/SaveClonePNGHR.cpp
+    ATCG/SaveClonePNGS.cpp
+    ATCG/SavePNGHR.cpp
+    ATCG/SavePNGS.cpp
+    ATCG/SavePNGSingleCell.cpp
+    ATCG/SaveVisualArrayL1.cpp
+    ATCG/SaveVisualArrayL2.cpp
+    ATCG/SaveVisualArrayL3.cpp
     ATCG/cell_store.cpp
     ATCG/cell_trace.cpp
     ATCG/cell_motion.cpp
@@ -86,6 +98,8 @@ add_executable(atcg
     ATCG/read_files.cpp
     ATCG/random_migration.cpp
     ATCG/recovery_parameters.cpp
+    ATCG/save_data.cpp
+    ATCG/save_data_free_living.cpp
     ATCG/stateless_rng.cpp
     ATCG/stage_convert.cpp
     ATCG/visual_range.cpp
