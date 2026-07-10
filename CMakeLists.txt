@@ -51,12 +51,27 @@ find_library(PNGWRITER_LIBRARY
 )
 
 add_executable(atcg
+    ATCG/CountLines.cpp
     ATCG/cell_store.cpp
     ATCG/cell_trace.cpp
+    ATCG/cell_motion.cpp
     ATCG/color_space.cpp
+    ATCG/deltah_calculation.cpp
+    ATCG/deltah_recalculation.cpp
+    ATCG/density_calculation.cpp
+    ATCG/density_growth_rate_calculation_1.cpp
+    ATCG/inner_count.cpp
+    ATCG/inner_count_low_density.cpp
+    ATCG/inner_initiation_array.cpp
     ATCG/int_grid.cpp
     ATCG/int_matrix.cpp
     ATCG/main.cpp
+    ATCG/out_initiation_visualrange.cpp
+    ATCG/outer_cell_count.cpp
+    ATCG/outer_corr.cpp
+    ATCG/outer_initiation_array.cpp
+    ATCG/outer_initiation_array_low_density.cpp
+    ATCG/read_files.cpp
     ATCG/recovery_parameters.cpp
     ATCG/stateless_rng.cpp
     ATCG/visual_range.cpp
