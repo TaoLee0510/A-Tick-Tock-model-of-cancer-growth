@@ -51,6 +51,11 @@ find_library(PNGWRITER_LIBRARY
 )
 
 add_executable(atcg
+    ATCG/CellDivision.cpp
+    ATCG/CellDivisionSingleCell.cpp
+    ATCG/CellMigration.cpp
+    ATCG/CellMigrationDivision.cpp
+    ATCG/CellMigrationDivisionSingleCell.cpp
     ATCG/CountLines.cpp
     ATCG/cell_store.cpp
     ATCG/cell_trace.cpp
