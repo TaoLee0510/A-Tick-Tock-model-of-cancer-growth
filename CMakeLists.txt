@@ -124,3 +124,14 @@ target_link_libraries(atcg PRIVATE
     ZLIB::ZLIB
     ${PNGWRITER_LIBRARY}
 )
+
+include(CTest)
+
+if(BUILD_TESTING)
+    add_executable(stateless_rng_test
+        ATCG/stateless_rng.cpp
+        tests/stateless_rng_test.cpp
+    )
+    target_include_directories(stateless_rng_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ATCG)
+    add_test(NAME stateless_rng_test COMMAND stateless_rng_test)
+endif()
