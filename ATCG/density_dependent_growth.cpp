@@ -294,28 +294,28 @@ void density_dependent_growth(int Visual_range_x, int Visual_range_y, double R0,
 
     //////////////////////////////////////////////////////////////////////////output parameters/////////////////////////////////////////////////////
     char dirname [100] = {'\0'};
-    sprintf(dirname, "mkdir ./a_%.1f_b_%.1f",alpha,beta);
+    snprintf(dirname, sizeof(dirname), "mkdir ./a_%.1f_b_%.1f",alpha,beta);
     system(dirname);
     char dirname1 [100] = {'\0'};
-    sprintf(dirname1, "mkdir ./a_%.1f_b_%.1f_pics",alpha,beta);
+    snprintf(dirname1, sizeof(dirname1), "mkdir ./a_%.1f_b_%.1f_pics",alpha,beta);
     system(dirname1);
     char dirname3 [100] = {'\0'};
-    sprintf(dirname3, "mkdir ./a_%.1f_b_%.1f_clonepics",alpha,beta);
+    snprintf(dirname3, sizeof(dirname3), "mkdir ./a_%.1f_b_%.1f_clonepics",alpha,beta);
     system(dirname3);
     if (allpng==1)
     {
         char dirname2 [100] = {'\0'};
-        sprintf(dirname2, "mkdir ./a_%.1f_b_%.1f_picsall",alpha,beta);
+        snprintf(dirname2, sizeof(dirname2), "mkdir ./a_%.1f_b_%.1f_picsall",alpha,beta);
         system(dirname2);
         char dirname4 [100] = {'\0'};
-        sprintf(dirname4, "mkdir ./a_%.1f_b_%.1f_clonepicsall",alpha,beta);
+        snprintf(dirname4, sizeof(dirname4), "mkdir ./a_%.1f_b_%.1f_clonepicsall",alpha,beta);
         system(dirname4);
         char dirname5 [100] = {'\0'};
-        sprintf(dirname5, "mkdir ./a_%.1f_b_%.1f_all",alpha,beta);
+        snprintf(dirname5, sizeof(dirname5), "mkdir ./a_%.1f_b_%.1f_all",alpha,beta);
         system(dirname5);
     }
     char filedir [100] = {'\0'};
-    sprintf(filedir, "./Parameters.txt");
+    snprintf(filedir, sizeof(filedir), "./Parameters.txt");
     FILE * fid1;
     fid1=fopen (filedir,"w+");
     fprintf(fid1, "%s %s %lf\n" ,"R0", "=", R0);

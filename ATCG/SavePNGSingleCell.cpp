@@ -16,11 +16,11 @@ void SavePNGSingleCell(int Visual_range_x, int Visual_range_y, int T, double alp
 {
     /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////
     char filedir4 [100] = {'\0'};
-    sprintf(filedir4, "./a_%.1f_b_%.1f_pics/%.1d.png",alpha,beta,T);
+    snprintf(filedir4, sizeof(filedir4), "./a_%.1f_b_%.1f_pics/%.1d.png",alpha,beta,T);
     char filedir5 [100] = {'\0'};
-    sprintf(filedir5, "%.04d h",T);
+    snprintf(filedir5, sizeof(filedir5), "%.04d h",T);
     char filedir6 [100] = {'\0'};
-    sprintf(filedir6, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+    snprintf(filedir6, sizeof(filedir6), "/Users/taolee/Library/Fonts/Calisto MT.ttf");
     FILE * fid4;
     fid4=fopen (filedir4,"wb");
     pngwriter image(Visual_range_x, Visual_range_y, 0, filedir4);

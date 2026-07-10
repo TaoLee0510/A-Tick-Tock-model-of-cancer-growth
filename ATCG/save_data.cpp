@@ -30,27 +30,27 @@ void save_data(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01,
         }
         /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////
         char filedir4 [100] = {'\0'};
-        sprintf(filedir4, "./a_%.1f_b_%.1f_pics/%.1d.png",alpha,beta,T);
+        snprintf(filedir4, sizeof(filedir4), "./a_%.1f_b_%.1f_pics/%.1d.png",alpha,beta,T);
         char filedir5 [100] = {'\0'};
-        sprintf(filedir5, "%.04d h",T);
+        snprintf(filedir5, sizeof(filedir5), "%.04d h",T);
         char filedir6 [100] = {'\0'};
-        sprintf(filedir6, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+        snprintf(filedir6, sizeof(filedir6), "/Users/taolee/Library/Fonts/Calisto MT.ttf");
         FILE * fid4;
         fid4=fopen (filedir4,"wb");
         pngwriter image(Visual_range_x, Visual_range_y, 0, filedir4);
         /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////
         char filedir10 [100] = {'\0'};
-        sprintf(filedir10, "./a_%.1f_b_%.1f_clonepics/%.1d.png",alpha,beta,T);
+        snprintf(filedir10, sizeof(filedir10), "./a_%.1f_b_%.1f_clonepics/%.1d.png",alpha,beta,T);
         char filedir11 [100] = {'\0'};
-        sprintf(filedir11, "%.04d h",T);
+        snprintf(filedir11, sizeof(filedir11), "%.04d h",T);
         char filedir12 [100] = {'\0'};
-        sprintf(filedir12, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+        snprintf(filedir12, sizeof(filedir12), "/Users/taolee/Library/Fonts/Calisto MT.ttf");
         FILE * fid6;
         fid6=fopen (filedir10,"wb");
         pngwriter image1(Visual_range_x, Visual_range_y, 0, filedir10);
        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
         char filedir3 [100] = {'\0'};
-        sprintf(filedir3, "./a_%.1f_b_%.1f/Cell_array_a_%.1f_b_%.1f_h_%.1d.txt",alpha,beta,alpha,beta,T);
+        snprintf(filedir3, sizeof(filedir3), "./a_%.1f_b_%.1f/Cell_array_a_%.1f_b_%.1f_h_%.1d.txt",alpha,beta,alpha,beta,T);
         FILE * fid3;
         fid3=fopen (filedir3,"w+");
         int C0 = cell_array.rows();
@@ -124,27 +124,27 @@ void save_data(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01,
         /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////
         double TT=deltah*(double)3600*(double)H;
         char filedir7 [100] = {'\0'};
-        sprintf(filedir7, "./a_%.1f_b_%.1f_picsall/%.1d.png",alpha,beta,H);
+        snprintf(filedir7, sizeof(filedir7), "./a_%.1f_b_%.1f_picsall/%.1d.png",alpha,beta,H);
         char filedir8 [100] = {'\0'};
-        sprintf(filedir8, "%.08d s",(int)TT);
+        snprintf(filedir8, sizeof(filedir8), "%.08d s",(int)TT);
         char filedir9 [100] = {'\0'};
-        sprintf(filedir9, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+        snprintf(filedir9, sizeof(filedir9), "/Users/taolee/Library/Fonts/Calisto MT.ttf");
         FILE * fid5;
         fid5=fopen (filedir7,"wb");
         pngwriter image2(Visual_range_x, Visual_range_y, 0, filedir7);
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         char filedir13 [100] = {'\0'};
-        sprintf(filedir13, "./a_%.1f_b_%.1f_clonepicsall/%.1d.png",alpha,beta,H);
+        snprintf(filedir13, sizeof(filedir13), "./a_%.1f_b_%.1f_clonepicsall/%.1d.png",alpha,beta,H);
         char filedir14 [100] = {'\0'};
-        sprintf(filedir14, "%.08d s",(int)TT);;
+        snprintf(filedir14, sizeof(filedir14), "%.08d s",(int)TT);;
         char filedir15 [100] = {'\0'};
-        sprintf(filedir15, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+        snprintf(filedir15, sizeof(filedir15), "/Users/taolee/Library/Fonts/Calisto MT.ttf");
         FILE * fid7;
         fid7=fopen (filedir13,"wb");
         pngwriter image3(Visual_range_x, Visual_range_y, 0, filedir13);
 
 //        char filedir16 [100] = {'\0'};
-//        sprintf(filedir16, "./a_%.1f_b_%.1f_all/Cell_array_%.1d.txt",alpha,beta,H);
+//        snprintf(filedir16, sizeof(filedir16), "./a_%.1f_b_%.1f_all/Cell_array_%.1d.txt",alpha,beta,H);
 //        FILE * fid8;
 //        fid8=fopen (filedir16,"w+");
 

@@ -17,7 +17,7 @@
 void SaveVisualArrayL1(int T, double alpha, double beta, const VisualRange &Visual_range, int Vx, int Vy)
 {
     char filedir1 [100] = {'\0'};
-    sprintf(filedir1, "./a_%.1f_b_%.1f_Visual_range/Visual_range_layer_1_%.1d.txt",alpha,beta,T);
+    snprintf(filedir1, sizeof(filedir1), "./a_%.1f_b_%.1f_Visual_range/Visual_range_layer_1_%.1d.txt",alpha,beta,T);
     FILE * fid8;
     fid8=fopen (filedir1,"w+");
     for (int i=1;i<=Vx;i++)

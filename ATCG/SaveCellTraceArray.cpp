@@ -17,7 +17,7 @@
 void SaveCellTraceArray(int T, double alpha, double beta, const CellTraceStore &cell_trace)
 {
     char filedir1 [100] = {'\0'};
-    sprintf(filedir1, "./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,T);
+    snprintf(filedir1, sizeof(filedir1), "./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,T);
     FILE * fid8;
     fid8=fopen (filedir1,"w+");
     int C01 = cell_trace.rows();
@@ -42,7 +42,7 @@ void SaveCellTraceArray(int T, double alpha, double beta, const CellTraceStore &
     {
         char filedir_prev [100] = {'\0'};
         int tt=T-1;
-        sprintf(filedir_prev, "./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,tt);
+        snprintf(filedir_prev, sizeof(filedir_prev), "./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,tt);
         remove(filedir_prev);
     }
 }

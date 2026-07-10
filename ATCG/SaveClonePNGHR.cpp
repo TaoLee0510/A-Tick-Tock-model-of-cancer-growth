@@ -19,11 +19,11 @@ void SaveClonePNGHR(int Visual_range_x, int Visual_range_y, const CellStore &cel
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     char filedir13 [100] = {'\0'};
-    sprintf(filedir13, "./a_%.1f_b_%.1f_clonepicsall/%.1d.png",alpha,beta,H);
+    snprintf(filedir13, sizeof(filedir13), "./a_%.1f_b_%.1f_clonepicsall/%.1d.png",alpha,beta,H);
     char filedir14 [100] = {'\0'};
-    sprintf(filedir14, "%.08d s",(int)TT);;
+    snprintf(filedir14, sizeof(filedir14), "%.08d s",(int)TT);;
     char filedir15 [100] = {'\0'};
-    sprintf(filedir15, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+    snprintf(filedir15, sizeof(filedir15), "/Users/taolee/Library/Fonts/Calisto MT.ttf");
     FILE * fid7;
     fid7=fopen (filedir13,"wb");
     pngwriter image3(Visual_range_x, Visual_range_y, 0, filedir13);

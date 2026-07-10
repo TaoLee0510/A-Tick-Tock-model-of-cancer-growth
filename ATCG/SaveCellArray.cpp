@@ -17,7 +17,7 @@ void SaveCellArray(int &T, double alpha, double beta, const CellStore &cell_arra
     if(Col>28)
     {
         char filedir3 [100] = {'\0'};
-        sprintf(filedir3, "./a_%.1f_b_%.1f/Cell_array_a_%.1f_b_%.1f_h_%.1d.txt",alpha,beta,alpha,beta,T);
+        snprintf(filedir3, sizeof(filedir3), "./a_%.1f_b_%.1f/Cell_array_a_%.1f_b_%.1f_h_%.1d.txt",alpha,beta,alpha,beta,T);
         FILE * fid3;
         fid3=fopen (filedir3,"w+");
         int C0 = cell_array.rows();
@@ -44,7 +44,7 @@ void SaveCellArray(int &T, double alpha, double beta, const CellStore &cell_arra
     else
     {
         char filedir3 [100] = {'\0'};
-        sprintf(filedir3, "./a_%.1f_b_%.1f/Cell_array_a_%.1f_b_%.1f_h_%.1d.txt",alpha,beta,alpha,beta,T);
+        snprintf(filedir3, sizeof(filedir3), "./a_%.1f_b_%.1f/Cell_array_a_%.1f_b_%.1f_h_%.1d.txt",alpha,beta,alpha,beta,T);
         FILE * fid3;
         fid3=fopen (filedir3,"w+");
         int C0 = cell_array.rows();

@@ -22,18 +22,18 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
 
         /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////
         char filedir4 [100] = {'\0'};
-        sprintf(filedir4, "./a_%.1f_b_%.1f_pics/%.1d.png",alpha,beta,T);
+        snprintf(filedir4, sizeof(filedir4), "./a_%.1f_b_%.1f_pics/%.1d.png",alpha,beta,T);
         char filedir5 [100] = {'\0'};
-        sprintf(filedir5, "%.04d h",T);
+        snprintf(filedir5, sizeof(filedir5), "%.04d h",T);
         char filedir6 [100] = {'\0'};
-        sprintf(filedir6, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+        snprintf(filedir6, sizeof(filedir6), "/Users/taolee/Library/Fonts/Calisto MT.ttf");
         FILE * fid4;
         fid4=fopen (filedir4,"wb");
         pngwriter image(Visual_range_x, Visual_range_y, 0, filedir4);
         /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
         char filedir3 [100] = {'\0'};
-        sprintf(filedir3, "./a_%.1f_b_%.1f/Cell_array_a_%.1f_b_%.1f_h_%.1d.txt",alpha,beta,alpha,beta,T);
+        snprintf(filedir3, sizeof(filedir3), "./a_%.1f_b_%.1f/Cell_array_a_%.1f_b_%.1f_h_%.1d.txt",alpha,beta,alpha,beta,T);
         FILE * fid3;
         fid3=fopen (filedir3,"w+");
         int C0 = cell_array.rows();
@@ -92,7 +92,7 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
         fclose(fid3);
 
         char filedir1 [100] = {'\0'};
-        sprintf(filedir1, "./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,T);
+        snprintf(filedir1, sizeof(filedir1), "./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,T);
         FILE * fid8;
         fid8=fopen (filedir1,"w+");
         int C01 = cell_trace.rows();
@@ -116,7 +116,7 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
         {
             char filedir_prev [100] = {'\0'};
             int tt=T-1;
-            sprintf(filedir_prev, "./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,tt);
+            snprintf(filedir_prev, sizeof(filedir_prev), "./a_%.1f_b_%.1f_CellTrace/Cell_Trace_%.1d.txt",alpha,beta,tt);
             remove(filedir_prev);
         }
 
@@ -133,17 +133,17 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
             double TT=deltah*(double)3600*(double)H;
             int HH=H/DELTA;
             char filedir7 [100] = {'\0'};
-            sprintf(filedir7, "./a_%.1f_b_%.1f_picsall/%.1d.png",alpha,beta,HH);
+            snprintf(filedir7, sizeof(filedir7), "./a_%.1f_b_%.1f_picsall/%.1d.png",alpha,beta,HH);
             char filedir8 [100] = {'\0'};
-            sprintf(filedir8, "%.08d s",(int)TT);
+            snprintf(filedir8, sizeof(filedir8), "%.08d s",(int)TT);
             char filedir9 [100] = {'\0'};
-            sprintf(filedir9, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+            snprintf(filedir9, sizeof(filedir9), "/Users/taolee/Library/Fonts/Calisto MT.ttf");
             FILE * fid5;
             fid5=fopen (filedir7,"wb");
             pngwriter image2(Visual_range_x, Visual_range_y, 0, filedir7);
             //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //        char filedir16 [100] = {'\0'};
-    //        sprintf(filedir16, "./a_%.1f_b_%.1f_all/Cell_array_%.1d.txt",alpha,beta,H);
+    //        snprintf(filedir16, sizeof(filedir16), "./a_%.1f_b_%.1f_all/Cell_array_%.1d.txt",alpha,beta,H);
     //        FILE * fid8;
     //        fid8=fopen (filedir16,"w+");
 

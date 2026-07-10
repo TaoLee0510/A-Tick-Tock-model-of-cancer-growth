@@ -16,11 +16,11 @@
 void SaveClonePNGS(int Visual_range_x, int Visual_range_y, int &T, double alpha, double beta, const CellStore &cell_array, const ColorSpace &colorspace)
 {
     char filedir10 [100] = {'\0'};
-    sprintf(filedir10, "./a_%.1f_b_%.1f_clonepics/%.1d.png",alpha,beta,T);
+    snprintf(filedir10, sizeof(filedir10), "./a_%.1f_b_%.1f_clonepics/%.1d.png",alpha,beta,T);
     char filedir11 [100] = {'\0'};
-    sprintf(filedir11, "%.04d h",T);
+    snprintf(filedir11, sizeof(filedir11), "%.04d h",T);
     char filedir12 [100] = {'\0'};
-    sprintf(filedir12, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+    snprintf(filedir12, sizeof(filedir12), "/Users/taolee/Library/Fonts/Calisto MT.ttf");
     FILE * fid6;
     fid6=fopen (filedir10,"wb");
     pngwriter image1(Visual_range_x, Visual_range_y, 0, filedir10);

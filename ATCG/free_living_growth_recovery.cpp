@@ -249,23 +249,23 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
 
     //////////////////////////////////////////////////////////////////////////output parameters/////////////////////////////////////////////////////
     char dirname [100] = {'\0'};
-    sprintf(dirname, "mkdir ./a_%.1f_b_%.1f",alpha,beta);
+    snprintf(dirname, sizeof(dirname), "mkdir ./a_%.1f_b_%.1f",alpha,beta);
     system(dirname);
     char dirname1 [100] = {'\0'};
-    sprintf(dirname1, "mkdir ./a_%.1f_b_%.1f_pics",alpha,beta);
+    snprintf(dirname1, sizeof(dirname1), "mkdir ./a_%.1f_b_%.1f_pics",alpha,beta);
     system(dirname1);
     char dirname2 [100] = {'\0'};
-    sprintf(dirname2, "mkdir ./a_%.1f_b_%.1f_CellTrace",alpha,beta);
+    snprintf(dirname2, sizeof(dirname2), "mkdir ./a_%.1f_b_%.1f_CellTrace",alpha,beta);
     system(dirname2);
     if (allpng==1)
     {
         char dirname2 [100] = {'\0'};
-        sprintf(dirname2, "mkdir ./a_%.1f_b_%.1f_picsall",alpha,beta);
+        snprintf(dirname2, sizeof(dirname2), "mkdir ./a_%.1f_b_%.1f_picsall",alpha,beta);
         system(dirname2);
 
     }
     char filedir [100] = {'\0'};
-    sprintf(filedir, "./Parameters_recovery.txt");
+    snprintf(filedir, sizeof(filedir), "./Parameters_recovery.txt");
     FILE * fid1;
     fid1=fopen (filedir,"w+");
     fprintf(fid1, "%s %s %lf\n" ,"R0", "=", R0);
@@ -310,7 +310,7 @@ void free_living_growth_recovery(int Visual_range_x, int Visual_range_y, double 
     fclose(fid1);
 
     char filedir1 [100] = {'\0'};
-    sprintf(filedir1, "./Logs_recovery.txt");
+    snprintf(filedir1, sizeof(filedir1), "./Logs_recovery.txt");
     FILE * fid2;
     fid2=fopen (filedir1,"w+");
     ////////////////////////////////////////////////////////////////////migration and proliferation//////////////////////////////////////////////////////////////

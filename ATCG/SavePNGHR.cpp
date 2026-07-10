@@ -20,11 +20,11 @@ void SavePNGHR(int Visual_range_x, int Visual_range_y, const CellStore &cell_arr
     double TT=deltah*(double)3600*(double)H;
     int HH=H;
     char filedir7 [100] = {'\0'};
-    sprintf(filedir7, "./a_%.1f_b_%.1f_picsall/%.1d.png",alpha,beta,HH);
+    snprintf(filedir7, sizeof(filedir7), "./a_%.1f_b_%.1f_picsall/%.1d.png",alpha,beta,HH);
     char filedir8 [100] = {'\0'};
-    sprintf(filedir8, "%.08d s",(int)TT);
+    snprintf(filedir8, sizeof(filedir8), "%.08d s",(int)TT);
     char filedir9 [100] = {'\0'};
-    sprintf(filedir9, "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+    snprintf(filedir9, sizeof(filedir9), "/Users/taolee/Library/Fonts/Calisto MT.ttf");
     FILE * fid5;
     fid5=fopen (filedir7,"wb");
     pngwriter image2(Visual_range_x, Visual_range_y, 0, filedir7);
