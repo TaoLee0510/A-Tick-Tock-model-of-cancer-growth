@@ -61,7 +61,7 @@ inline CellStore outer_initiation_low_density_cell_store(int N0, int Visual_rang
     {
         random_cor[x]=x+1;
     }
-    stateless_shuffle(random_cor.begin(), random_cor.end(), rng_context, N0, 1);
+    stateless_shuffle(random_cor.data(), random_cor.data() + random_cor.size(), rng_context, N0, 1);
     std::vector<int> cell_cor_x(N0 + 1, 0);
     std::vector<int> cell_cor_y(N0 + 1, 0);
     for (int x=1; x<=N0; x++)

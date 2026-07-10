@@ -51,7 +51,15 @@ find_library(PNGWRITER_LIBRARY
 )
 
 add_executable(atcg
+    ATCG/cell_store.cpp
+    ATCG/cell_trace.cpp
+    ATCG/color_space.cpp
+    ATCG/int_grid.cpp
+    ATCG/int_matrix.cpp
     ATCG/main.cpp
+    ATCG/recovery_parameters.cpp
+    ATCG/stateless_rng.cpp
+    ATCG/visual_range.cpp
 )
 
 target_include_directories(atcg PRIVATE

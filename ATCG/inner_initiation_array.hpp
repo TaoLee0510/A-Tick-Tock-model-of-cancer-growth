@@ -63,7 +63,7 @@ inline void fill_inner_initiation_cells(int N0,int N01,int R0,int Visual_range_x
     {
         random_cor[x]=x+1;
     }
-    stateless_shuffle(random_cor.begin(), random_cor.end(), rng_context, N01, 1);
+    stateless_shuffle(random_cor.data(), random_cor.data() + random_cor.size(), rng_context, N01, 1);
     std::vector<int> cell_cor_x(N01 + 1, 0);
     std::vector<int> cell_cor_y(N01 + 1, 0);
     for (int x=1; x<=N01; x++)
