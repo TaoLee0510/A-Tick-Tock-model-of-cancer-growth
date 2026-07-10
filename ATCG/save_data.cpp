@@ -8,16 +8,17 @@
 
 #include "save_data.hpp"
 
+#include <iostream>
 #include <stdio.h>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include <pngwriter.h>
 #include <cmath>
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
 #include "color_space.hpp"
 
-using namespace blitz;
+using std::cout;
+using std::endl;
+
 void save_data(int Visual_range_x, int Visual_range_y, int N0, int N00, int N01, int MMR, int H, int &T, double alpha, double beta, const CellStore &cell_array, int migration_judgement,double deltah, const ColorSpace &colorspace, int DDM, int allpng)
 {
     if (H%MMR==0)

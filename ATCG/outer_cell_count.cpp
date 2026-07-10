@@ -8,11 +8,11 @@
 
 #include "outer_cell_count.hpp"
 
+#include <cmath>
 #include <stdio.h>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 
-using namespace blitz;
+using std::pow;
+
 void outer_cell_count(int Visual_range_x,int Visual_range_y,int &N0,double R0, double R1)
 {
     double r0=R0/2;

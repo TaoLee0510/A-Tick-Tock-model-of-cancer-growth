@@ -13,17 +13,12 @@
 #include <algorithm>
 #include <random>
 #include <vector>
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
 #include <ctime>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
 #include "visual_range.hpp"
 #include "density_growth_rate_calculation_1.hpp"
 #include "stateless_rng.hpp"
-using namespace blitz;
 
 bool death_judgement_live_cell(const CellStore &cell_array, int row)
 {

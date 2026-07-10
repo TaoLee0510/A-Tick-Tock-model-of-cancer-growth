@@ -9,14 +9,11 @@
 #include "SaveVisualArrayL1.hpp"
 
 #include <stdio.h>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include "visual_range.hpp"
 #include <pngwriter.h>
 #include <cmath>
 
 
-using namespace blitz;
 void SaveVisualArrayL1(int T, double alpha, double beta, const VisualRange &Visual_range, int Vx, int Vy)
 {
     char filedir1 [100] = {'\0'};

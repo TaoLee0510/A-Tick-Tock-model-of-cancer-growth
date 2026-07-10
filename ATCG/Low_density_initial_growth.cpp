@@ -8,6 +8,8 @@
 
 #include "Low_density_initial_growth.hpp"
 
+#include <gsl/gsl_cdf.h>
+
 #include <stdio.h>
 #include <iostream>
 #include <time.h>
@@ -22,19 +24,6 @@
 #include <fstream>
 #include <iomanip>
 #include <getopt.h>
-#include <gsl/gsl_sf_bessel.h>
-#include <gsl/gsl_cdf.h>
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
-#include <gsl/gsl_block.h>
-#include <gsl/gsl_vector.h>
-#include <gsl/gsl_sort.h>
-#include <gsl/gsl_sort_vector.h>
-#include <gsl/gsl_matrix.h>
-#define BZ_THREADSAFE
-#define BZ_THREADSAFE_USE_OPENMP
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
 #include "visual_range.hpp"

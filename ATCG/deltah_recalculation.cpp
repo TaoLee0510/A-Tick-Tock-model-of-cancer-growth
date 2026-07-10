@@ -11,8 +11,6 @@
 #include <stdio.h>
 #include <algorithm>
 #include <cmath>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
 

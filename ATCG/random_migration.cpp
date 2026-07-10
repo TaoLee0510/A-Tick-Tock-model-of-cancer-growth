@@ -20,26 +20,12 @@
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
-#include <gsl/gsl_sf_bessel.h>
-#include <gsl/gsl_cdf.h>
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
-#include <gsl/gsl_block.h>
-#include <gsl/gsl_vector.h>
-#include <gsl/gsl_sort.h>
-#include <gsl/gsl_sort_vector.h>
-#include <gsl/gsl_matrix.h>
-#define BZ_THREADSAFE
-#define BZ_THREADSAFE_USE_OPENMP
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
 #include "visual_range.hpp"
 #include "deltah_calculation.hpp"
 #include "cell_motion.hpp"
 #include "stateless_rng.hpp"
-using namespace blitz;
 
 int select_random_migration_direction(int x1, int y1, int cell_stage, const VisualRange &Visual_range, long cell_rng_id, long rng_time_step, long rng_event)
 {

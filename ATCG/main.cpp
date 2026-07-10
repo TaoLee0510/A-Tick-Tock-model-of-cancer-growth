@@ -35,7 +35,6 @@
 #include "free_living_growth.hpp"
 #include "free_living_growth_recovery.hpp"
 #include "cell_store.hpp"
-#define BZ_THREADSAFE
 #include <omp.h>
 #include <string>
 

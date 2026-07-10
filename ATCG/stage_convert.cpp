@@ -17,21 +17,9 @@
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
-#include <gsl/gsl_sf_bessel.h>
-#include <gsl/gsl_cdf.h>
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
-#include <gsl/gsl_block.h>
-#include <gsl/gsl_vector.h>
-#include <gsl/gsl_sort.h>
-#include <gsl/gsl_sort_vector.h>
-#include <gsl/gsl_matrix.h>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include "stateless_rng.hpp"
 #include "cell_store.hpp"
 #include "visual_range.hpp"
-using namespace blitz;
 namespace stage_convert_detail
 {
 bool within_visual_range(int x, int y, int Visual_range_x, int Visual_range_y)

@@ -9,12 +9,9 @@
 #include "SaveCellArraySingleCell.hpp"
 
 #include <stdio.h>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include <pngwriter.h>
 #include <cmath>
 
-using namespace blitz;
 void SaveCellArraySingleCell(int T, double alpha, double beta, const CellStore &cell_array ,int Col)
 {
     char filedir3 [100] = {'\0'};

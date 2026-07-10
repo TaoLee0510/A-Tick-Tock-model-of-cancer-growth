@@ -8,6 +8,8 @@
 
 #include "cell_type_transform.hpp"
 
+#include <gsl/gsl_cdf.h>
+
 #include <stdio.h>
 #include <random>
 #include <memory>
@@ -20,19 +22,6 @@
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
-#include <gsl/gsl_sf_bessel.h>
-#include <gsl/gsl_cdf.h>
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
-#include <gsl/gsl_block.h>
-#include <gsl/gsl_vector.h>
-#include <gsl/gsl_sort.h>
-#include <gsl/gsl_sort_vector.h>
-#include <gsl/gsl_matrix.h>
-#define BZ_THREADSAFE
-#define BZ_THREADSAFE_USE_OPENMP
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include "density_calculation.hpp"
 #include "cell_store.hpp"
 #include "visual_range.hpp"

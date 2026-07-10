@@ -9,13 +9,10 @@
 #include "SaveClonePNGS.hpp"
 
 #include <stdio.h>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include <pngwriter.h>
 #include <cmath>
 #include "color_space.hpp"
 
-using namespace blitz;
 void SaveClonePNGS(int Visual_range_x, int Visual_range_y, int &T, double alpha, double beta, const CellStore &cell_array, const ColorSpace &colorspace)
 {
     char filedir10 [100] = {'\0'};

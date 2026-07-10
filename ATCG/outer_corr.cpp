@@ -9,11 +9,8 @@
 #include "outer_corr.hpp"
 
 #include <stdio.h>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include "int_grid.hpp"
 
-using namespace blitz;
 void outer_corr(int Visual_range_x,int Visual_range_y,double R0, double R1,IntGrid &A)
 {
     double r0=R0/2;

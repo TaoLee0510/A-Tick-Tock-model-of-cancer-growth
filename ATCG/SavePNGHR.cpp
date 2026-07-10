@@ -9,12 +9,9 @@
 #include "SavePNGHR.hpp"
 
 
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include <pngwriter.h>
 #include <cmath>
 
-using namespace blitz;
 void SavePNGHR(int Visual_range_x, int Visual_range_y, const CellStore &cell_array, int H, int &T, double alpha, double beta,double deltah)
 {
 

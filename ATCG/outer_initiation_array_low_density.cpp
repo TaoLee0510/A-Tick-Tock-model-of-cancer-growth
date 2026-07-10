@@ -8,6 +8,8 @@
 
 #include "outer_initiation_array_low_density.hpp"
 
+#include <gsl/gsl_cdf.h>
+
 #include <stdio.h>
 #include <random>
 #include <cmath>
@@ -18,21 +20,9 @@
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
-#include <gsl/gsl_sf_bessel.h>
-#include <gsl/gsl_cdf.h>
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
-#include <gsl/gsl_block.h>
-#include <gsl/gsl_vector.h>
-#include <gsl/gsl_sort.h>
-#include <gsl/gsl_sort_vector.h>
-#include <gsl/gsl_matrix.h>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include "stateless_rng.hpp"
 #include "cell_store.hpp"
 #include "int_grid.hpp"
-using namespace blitz;
 
 CellStore outer_initiation_low_density_cell_store(int N0, int Visual_range_x, int Visual_range_y, const IntGrid &A, double uniup_r, double unilow_r, double sigmahatr,double muhatr, double uniup_K, double unilow_K, double sigmahatK,double muhatK, int N0r,int N0K, double *migration_rate_r, double *migration_rate_K)
 {
@@ -145,4 +135,3 @@ CellStore outer_initiation_low_density_cell_store(int N0, int Visual_range_x, in
     }
     return cells;
 }
-

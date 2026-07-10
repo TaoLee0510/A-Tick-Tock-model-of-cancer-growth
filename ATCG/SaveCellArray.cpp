@@ -9,12 +9,9 @@
 #include "SaveCellArray.hpp"
 
 #include <stdio.h>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include <pngwriter.h>
 #include <cmath>
 
-using namespace blitz;
 void SaveCellArray(int &T, double alpha, double beta, const CellStore &cell_array ,int Col)
 {
     if(Col>28)

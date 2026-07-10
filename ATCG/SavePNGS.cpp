@@ -10,12 +10,9 @@
 
 
 #include <stdio.h>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include <pngwriter.h>
 #include <cmath>
 
-using namespace blitz;
 void SavePNGS(int Visual_range_x, int Visual_range_y, int &T, double alpha, double beta, const CellStore &cell_array)
 {
     /////////////////////////////////////////////////PNG//////////////////////////////////////////////////////////////

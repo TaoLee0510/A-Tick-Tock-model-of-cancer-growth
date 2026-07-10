@@ -41,17 +41,6 @@
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
-#include <gsl/gsl_sf_bessel.h>
-#include <gsl/gsl_cdf.h>
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
-#include <gsl/gsl_block.h>
-#include <gsl/gsl_vector.h>
-#include <gsl/gsl_sort.h>
-#include <gsl/gsl_sort_vector.h>
-#include <gsl/gsl_matrix.h>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include "visual_range.hpp"
 #include "cell_columns.hpp"
 #include "deltah_calculation.hpp"
@@ -60,7 +49,6 @@
 #include <chrono>
 
 using std::chrono::high_resolution_clock;
-using namespace blitz;
 
 bool migration_visual_site_empty(const VisualRange &Visual_range, int x, int y)
 {

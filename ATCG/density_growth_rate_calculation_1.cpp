@@ -11,17 +11,12 @@
 #include <algorithm>
 #include <stdio.h>
 #include <vector>
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
 #include <ctime>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
 #include "visual_range.hpp"
 #include "stateless_rng.hpp"
 
-using namespace blitz;
 
 long unique_nonzero_count(long *values, int count)
 {

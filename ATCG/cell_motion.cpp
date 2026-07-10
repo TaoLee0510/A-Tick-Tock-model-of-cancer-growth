@@ -5,13 +5,10 @@
 
 #include "cell_motion.hpp"
 
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include "cell_columns.hpp"
 #include "cell_store.hpp"
 #include "visual_range.hpp"
 
-using namespace blitz;
 
 int migration_direction_dx(int direction)
 {

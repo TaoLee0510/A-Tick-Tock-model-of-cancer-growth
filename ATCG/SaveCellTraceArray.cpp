@@ -10,13 +10,10 @@
 
 #include <stdio.h>
 
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include <pngwriter.h>
 #include <cmath>
 #include "cell_trace.hpp"
 
-using namespace blitz;
 void SaveCellTraceArray(int T, double alpha, double beta, const CellTraceStore &cell_trace)
 {
     char filedir1 [100] = {'\0'};

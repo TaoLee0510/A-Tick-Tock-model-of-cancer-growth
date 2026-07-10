@@ -8,6 +8,8 @@
 
 #include "inner_initiation_array.hpp"
 
+#include <gsl/gsl_cdf.h>
+
 #include <stdio.h>
 #include <random>
 #include <cmath>
@@ -18,21 +20,9 @@
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
-#include <gsl/gsl_sf_bessel.h>
-#include <gsl/gsl_cdf.h>
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
-#include <gsl/gsl_block.h>
-#include <gsl/gsl_vector.h>
-#include <gsl/gsl_sort.h>
-#include <gsl/gsl_sort_vector.h>
-#include <gsl/gsl_matrix.h>
-#include <blitz/blitz.h>
-#include <blitz/array.h>
 #include "stateless_rng.hpp"
 #include "cell_store.hpp"
 #include "visual_range.hpp"
-using namespace blitz;
 
 void fill_inner_initiation_cells(int N0,int N01,int R0,int Visual_range_x, int Visual_range_y, CellStore &cell_array_inner, const VisualRange &Visual_range, double uniup_r1, double unilow_r1, double sigmahatr,double muhatr, double uniup_K1, double unilow_K1, double sigmahatK,double muhatK, int N0r1,int N0K1, double *migration_rate_r1, double *migration_rate_K1, int Col)
 {
@@ -136,4 +126,3 @@ CellStore inner_initiation_cell_store(int N0,int N01,int R0,int Visual_range_x, 
     fill_inner_initiation_cells(N0, N01, R0, Visual_range_x, Visual_range_y, cells, Visual_range, uniup_r1, unilow_r1, sigmahatr, muhatr, uniup_K1, unilow_K1, sigmahatK, muhatK, N0r1, N0K1, migration_rate_r1, migration_rate_K1, Col);
     return cells;
 }
-
