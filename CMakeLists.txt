@@ -134,4 +134,14 @@ if(BUILD_TESTING)
     )
     target_include_directories(stateless_rng_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ATCG)
     add_test(NAME stateless_rng_test COMMAND stateless_rng_test)
+
+    add_executable(density_growth_rate_test
+        ATCG/cell_store.cpp
+        ATCG/density_growth_rate_calculation_1.cpp
+        ATCG/stateless_rng.cpp
+        ATCG/visual_range.cpp
+        tests/density_growth_rate_test.cpp
+    )
+    target_include_directories(density_growth_rate_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ATCG)
+    add_test(NAME density_growth_rate_test COMMAND density_growth_rate_test)
 endif()

@@ -136,18 +136,8 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                     if (x1_values[row]>=100 && y1_values[row] >=100 && x1_values[row]<=Visual_range_x+100 && y1_values[row]<=Visual_range_y+100)
                     {
                         DensityGrowthCounts counts = density_growth_neighborhood_counts((int)x1_values[row], (int)y1_values[row], N00, N01, Visual_range);
-                        long rc=counts.rc;
-                        long kc=counts.kc;
-                        long cells_number=counts.cells_number;
                         double growth_rate_inherent_r=growth_rates[row];
-                        if (cells_number>=r_limit)
-                        {
-                            density_growth_rates[row]=growth_rate_inherent_r-((growth_rate_inherent_r*2*(rc+kc+alpha*kc-r_limit))/carrying_capacity_r);
-                        }
-                        else
-                        {
-                            density_growth_rates[row]=growth_rate_inherent_r;
-                        }
+                        density_growth_rates[row]=calculate_density_growth_rate((int)types[row], growth_rate_inherent_r, counts, r_limit, K_limit, alpha, beta, carrying_capacity_r, carrying_capacity_K);
                         if (density_growth_rates[row]>deathjudge)
                         {
                             double expected_division_time=24/density_growth_rates[row];
@@ -176,18 +166,8 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                     if (x1_values[row]>=100 && y1_values[row] >=100 && x1_values[row]<=Visual_range_x+100 && y1_values[row]<=Visual_range_y+100)
                     {
                         DensityGrowthCounts counts = density_growth_neighborhood_counts((int)x1_values[row], (int)y1_values[row], N00, N01, Visual_range);
-                        long rc=counts.rc;
-                        long kc=counts.kc;
-                        long cells_number=counts.cells_number;
                         double growth_rate_inherent_K=growth_rates[row];
-                        if (cells_number>=K_limit)
-                        {
-                            density_growth_rates[row]=growth_rate_inherent_K-((growth_rate_inherent_K*2*(beta*rc+rc+kc-K_limit))/carrying_capacity_K);
-                        }
-                        else
-                        {
-                            density_growth_rates[row]=growth_rate_inherent_K;
-                        }
+                        density_growth_rates[row]=calculate_density_growth_rate((int)types[row], growth_rate_inherent_K, counts, r_limit, K_limit, alpha, beta, carrying_capacity_r, carrying_capacity_K);
                         if (density_growth_rates[row]>deathjudge)
                         {
                             double expected_division_time=24/density_growth_rates[row];
@@ -247,18 +227,8 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                             if (x1_values[row]>=100 && y1_values[row] >=100 && x1_values[row]<=Visual_range_x+100 && y1_values[row]<=Visual_range_y+100)
                             {
                                 DensityGrowthCounts counts = density_growth_neighborhood_counts((int)x1_values[row], (int)y1_values[row], N00, N01, Visual_range);
-                                long rc=counts.rc;
-                                long kc=counts.kc;
-                                long cells_number=counts.cells_number;
                                 double growth_rate_inherent_r=growth_rates[row];
-                                if (cells_number>=r_limit)
-                                {
-                                    density_growth_rates[row]=growth_rate_inherent_r-((growth_rate_inherent_r*2*(rc+kc+alpha*kc-r_limit))/carrying_capacity_r);
-                                }
-                                else
-                                {
-                                    density_growth_rates[row]=growth_rate_inherent_r;
-                                }
+                                density_growth_rates[row]=calculate_density_growth_rate((int)types[row], growth_rate_inherent_r, counts, r_limit, K_limit, alpha, beta, carrying_capacity_r, carrying_capacity_K);
                                 if (density_growth_rates[row]>deathjudge)
                                 {
                                     double expected_division_time=24/density_growth_rates[row];
@@ -284,18 +254,8 @@ void death_judgement(int Visual_range_x, int Visual_range_y, int N00, int N01, d
                             if (x1_values[row]>=100 && y1_values[row] >=100 && x1_values[row]<=Visual_range_x+100 && y1_values[row]<=Visual_range_y+100)
                             {
                                 DensityGrowthCounts counts = density_growth_neighborhood_counts((int)x1_values[row], (int)y1_values[row], N00, N01, Visual_range);
-                                long rc=counts.rc;
-                                long kc=counts.kc;
-                                long cells_number=counts.cells_number;
                                 double growth_rate_inherent_K=growth_rates[row];
-                                if (cells_number>=K_limit)
-                                {
-                                    density_growth_rates[row]=growth_rate_inherent_K-((growth_rate_inherent_K*2*(beta*rc+rc+kc-K_limit))/carrying_capacity_K);
-                                }
-                                else
-                                {
-                                    density_growth_rates[row]=growth_rate_inherent_K;
-                                }
+                                density_growth_rates[row]=calculate_density_growth_rate((int)types[row], growth_rate_inherent_K, counts, r_limit, K_limit, alpha, beta, carrying_capacity_r, carrying_capacity_K);
                                 if (density_growth_rates[row]>deathjudge)
                                 {
                                     double expected_division_time=24/density_growth_rates[row];
