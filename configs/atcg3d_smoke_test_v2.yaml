@@ -1,0 +1,179 @@
+# CI/developer smoke profile only. This intentionally uses explicit small counts
+# and must not be used as the production 2D-to-3D biological profile.
+schema:
+  name: atcg3d.model_config
+  version: 2
+profile: smoke_test_v2
+
+calibration:
+  source_profile: legacy_2d_default_no_ultrasmall
+  conversion: density_window_volume_ratio_v1
+  density_count_scale_2d_to_3d: 6.0
+  scaled_down_initialization: true
+  source_2d:
+    r_limit: 15.5
+    K_limit: 18.0
+    carrying_capacity_r: 31.0
+    carrying_capacity_K: 36.0
+    outer_radius: 60
+    inner_radius: 50
+
+rng:
+  seed: 1
+run:
+  mode: new
+  resume_checkpoint: null
+space:
+  domain_policy: expandable_sparse
+  chunk_edge: 32
+  thin_layer: false
+  minimum: [-1000000, -1000000, -1000000]
+  maximum: [1000000, 1000000, 1000000]
+direction:
+  set: fixed_26_v1
+  continue_probability: 0.90
+  turn_half_angle_deg: 45.0
+  density_radius: 5
+  density_half_angle_deg: 45.0
+  density_threshold: 0.60
+  persistence_uses_density: false
+  distance_weight_exponent: 0.0
+migration:
+  activation_enabled: true
+  activation_window_edge: 70
+  activation_block_edge: 32
+  activation_threshold: 0.90
+  normal_r_rate:
+    model: beta
+    alpha: 5.0
+    beta: 5.0
+    scale: 0.5
+  activation_duration:
+    model: beta_remaining_division_cycle
+    alpha: 0.005
+    mean_fraction: 0.30
+    beta: 0.011666666666666667
+density:
+  backend: block_anchor_v1
+  block_edge: 4
+  growth_window_edge: 6
+biology:
+  alpha: 2.2
+  beta: 0.0
+  death_delay_model: legacy_geometric_mean_v1
+  death_growth_rate_threshold: 0.005
+  r_death_delay_hours: 48.0
+  K_death_delay_hours: 120.0
+  r_to_K_conversion:
+    enabled: false
+    density_window_edge: 70
+    query_block_edge: 32
+    density_threshold: 0.50
+    probability_per_division: 0.05
+stage:
+  large_footprint_edge: 2
+  small_footprint_voxels: 1
+  ultrasmall_enabled: false
+division:
+  shell_radius: 2
+  allow_shape_reduction: true
+  timing:
+    base_cycle_hours: 24.0
+    minimum_fraction: 0.90
+    stochastic_tail_fraction: 0.10
+    stochastic_time_quantum_hours: 1.0
+    retry_delay_hours: 1.0
+    inherited_growth_multiplier_min: 0.95
+    inherited_growth_multiplier_max: 1.05
+    r_max_inherent_growth_rate: 1.3171805
+    K_max_inherent_growth_rate: 0.99505180
+initial:
+  mode: explicit_counts
+  explicit_counts:
+    r_cells: 32
+    K_cells: 32
+  geometry:
+    outer_radius: 8
+    shell_inner_radius: 6
+    inner_small_radius: 6
+  r_fraction: 0.50
+  large_fraction: 0.50
+  growth_rate:
+    model: fixed
+    fixed:
+      r: 1.0
+      K: 1.0
+  migration_rate:
+    model: fixed
+    fixed:
+      r: 0.25
+      K: 0.25
+simulation:
+  end_time_hours: 24.0
+  max_events: 1000000
+  threads: 1
+scheduler:
+  backend: event_queue_v1
+  conflict_bucket_hours: 0.0
+angiogenesis:
+  enabled: false
+  trigger:
+    metric: biological_cell_volume_voxels3
+    activation_volume_voxels3: 100000.0
+    deactivation_volume_voxels3: 80000.0
+    delay_hours: 0.0
+    stage_biological_volume_voxels3:
+      stage0: 8.0
+      stage1: 1.0
+      stage2: 0.5
+  seed_process:
+    model: homogeneous_poisson
+    rate_sites_per_30_days: 10.0
+    roots_per_event: 1
+    surface_min_separation_voxels: 8
+    surface_max_sampling_attempts: 4096
+    max_total_roots: 64
+    max_active_tips: 128
+  vessel:
+    diameter_voxels: 3.0
+    inward:
+      speed_voxels_per_hour: 0.50
+      max_length_voxels: 128
+      target_tolerance_voxels: 2.0
+      replacement_policy: remove_whole_cells
+    outward:
+      speed_voxels_per_hour: 0.25
+      max_length_voxels: 128
+      external_connection_distance_voxels: 64.0
+      occupancy_policy: permanent_reserved_placeholder
+    collision_policy: anastomose_and_stop
+    boundary_policy: stop
+  direction:
+    model: forward_biased_26_v1
+    forward_bias: 1.0
+    forward_half_angle_deg: 45.0
+    turn_half_angle_deg: 45.0
+    persistence_probability: 0.90
+    distance_weight_exponent: 0.0
+  influence:
+    profile: linear_cutoff
+    max_relief_fraction: 0.50
+    decay_length_voxels: 4.0
+    cutoff_radius_voxels: 12.0
+    scope: growth_density
+    activation: after_outward_connection
+output:
+  enabled: false
+  preview_mode: stable_uid_hash_v1
+  full_format: vtkhdf_points_v1
+  checkpoint_format: hdf5_v2
+  directory: atcg3d_smoke_run
+  preview_every_hours: 1.0
+  full_every_hours: 6.0
+  checkpoint_every_hours: 24.0
+  preview_max_cells: 1000000
+  preview_seed: 0
+  display_radius:
+    large: 1.0
+    small: 0.5
+    ultrasmall: 0.25

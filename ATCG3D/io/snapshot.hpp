@@ -12,6 +12,7 @@ struct SimulationSnapshotView3D {
     const CellStore3D& cells;
     std::span<const Slot> slots;
     SimulationClock3D clock;
+    DisplayRadiusConfig radii{};
 
     std::size_t size() const noexcept { return slots.size(); }
     Slot slot(std::size_t index) const { return slots[index]; }
@@ -27,11 +28,11 @@ struct SimulationSnapshotView3D {
 
     float display_radius(std::size_t index) const {
         switch (cells.stage(slot(index))) {
-            case CellStage::large: return 1.0F;
-            case CellStage::small: return 0.5F;
-            case CellStage::ultrasmall: return 0.25F;
+            case CellStage::large: return static_cast<float>(radii.large);
+            case CellStage::small: return static_cast<float>(radii.small);
+            case CellStage::ultrasmall: return static_cast<float>(radii.ultrasmall);
         }
-        return 0.5F;
+        return static_cast<float>(radii.small);
     }
 };
 

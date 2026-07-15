@@ -16,6 +16,10 @@ enum class RngEventKind : std::uint64_t {
     division_timing = 3,
     conflict_priority = 4,
     initialization = 5,
+    death_timing = 6,
+    division_type_conversion = 7,
+    division_conflict_priority = 8,
+    stage_recovery_conflict_priority = 9,
 };
 
 std::vector<DirectionId> feasible_directions(Slot slot,

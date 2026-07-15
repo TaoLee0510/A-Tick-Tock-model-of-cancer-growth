@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <vector>
@@ -11,10 +12,14 @@ namespace atcg3d {
 
 struct CheckpointData3D {
     std::vector<CellInit> cells;
+    std::vector<Slot> cell_slots;
+    std::size_t cell_slot_count{};
+    std::vector<Slot> cell_free_slots;
     CellUid next_uid{};
     SimulationClock3D clock;
     SimulationStats3D stats;
     std::vector<LineageEdge> lineage;
+    VasculatureState3D vasculature;
     std::uint64_t state_checksum{};
 };
 

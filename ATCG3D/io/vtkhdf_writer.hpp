@@ -4,6 +4,7 @@
 #include <filesystem>
 
 #include "io/snapshot.hpp"
+#include "vasculature/vessel_store.hpp"
 
 namespace atcg3d {
 
@@ -13,6 +14,14 @@ bool vtkhdf_output_available() noexcept;
 // only after vtkHDFWriter has closed the temporary file successfully.
 void write_vtkhdf_points_atomic(const std::filesystem::path& path,
                                 const SimulationSnapshotView3D& snapshot);
+
+// Writes the vascular centerline as a separate vtkPolyData. Every live vessel
+// node becomes one point and every non-root node contributes one parent-child
+// line. Vessel geometry is deliberately not mixed into the biological-cell
+// points-only files.
+void write_vtkhdf_vessels_atomic(const std::filesystem::path& path,
+                                 const VesselNodeStore3D& nodes);
+
 std::size_t read_vtkhdf_point_count(const std::filesystem::path& path);
 
 }  // namespace atcg3d

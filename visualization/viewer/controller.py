@@ -18,10 +18,17 @@ class Frame:
     time_hours: float
 
 
+@dataclass(frozen=True)
+class FrameCounts:
+    total: int
+    displayed: int
+
+
 class FrameBackend(Protocol):
     def capture_camera(self): ...
     def restore_camera(self, camera) -> None: ...
-    def load_frame(self, frame: Frame, quality: str, token: int) -> int: ...
+    def load_frame(self, frame: Frame, quality: str, token: int) -> FrameCounts: ...
+    def load_vessel_frame(self, frame: Frame | None, token: int) -> int: ...
     def cancel_full(self, token: int) -> None: ...
 
 
@@ -30,7 +37,8 @@ class SeriesCatalog:
         self.run_directory = Path(run_directory).resolve()
         self.preview: list[Frame] = []
         self.full: list[Frame] = []
-        self._signature: tuple[tuple[int, int], tuple[int, int]] | None = None
+        self.vessels: list[Frame] = []
+        self._signature: tuple[tuple[int, int], tuple[int, int], tuple[int, int]] | None = None
         self.refresh()
 
     def _file_signature(self, path: Path) -> tuple[int, int]:
@@ -59,11 +67,14 @@ class SeriesCatalog:
     def refresh(self) -> bool:
         preview_path = self.run_directory / "preview.vtkhdf.series"
         full_path = self.run_directory / "full.vtkhdf.series"
-        signature = (self._file_signature(preview_path), self._file_signature(full_path))
+        vessel_path = self.run_directory / "vessels.vtkhdf.series"
+        signature = (self._file_signature(preview_path), self._file_signature(full_path),
+                     self._file_signature(vessel_path))
         if signature == self._signature:
             return False
         self.preview = self._read("preview.vtkhdf.series")
         self.full = self._read("full.vtkhdf.series")
+        self.vessels = self._read("vessels.vtkhdf.series")
         self._signature = signature
         return True
 
@@ -75,6 +86,13 @@ class SeriesCatalog:
 
     def exact_full(self, time_hours: float, tolerance: float = 1e-9) -> Frame | None:
         for frame in self.full:
+            scale = max(1.0, abs(frame.time_hours), abs(time_hours))
+            if abs(frame.time_hours - time_hours) <= tolerance * scale:
+                return frame
+        return None
+
+    def exact_vessel(self, time_hours: float, tolerance: float = 1e-9) -> Frame | None:
+        for frame in self.vessels:
             scale = max(1.0, abs(frame.time_hours), abs(time_hours))
             if abs(frame.time_hours - time_hours) <= tolerance * scale:
                 return frame
@@ -96,6 +114,9 @@ class PreviewFullController:
         self.current_time: float | None = None
         self.current_quality = "none"
         self.current_count = 0
+        self.current_displayed_count = 0
+        self.current_vessel_count = 0
+        self.current_vessel_status = "vessels unavailable"
         self._token = 0
         self._last_slider_ms = 0
         self._full_token_done: int | None = None
@@ -117,9 +138,17 @@ class PreviewFullController:
         if frame is None:
             self.current_quality = "preview unavailable"
             self.current_count = 0
+            self.current_displayed_count = 0
+            self.current_vessel_count = self.backend.load_vessel_frame(None, self._token)
+            self.current_vessel_status = "vessels unavailable"
             return self.current_quality
         camera = self.backend.capture_camera()
-        self.current_count = self.backend.load_frame(frame, "preview", self._token)
+        counts = self.backend.load_frame(frame, "preview", self._token)
+        self.current_count = counts.total
+        self.current_displayed_count = counts.displayed
+        vessel = self.catalog.exact_vessel(frame.time_hours)
+        self.current_vessel_count = self.backend.load_vessel_frame(vessel, self._token)
+        self.current_vessel_status = "vessels" if vessel is not None else "vessels unavailable"
         self.backend.restore_camera(camera)
         self.current_quality = "preview"
         return self.current_quality
@@ -137,9 +166,20 @@ class PreviewFullController:
             return self.current_quality
         camera = self.backend.capture_camera()
         token = self._token
-        count = self.backend.load_frame(frame, "full", token)
+        counts = self.backend.load_frame(frame, "full", token)
+        if token != self._token:
+            return self.current_quality
+        vessel = self.catalog.exact_vessel(frame.time_hours)
+        vessel_count = self.backend.load_vessel_frame(vessel, token)
+        if token != self._token:
+            return self.current_quality
         if token == self._token:
-            self.current_count = count
+            self.current_count = counts.total
+            self.current_displayed_count = counts.displayed
+            self.current_vessel_count = vessel_count
+            self.current_vessel_status = (
+                "vessels" if vessel is not None else "vessels unavailable"
+            )
             self.backend.restore_camera(camera)
             self.current_quality = "full"
         return self.current_quality

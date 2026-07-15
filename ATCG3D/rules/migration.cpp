@@ -51,7 +51,8 @@ std::vector<DirectionId> density_filtered(const std::vector<DirectionId>& direct
     for (const DirectionId direction : directions) {
         if (density.estimate_directional_density(anchor, direction,
                                                  config.direction_density_radius,
-                                                 config.direction_density_half_angle_degrees) <=
+                                                 config.direction_density_half_angle_degrees,
+                                                 config.thin_layer) <=
             config.direction_density_threshold) {
             result.push_back(direction);
         }
@@ -97,7 +98,9 @@ DirectionId select_migration_direction(Slot slot,
         return kStayDirection;
     }
     const CellUid uid = cells.uid(slot);
-    if (cells.type(slot) == CellType::K) {
+    const bool activated = config.migration_activation_enabled &&
+        (cells.flags(slot) & static_cast<std::uint8_t>(kMigrationActive)) != 0;
+    if (cells.type(slot) == CellType::K || !activated) {
         return weighted_choice(feasible, config.distance_weight_exponent, config.seed, uid, event_sequence, 0);
     }
 
@@ -150,7 +153,7 @@ MoveProposal make_move_proposal(Slot slot,
     proposal.to = proposal.from + direction_vector(proposal.direction);
     proposal.priority = rng_word(config.seed, proposal.uid,
                                  static_cast<std::uint64_t>(RngEventKind::conflict_priority),
-                                 event_sequence, time_bucket);
+                                 time_bucket, 0);
     if (proposal.direction == kStayDirection) {
         proposal.to = proposal.from;
         return proposal;
@@ -201,7 +204,7 @@ bool commit_move(const MoveProposal& proposal,
         }
         (void)former_group;
     }
-    density.move(proposal.from, proposal.to, type);
+    density.move(proposal.from, proposal.to, type, proposal.slot);
     cells.set_anchor(proposal.slot, proposal.to);
     cells.set_last_direction(proposal.slot, proposal.direction);
     return true;

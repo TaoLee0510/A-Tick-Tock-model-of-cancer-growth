@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "vasculature/vessel_grid.hpp"
+
 namespace atcg3d {
 
 SparseChunkGrid3D::SparseChunkGrid3D(int chunk_edge, DomainPolicy domain)
@@ -84,7 +86,11 @@ bool SparseChunkGrid3D::empty(Vec3i site) const {
 }
 
 bool SparseChunkGrid3D::available(Vec3i site) const {
-    return domain_.contains(site) && empty(site);
+    return domain_.contains(site) && empty(site) && !blocked_by_vessel(site);
+}
+
+bool SparseChunkGrid3D::blocked_by_vessel(Vec3i site) const {
+    return vessels_ != nullptr && vessels_->occupied(site);
 }
 
 bool SparseChunkGrid3D::place_single(Vec3i site, Slot slot) {
@@ -97,7 +103,7 @@ bool SparseChunkGrid3D::place_single(Vec3i site, Slot slot) {
 }
 
 bool SparseChunkGrid3D::add_colocated(Vec3i site, Slot slot) {
-    if (!domain_.contains(site) || slot == kEmptySlot) {
+    if (!domain_.contains(site) || blocked_by_vessel(site) || slot == kEmptySlot) {
         return false;
     }
     const Address location = address(site);

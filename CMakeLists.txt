@@ -138,9 +138,19 @@ if(ATCG_BUILD_LEGACY_2D)
 endif()
 
 if(ATCG_BUILD_3D)
+    find_package(yaml-cpp 0.7 REQUIRED CONFIG)
+    if(TARGET yaml-cpp::yaml-cpp)
+        set(ATCG3D_YAML_TARGET yaml-cpp::yaml-cpp)
+    elseif(TARGET yaml-cpp)
+        set(ATCG3D_YAML_TARGET yaml-cpp)
+    else()
+        message(FATAL_ERROR "yaml-cpp did not export a supported CMake target")
+    endif()
+
     add_library(atcg3d_core
         ATCG/common/density_growth_rule.cpp
         ATCG3D/config/model_config.cpp
+        ATCG3D/config/yaml_loader.cpp
         ATCG3D/core/cell_store.cpp
         ATCG3D/engine/simulation.cpp
         ATCG3D/io/output_manager.cpp
@@ -148,17 +158,25 @@ if(ATCG_BUILD_3D)
         ATCG3D/io/run_manifest.cpp
         ATCG3D/rules/density.cpp
         ATCG3D/rules/initialization.cpp
+        ATCG3D/rules/initial_rates.cpp
         ATCG3D/rules/lifecycle.cpp
         ATCG3D/rules/migration.cpp
         ATCG3D/space/chunk_grid.cpp
         ATCG3D/space/density_index.cpp
+        ATCG3D/vasculature/angiogenesis_process.cpp
+        ATCG3D/vasculature/geometry.cpp
+        ATCG3D/vasculature/growth_rules.cpp
+        ATCG3D/vasculature/influence_field.cpp
+        ATCG3D/vasculature/surface_index.cpp
+        ATCG3D/vasculature/vessel_grid.cpp
+        ATCG3D/vasculature/vessel_store.cpp
     )
     target_include_directories(atcg3d_core PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D
         ${CMAKE_CURRENT_SOURCE_DIR}/ATCG
     )
-    target_link_libraries(atcg3d_core PUBLIC atcg_openmp)
-    target_compile_definitions(atcg3d_core PUBLIC ATCG3D_SCHEMA_VERSION=1)
+    target_link_libraries(atcg3d_core PUBLIC atcg_openmp PRIVATE ${ATCG3D_YAML_TARGET})
+    target_compile_definitions(atcg3d_core PUBLIC ATCG3D_SCHEMA_VERSION=2)
 
     add_executable(atcg3d ATCG3D/app/main.cpp)
     target_link_libraries(atcg3d PRIVATE atcg3d_core)
@@ -167,13 +185,20 @@ if(ATCG_BUILD_3D)
     target_link_libraries(atcg3d_scale_benchmark PRIVATE atcg3d_core)
     add_executable(atcg3d_event_benchmark benchmarks/atcg3d_events.cpp)
     target_link_libraries(atcg3d_event_benchmark PRIVATE atcg3d_core)
+    add_executable(atcg3d_initialization_benchmark benchmarks/atcg3d_initialization.cpp)
+    target_link_libraries(atcg3d_initialization_benchmark PRIVATE atcg3d_core)
+    add_executable(atcg3d_angiogenesis_scale_benchmark
+        benchmarks/atcg3d_angiogenesis_scale.cpp)
+    target_link_libraries(atcg3d_angiogenesis_scale_benchmark PRIVATE atcg3d_core)
 
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/configs)
-    configure_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/configs/atcg3d_legacy_like_v1.cfg
-        ${CMAKE_CURRENT_BINARY_DIR}/configs/atcg3d_legacy_like_v1.cfg
-        COPYONLY
-    )
+    foreach(config_name IN ITEMS atcg3d_legacy_2d_mapped_v2.yaml atcg3d_smoke_test_v2.yaml)
+        configure_file(
+            ${CMAKE_CURRENT_SOURCE_DIR}/configs/${config_name}
+            ${CMAKE_CURRENT_BINARY_DIR}/configs/${config_name}
+            COPYONLY
+        )
+    endforeach()
 
     if(ATCG3D_ENABLE_VTKHDF)
         find_package(VTK REQUIRED COMPONENTS CommonCore CommonDataModel IOHDF)
@@ -185,7 +210,13 @@ if(ATCG_BUILD_3D)
         )
         target_compile_definitions(atcg3d_core PUBLIC ATCG3D_HAS_VTKHDF=1)
         vtk_module_autoinit(
-            TARGETS atcg3d_core atcg3d
+            TARGETS
+                atcg3d_core
+                atcg3d
+                atcg3d_scale_benchmark
+                atcg3d_event_benchmark
+                atcg3d_initialization_benchmark
+                atcg3d_angiogenesis_scale_benchmark
             MODULES VTK::CommonCore VTK::CommonDataModel VTK::IOHDF
         )
         message(STATUS "VTK-HDF visualization output enabled")
@@ -212,6 +243,7 @@ if(BUILD_TESTING)
         tests/stateless_rng_test.cpp
     )
     target_include_directories(stateless_rng_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ATCG)
+    target_compile_options(stateless_rng_test PRIVATE -UNDEBUG)
     add_test(NAME stateless_rng_test COMMAND stateless_rng_test)
 
     add_executable(density_growth_rate_test
@@ -223,22 +255,29 @@ if(BUILD_TESTING)
         tests/density_growth_rate_test.cpp
     )
     target_include_directories(density_growth_rate_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ATCG)
+    target_compile_options(density_growth_rate_test PRIVATE -UNDEBUG)
     add_test(NAME density_growth_rate_test COMMAND density_growth_rate_test)
 
     if(ATCG_BUILD_3D)
-        foreach(test_name IN ITEMS geometry config storage density migration lifecycle simulation io_core)
+        foreach(test_name IN ITEMS
+                geometry config storage density migration lifecycle initialization initial_rates simulation io_core
+                angiogenesis_geometry angiogenesis_process angiogenesis_direction
+                angiogenesis_simulation vascular_density)
             add_executable(atcg3d_${test_name}_test tests/3d/${test_name}_test.cpp)
             target_link_libraries(atcg3d_${test_name}_test PRIVATE atcg3d_core)
+            target_compile_options(atcg3d_${test_name}_test PRIVATE -UNDEBUG)
             add_test(NAME atcg3d_${test_name}_test COMMAND atcg3d_${test_name}_test)
         endforeach()
         if(ATCG3D_ENABLE_HDF5_CHECKPOINT)
             add_executable(atcg3d_checkpoint_test tests/3d/checkpoint_test.cpp)
             target_link_libraries(atcg3d_checkpoint_test PRIVATE atcg3d_core)
+            target_compile_options(atcg3d_checkpoint_test PRIVATE -UNDEBUG)
             add_test(NAME atcg3d_checkpoint_test COMMAND atcg3d_checkpoint_test)
         endif()
         if(ATCG3D_ENABLE_VTKHDF)
             add_executable(atcg3d_vtkhdf_test tests/3d/vtkhdf_test.cpp)
             target_link_libraries(atcg3d_vtkhdf_test PRIVATE atcg3d_core)
+            target_compile_options(atcg3d_vtkhdf_test PRIVATE -UNDEBUG)
             vtk_module_autoinit(
                 TARGETS atcg3d_vtkhdf_test
                 MODULES VTK::CommonCore VTK::CommonDataModel VTK::IOHDF
@@ -254,6 +293,19 @@ if(BUILD_TESTING)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             )
         endif()
+        add_test(
+            NAME atcg3d_angiogenesis_scale_smoke
+            COMMAND ${CMAKE_COMMAND}
+                -DBENCHMARK=$<TARGET_FILE:atcg3d_angiogenesis_scale_benchmark>
+                -DCELLS=1000
+                -DEVENTS=64
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/3d/angiogenesis_scale_test.cmake
+        )
+        set_tests_properties(atcg3d_angiogenesis_scale_smoke PROPERTIES
+            LABELS benchmark
+            PROCESSORS 4
+            TIMEOUT 90
+        )
         if(ATCG3D_ENABLE_LARGE_TESTS)
             add_test(
                 NAME atcg3d_ten_million_core_benchmark
@@ -264,7 +316,40 @@ if(BUILD_TESTING)
                     --directory ${CMAKE_CURRENT_BINARY_DIR}/atcg3d_10m_core
                     --result ${CMAKE_CURRENT_BINARY_DIR}/atcg3d_10m_core/result.json
             )
-            set_tests_properties(atcg3d_ten_million_core_benchmark PROPERTIES LABELS large)
+            set_tests_properties(atcg3d_ten_million_core_benchmark PROPERTIES
+                LABELS large
+                RUN_SERIAL TRUE
+            )
+            add_test(
+                NAME atcg3d_ten_million_angiogenesis_benchmark
+                COMMAND atcg3d_angiogenesis_scale_benchmark
+                    --cells 10000000
+                    --events 256
+                    --threads 1
+            )
+            set_tests_properties(
+                atcg3d_ten_million_angiogenesis_benchmark
+                PROPERTIES
+                    LABELS large
+                    RUN_SERIAL TRUE
+            )
+            add_test(
+                NAME atcg3d_ten_million_angiogenesis_production_benchmark
+                COMMAND ${CMAKE_COMMAND}
+                    -DBENCHMARK=$<TARGET_FILE:atcg3d_angiogenesis_scale_benchmark>
+                    -DCELLS=10000000
+                    -DEVENTS=100000
+                    -DPROFILE=production
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/3d/angiogenesis_scale_test.cmake
+            )
+            set_tests_properties(
+                atcg3d_ten_million_angiogenesis_production_benchmark
+                PROPERTIES
+                    LABELS large
+                    RUN_SERIAL TRUE
+                    PROCESSORS 4
+                    TIMEOUT 1800
+            )
         endif()
     endif()
 endif()

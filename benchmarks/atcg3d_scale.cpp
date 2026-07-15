@@ -195,7 +195,9 @@ int main(int argc, char** argv) {
             const auto restore_start = Clock::now();
             const CheckpointData3D data = read_hdf5_checkpoint(checkpoint_path, config);
             Simulation3D restored(config);
-            restored.restore(data.cells, data.next_uid, data.clock, data.stats, data.lineage);
+            restored.restore(data.cells, data.next_uid, data.clock, data.stats,
+                             data.lineage, data.vasculature, data.cell_slot_count,
+                             data.cell_slots, data.cell_free_slots);
             if (restored.cells().alive_count() != options.cells ||
                 restored.state_checksum() != simulation.state_checksum()) {
                 throw std::runtime_error("checkpoint restore checksum mismatch");

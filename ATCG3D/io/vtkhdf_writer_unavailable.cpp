@@ -15,6 +15,13 @@ void write_vtkhdf_points_atomic(const std::filesystem::path&,
         "-DATCG3D_ENABLE_VTKHDF=ON and install VTK with IOHDF");
 }
 
+void write_vtkhdf_vessels_atomic(const std::filesystem::path&,
+                                 const VesselNodeStore3D&) {
+    throw std::runtime_error(
+        "VTK-HDF vessel output is unavailable: configure with "
+        "-DATCG3D_ENABLE_VTKHDF=ON and install VTK with IOHDF");
+}
+
 std::size_t read_vtkhdf_point_count(const std::filesystem::path&) {
     throw std::runtime_error("VTK-HDF reader is unavailable in this build");
 }
