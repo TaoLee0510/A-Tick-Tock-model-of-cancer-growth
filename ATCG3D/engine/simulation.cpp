@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "core/stateless_rng.hpp"
+#include "engine/parallelism.hpp"
 #include "geometry/directions.hpp"
 #include "geometry/footprint.hpp"
 #include "rules/density.hpp"
@@ -553,6 +554,16 @@ void Simulation3D::process_non_migration(const Event& event) {
 }
 
 void Simulation3D::process_deaths(const std::vector<Event>& events) {
+    struct DeathDecision {
+        Event event;
+        bool remove{};
+    };
+    std::vector<Event> pending;
+    pending.reserve(events.size());
+    for (const Event& event : events) {
+        if (current(event)) pending.push_back(event);
+    }
+    std::vector<DeathDecision> decisions(pending.size());
     std::vector<Event> removals;
     removals.reserve(events.size());
     const VascularInfluenceField3D* influence = config_.angiogenesis.enabled
@@ -560,11 +571,24 @@ void Simulation3D::process_deaths(const std::vector<Event>& events) {
 
     // Decide every same-time death against the same occupancy/density
     // snapshot. No removal is visible while another death is being judged.
-    for (const Event& event : events) {
-        if (!current(event)) continue;
+    // This read-only phase is safe to parallelize; refresh and commit remain
+    // ordered below so thread scheduling cannot affect model evolution.
+#ifdef _OPENMP
+    const int worker_count = select_worker_count(
+        cells_.alive_count(), pending.size(), config_, available_worker_threads());
+#pragma omp parallel for schedule(static) num_threads(worker_count)
+#endif
+    for (std::int64_t index = 0;
+         index < static_cast<std::int64_t>(pending.size()); ++index) {
+        const Event& event = pending[static_cast<std::size_t>(index)];
         const double rate = density_growth_rate_for_cell(
             cells_, event.slot, density_, config_, influence);
-        if (rate > config_.death_growth_rate_threshold) {
+        decisions[static_cast<std::size_t>(index)] = {
+            event, rate <= config_.death_growth_rate_threshold};
+    }
+    for (const DeathDecision& decision : decisions) {
+        const Event& event = decision.event;
+        if (!decision.remove) {
             const GrowthRefreshResult refresh = refresh_growth_state(
                 event.slot, clock_.time_hours, cells_, density_, config_, influence);
             apply_growth_refresh(event.slot, refresh);
@@ -590,6 +614,11 @@ void Simulation3D::process_deaths(const std::vector<Event>& events) {
 }
 
 void Simulation3D::process_divisions(const std::vector<Event>& events) {
+    struct EligibleDivision {
+        Event event;
+        double mother_death_before{};
+        std::uint64_t priority{};
+    };
     struct OrderedDivision {
         Event event;
         DivisionProposal proposal;
@@ -597,8 +626,8 @@ void Simulation3D::process_divisions(const std::vector<Event>& events) {
         std::uint64_t priority{};
     };
 
-    std::vector<OrderedDivision> ordered;
-    ordered.reserve(events.size());
+    std::vector<EligibleDivision> eligible;
+    eligible.reserve(events.size());
     const VascularInfluenceField3D* influence = config_.angiogenesis.enabled
         ? &vascular_influence_ : nullptr;
     for (const Event& event : events) {
@@ -616,14 +645,28 @@ void Simulation3D::process_divisions(const std::vector<Event>& events) {
             reschedule_event(EventKind::division, event.slot);
             continue;
         }
-        DivisionProposal proposal = make_division_proposal(
-            event.slot, cells_, grid_, config_);
-        ordered.push_back({
+        eligible.push_back({
             event,
-            std::move(proposal),
             cells_.death_deadline(event.slot),
             division_conflict_priority(config_, event.time, event.uid),
         });
+    }
+    std::vector<OrderedDivision> ordered(eligible.size());
+#ifdef _OPENMP
+    const int worker_count = select_worker_count(
+        cells_.alive_count(), eligible.size(), config_, available_worker_threads());
+#pragma omp parallel for schedule(static) num_threads(worker_count)
+#endif
+    for (std::int64_t index = 0;
+         index < static_cast<std::int64_t>(eligible.size()); ++index) {
+        const EligibleDivision& candidate = eligible[static_cast<std::size_t>(index)];
+        ordered[static_cast<std::size_t>(index)] = OrderedDivision{
+            candidate.event,
+            make_division_proposal(
+                candidate.event.slot, cells_, grid_, config_),
+            candidate.mother_death_before,
+            candidate.priority,
+        };
     }
     std::sort(ordered.begin(), ordered.end(), [](const OrderedDivision& lhs,
                                                   const OrderedDivision& rhs) {
@@ -748,7 +791,9 @@ void Simulation3D::process_migrations(const std::vector<Event>& events) {
         ? static_cast<std::uint64_t>(std::floor(clock_.time_hours / config_.conflict_bucket_hours))
         : std::bit_cast<std::uint64_t>(clock_.time_hours);
 #ifdef _OPENMP
-#pragma omp parallel for schedule(static) num_threads(config_.threads)
+    const int worker_count = select_worker_count(
+        cells_.alive_count(), pending.size(), config_, available_worker_threads());
+#pragma omp parallel for schedule(static) num_threads(worker_count)
 #endif
     for (std::int64_t index = 0; index < static_cast<std::int64_t>(pending.size()); ++index) {
         proposals[static_cast<std::size_t>(index)] = make_move_proposal(
@@ -1141,9 +1186,17 @@ Simulation3D::VesselGrowthProposal Simulation3D::make_vessel_growth_proposal(
 }
 
 void Simulation3D::process_vessel_growth(const std::vector<Event>& events) {
-    std::vector<VesselGrowthProposal> proposals;
-    proposals.reserve(events.size());
-    for (const Event& event : events) proposals.push_back(make_vessel_growth_proposal(event));
+    std::vector<VesselGrowthProposal> proposals(events.size());
+#ifdef _OPENMP
+    const int worker_count = select_worker_count(
+        cells_.alive_count(), events.size(), config_, available_worker_threads());
+#pragma omp parallel for schedule(static) num_threads(worker_count)
+#endif
+    for (std::int64_t index = 0;
+         index < static_cast<std::int64_t>(events.size()); ++index) {
+        proposals[static_cast<std::size_t>(index)] =
+            make_vessel_growth_proposal(events[static_cast<std::size_t>(index)]);
+    }
     std::sort(proposals.begin(), proposals.end(), [](const auto& lhs, const auto& rhs) {
         if (lhs.priority != rhs.priority) return lhs.priority > rhs.priority;
         return lhs.event.uid < rhs.event.uid;

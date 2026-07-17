@@ -232,7 +232,7 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     const YAML::Node root = documents.front();
     check_map(root, "$", {"schema", "profile", "calibration", "rng", "run", "space",
                            "direction", "migration", "density", "biology", "stage",
-                           "division", "initial", "simulation", "scheduler",
+                           "division", "initial", "simulation", "parallel", "scheduler",
                            "angiogenesis", "output"});
 
     Model3DConfig config;
@@ -597,6 +597,40 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
         required(simulation, "max_events", "$.simulation"), "simulation.max_events");
     config.threads = strict_integer<int>(required(simulation, "threads", "$.simulation"),
                                          "simulation.threads");
+
+    const YAML::Node parallel = root["parallel"];
+    if (parallel && parallel.IsDefined()) {
+        check_map(parallel, "$.parallel",
+                  {"mode", "min_threads", "min_events_per_thread", "cell_thresholds"});
+        config.parallel_mode = strict_string(
+            required(parallel, "mode", "$.parallel"), "parallel.mode");
+        config.parallel_min_threads = strict_integer<int>(
+            required(parallel, "min_threads", "$.parallel"),
+            "parallel.min_threads");
+        config.parallel_min_events_per_thread = strict_integer<std::uint64_t>(
+            required(parallel, "min_events_per_thread", "$.parallel"),
+            "parallel.min_events_per_thread");
+        const YAML::Node thresholds = required(
+            parallel, "cell_thresholds", "$.parallel");
+        if (!thresholds.IsSequence() || thresholds.size() == 0) {
+            config_error(thresholds, "parallel.cell_thresholds",
+                         "must be a non-empty sequence");
+        }
+        config.parallel_thread_thresholds.clear();
+        config.parallel_thread_thresholds.reserve(thresholds.size());
+        for (std::size_t index = 0; index < thresholds.size(); ++index) {
+            const YAML::Node threshold = thresholds[index];
+            const std::string path =
+                "parallel.cell_thresholds[" + std::to_string(index) + ']';
+            check_map(threshold, path, {"minimum_cells", "max_thread_fraction"});
+            config.parallel_thread_thresholds.push_back({
+                strict_integer<std::uint64_t>(
+                    required(threshold, "minimum_cells", path),
+                    path + ".minimum_cells"),
+                strict_double(required(threshold, "max_thread_fraction", path),
+                              path + ".max_thread_fraction")});
+        }
+    }
 
     const YAML::Node scheduler = checked_section(
         root, "scheduler", "$", {"backend", "conflict_bucket_hours"});

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import math
 from pathlib import Path
 import sys
 import time
@@ -15,6 +16,49 @@ except ImportError:  # Allows direct `pvpython app.py` execution.
     from controller import Frame, FrameCounts, PreviewFullController, SeriesCatalog
 
 
+CELL_TYPE_ANNOTATIONS = ["1", "r", "2", "K"]
+CELL_TYPE_INDEXED_COLORS = [
+    0.0, 0.72, 0.0,  # r: green
+    0.90, 0.0, 0.0,  # K: red
+]
+VESSEL_SOLID_COLOR = [0.05, 0.25, 1.0]
+SLICE_AXES = {
+    "X": (1.0, 0.0, 0.0),
+    "Y": (0.0, 1.0, 0.0),
+    "Z": (0.0, 0.0, 1.0),
+}
+
+
+def clipping_plane_specs(mode: str, axis: str, position: float,
+                         thickness: float, invert: bool = False):
+    """Return ParaView Clip plane specifications for whole/cut/slab views."""
+    mode = str(mode).lower()
+    axis = str(axis).upper()
+    position = float(position)
+    thickness = float(thickness)
+    if mode not in ("whole", "cut", "slab"):
+        raise ValueError(f"unsupported slice mode: {mode}")
+    if axis not in SLICE_AXES:
+        raise ValueError(f"unsupported slice axis: {axis}")
+    if not math.isfinite(position) or not math.isfinite(thickness):
+        raise ValueError("slice position and thickness must be finite")
+    if mode == "whole":
+        return []
+    normal = SLICE_AXES[axis]
+    origin = [normal[index] * position for index in range(3)]
+    if mode == "cut":
+        return [(origin, list(normal), int(bool(invert)))]
+    if thickness <= 0.0:
+        raise ValueError("slice thickness must be positive")
+    half = thickness * 0.5
+    lower = [normal[index] * (position - half) for index in range(3)]
+    upper = [normal[index] * (position + half) for index in range(3)]
+    return [
+        (lower, list(normal), 0),
+        (upper, list(normal), 1),
+    ]
+
+
 class ParaViewBackend:
     def __init__(self):
         from paraview import simple
@@ -23,14 +67,22 @@ class ParaViewBackend:
         self.view = simple.GetActiveViewOrCreate("RenderView")
         self.cell_source = None
         self.cell_radius_calculator = None
+        self.cell_clip_filters = []
+        self.cell_render_source = None
         self.cell_display = None
         self.cell_radius_scale = 1.0
         self.vessel_source = None
         self.vessel_radius_calculator = None
+        self.vessel_clip_filters = []
         self.vessel_tube = None
+        self.vessel_render_source = None
         self.vessel_display = None
-        self.vessel_color = "perfused"
         self.vessel_radius_scale = 1.0
+        self.slice_mode = "whole"
+        self.slice_axis = "Z"
+        self.slice_position = 0.0
+        self.slice_thickness = 2.0
+        self.slice_invert = False
         self.cancelled_full_tokens: set[int] = set()
         self.cell_count = 0
         self.displayed_cell_count = 0
@@ -73,6 +125,77 @@ class ParaViewBackend:
         # it starts and prevents a completed stale read from being published.
         self.cancelled_full_tokens.add(int(token))
 
+    def _build_clipped_pipeline(self, input_proxy):
+        current = input_proxy
+        filters = []
+        for origin, normal, invert in clipping_plane_specs(
+                self.slice_mode, self.slice_axis, self.slice_position,
+                self.slice_thickness, self.slice_invert):
+            clip = self.pv.Clip(Input=current)
+            clip.ClipType = "Plane"
+            clip.ClipType.Origin = origin
+            clip.ClipType.Normal = normal
+            clip.Invert = invert
+            clip.UpdatePipeline()
+            filters.append(clip)
+            current = clip
+        return current, filters
+
+    def _clear_cell_render(self) -> None:
+        if self.cell_render_source is not None:
+            self.pv.Hide(self.cell_render_source, self.view)
+        for proxy in reversed(self.cell_clip_filters):
+            self.pv.Delete(proxy)
+        self.cell_clip_filters = []
+        self.cell_render_source = None
+        self.cell_display = None
+
+    def _build_cell_render(self) -> None:
+        if self.cell_radius_calculator is None:
+            return
+        self.cell_render_source, self.cell_clip_filters = \
+            self._build_clipped_pipeline(self.cell_radius_calculator)
+        self.cell_display = self.pv.Show(self.cell_render_source, self.view)
+        self.cell_display.Representation = "Point Gaussian"
+        self.cell_display.GaussianRadius = 0.5
+        self.pv.ColorBy(self.cell_display, ("POINTS", "cell_type"))
+        lookup = self.pv.GetColorTransferFunction("cell_type")
+        lookup.InterpretValuesAsCategories = 1
+        lookup.Annotations = CELL_TYPE_ANNOTATIONS
+        lookup.IndexedColors = CELL_TYPE_INDEXED_COLORS
+        self.cell_display.LookupTable = lookup
+        self.cell_display.SetScaleArray = ["POINTS", "viewer_display_radius"]
+        self.cell_display.ScaleByArray = 1
+        self.cell_display.UseScaleFunction = 0
+        self.cell_display.SetScalarBarVisibility(self.view, True)
+
+    def data_bounds(self):
+        if self.cell_source is None:
+            return None
+        bounds = tuple(float(value) for value in
+                       self.cell_source.GetDataInformation().GetBounds())
+        if len(bounds) != 6 or any(not math.isfinite(value) for value in bounds):
+            return None
+        if any(bounds[2 * axis] > bounds[2 * axis + 1] for axis in range(3)):
+            return None
+        return bounds
+
+    def set_slice(self, mode: str, axis: str, position: float,
+                  thickness: float, invert: bool = False) -> None:
+        # Validate before mutating or tearing down the current presentation.
+        clipping_plane_specs(mode, axis, position, thickness, invert)
+        camera = self.capture_camera()
+        self.slice_mode = str(mode).lower()
+        self.slice_axis = str(axis).upper()
+        self.slice_position = float(position)
+        self.slice_thickness = float(thickness)
+        self.slice_invert = bool(invert)
+        self._clear_cell_render()
+        self._build_cell_render()
+        self._clear_vessel_render()
+        self._build_vessel_render()
+        self.restore_camera(camera)
+
     def load_frame(self, frame: Frame, quality: str, token: int) -> FrameCounts:
         token = int(token)
         if quality == "full" and token in self.cancelled_full_tokens:
@@ -95,23 +218,15 @@ class ParaViewBackend:
 
         old_source = self.cell_source
         old_calculator = self.cell_radius_calculator
-        if old_calculator is not None:
-            self.pv.Hide(old_calculator, self.view)
-        new_display = self.pv.Show(new_calculator, self.view)
-        new_display.Representation = "Point Gaussian"
-        new_display.GaussianRadius = 0.5
-        self.pv.ColorBy(new_display, ("POINTS", "cell_type"))
-        new_display.SetScaleArray = ["POINTS", "viewer_display_radius"]
-        new_display.ScaleByArray = 1
-        new_display.UseScaleFunction = 0
-        self.pv.Render(self.view)
+        self._clear_cell_render()
+        self.cell_source = new_source
+        self.cell_radius_calculator = new_calculator
+        self._build_cell_render()
         if old_calculator is not None:
             self.pv.Delete(old_calculator)
         if old_source is not None:
             self.pv.Delete(old_source)
-        self.cell_source = new_source
-        self.cell_radius_calculator = new_calculator
-        self.cell_display = new_display
+        self.pv.Render(self.view)
         self.cell_count = total_count
         self.displayed_cell_count = displayed_count
         if quality == "full":
@@ -130,12 +245,20 @@ class ParaViewBackend:
             self.cell_radius_calculator.UpdatePipeline()
             self.pv.Render(self.view)
 
-    def _clear_vessels(self) -> None:
+    def _clear_vessel_render(self) -> None:
+        if self.vessel_render_source is not None:
+            self.pv.Hide(self.vessel_render_source, self.view)
+        for proxy in reversed(self.vessel_clip_filters):
+            self.pv.Delete(proxy)
+        self.vessel_clip_filters = []
+        self.vessel_render_source = None
+        self.vessel_display = None
         if self.vessel_tube is not None:
-            self.pv.Hide(self.vessel_tube, self.view)
             self.pv.Delete(self.vessel_tube)
             self.vessel_tube = None
-            self.vessel_display = None
+
+    def _clear_vessels(self) -> None:
+        self._clear_vessel_render()
         if self.vessel_radius_calculator is not None:
             self.pv.Delete(self.vessel_radius_calculator)
             self.vessel_radius_calculator = None
@@ -143,29 +266,14 @@ class ParaViewBackend:
             self.pv.Delete(self.vessel_source)
             self.vessel_source = None
 
-    def load_vessel_frame(self, frame: Frame | None, token: int) -> int:
-        del token
-        self._clear_vessels()
-        if frame is None:
-            self.pv.Render(self.view)
-            return 0
-        self.vessel_source = self.pv.OpenDataFile(str(frame.path))
-        self.vessel_source.UpdatePipeline()
-        tube_input = self.vessel_source
-        radius_array = "radius_voxels"
-        try:
-            self.vessel_radius_calculator = self.pv.Calculator(Input=self.vessel_source)
-            self.vessel_radius_calculator.ResultArrayName = "viewer_radius_voxels"
-            self.vessel_radius_calculator.Function = (
-                f"radius_voxels*{self.vessel_radius_scale:.17g}"
-            )
-            self.vessel_radius_calculator.UpdatePipeline()
-            tube_input = self.vessel_radius_calculator
-            radius_array = "viewer_radius_voxels"
-        except Exception:  # pragma: no cover - ParaView-version dependent
-            if self.vessel_radius_calculator is not None:
-                self.pv.Delete(self.vessel_radius_calculator)
-                self.vessel_radius_calculator = None
+    def _build_vessel_render(self) -> None:
+        if self.vessel_source is None:
+            return
+        tube_input = self.vessel_radius_calculator or self.vessel_source
+        radius_array = (
+            "viewer_radius_voxels" if self.vessel_radius_calculator is not None
+            else "radius_voxels"
+        )
         self.vessel_tube = self.pv.Tube(Input=tube_input)
         self.vessel_tube.NumberofSides = 12
         self.vessel_tube.Capping = 1
@@ -179,18 +287,34 @@ class ParaViewBackend:
         except Exception:  # pragma: no cover - ParaView-version dependent
             pass
         self.vessel_tube.UpdatePipeline()
-        self.vessel_display = self.pv.Show(self.vessel_tube, self.view)
-        self.set_vessel_color(self.vessel_color)
+        self.vessel_render_source, self.vessel_clip_filters = \
+            self._build_clipped_pipeline(self.vessel_tube)
+        self.vessel_display = self.pv.Show(self.vessel_render_source, self.view)
+        self.vessel_display.DiffuseColor = VESSEL_SOLID_COLOR
+        self.vessel_display.AmbientColor = VESSEL_SOLID_COLOR
+
+    def load_vessel_frame(self, frame: Frame | None, token: int) -> int:
+        del token
+        self._clear_vessels()
+        if frame is None:
+            self.pv.Render(self.view)
+            return 0
+        self.vessel_source = self.pv.OpenDataFile(str(frame.path))
+        self.vessel_source.UpdatePipeline()
+        try:
+            self.vessel_radius_calculator = self.pv.Calculator(Input=self.vessel_source)
+            self.vessel_radius_calculator.ResultArrayName = "viewer_radius_voxels"
+            self.vessel_radius_calculator.Function = (
+                f"radius_voxels*{self.vessel_radius_scale:.17g}"
+            )
+            self.vessel_radius_calculator.UpdatePipeline()
+        except Exception:  # pragma: no cover - ParaView-version dependent
+            if self.vessel_radius_calculator is not None:
+                self.pv.Delete(self.vessel_radius_calculator)
+                self.vessel_radius_calculator = None
+        self._build_vessel_render()
         self.pv.Render(self.view)
         return int(self.vessel_source.GetDataInformation().GetNumberOfPoints())
-
-    def set_vessel_color(self, array_name: str) -> None:
-        if array_name not in ("perfused", "branch_role"):
-            raise ValueError(f"unsupported vessel color array: {array_name}")
-        self.vessel_color = array_name
-        if self.vessel_display is not None:
-            self.pv.ColorBy(self.vessel_display, ("POINTS", array_name))
-            self.vessel_display.RescaleTransferFunctionToDataRange(True, False)
 
     def set_vessel_radius_scale(self, scale: float) -> None:
         self.vessel_radius_scale = float(scale)
@@ -233,8 +357,28 @@ def build_app(run_directory: Path, debounce_ms: int = 250):
     state.playing = False
     state.radius_scale = 1.0
     state.vessel_radius_scale = 1.0
-    state.vessel_color = "perfused"
-    state.vessel_color_options = ["perfused", "branch_role"]
+    state.slice_mode = "whole"
+    state.slice_mode_options = ["whole", "cut", "slab"]
+    state.slice_axis = "Z"
+    state.slice_axis_options = ["X", "Y", "Z"]
+    state.slice_position = 0.0
+    state.slice_min = -1.0
+    state.slice_max = 1.0
+    state.slice_thickness = 2.0
+    state.slice_invert = False
+
+    def sync_slice_bounds(recenter=False):
+        bounds = backend.data_bounds()
+        if bounds is None:
+            return
+        axis_index = {"X": 0, "Y": 1, "Z": 2}[str(state.slice_axis)]
+        minimum = float(bounds[2 * axis_index])
+        maximum = float(bounds[2 * axis_index + 1])
+        state.slice_min = minimum
+        state.slice_max = maximum
+        if (recenter or float(state.slice_position) < minimum or
+                float(state.slice_position) > maximum):
+            state.slice_position = 0.5 * (minimum + maximum)
 
     def load_index(index):
         catalog.refresh()
@@ -249,6 +393,7 @@ def build_app(run_directory: Path, debounce_ms: int = 250):
         state.displayed_cell_count = timeline.current_displayed_count
         state.vessel_count = timeline.current_vessel_count
         state.vessel_status = timeline.current_vessel_status
+        sync_slice_bounds()
         ctrl.view_update()
 
     @state.change("time_index")
@@ -265,24 +410,40 @@ def build_app(run_directory: Path, debounce_ms: int = 250):
         backend.set_vessel_radius_scale(float(vessel_radius_scale))
         ctrl.view_update()
 
-    @state.change("vessel_color")
-    def _vessel_color_changed(vessel_color, **_):
-        backend.set_vessel_color(str(vessel_color))
-        backend.pv.Render(backend.view)
+    def apply_slice():
+        backend.set_slice(
+            str(state.slice_mode), str(state.slice_axis),
+            float(state.slice_position), float(state.slice_thickness),
+            bool(state.slice_invert))
         ctrl.view_update()
+
+    @state.change("slice_mode", "slice_position", "slice_thickness", "slice_invert")
+    def _slice_changed(**_):
+        apply_slice()
+
+    @state.change("slice_axis")
+    def _slice_axis_changed(**_):
+        sync_slice_bounds(recenter=True)
+        apply_slice()
 
     def toggle_play():
         state.playing = not state.playing
 
     ctrl.toggle_play = toggle_play
 
-    async def update_loop():
+    # trame >= 3.13 forwards the current server state as keyword arguments to
+    # on_server_ready tasks.  The polling loop does not need that state, but it
+    # must accept it to remain compatible with the callback contract.
+    async def update_loop(**_):
         while True:
             await asyncio.sleep(0.05)
             changed = catalog.refresh()
             if changed:
                 state.times = catalog.times
+            previous_quality = state.quality
             state.quality = timeline.tick(int(time.monotonic() * 1000))
+            if state.quality != previous_quality:
+                sync_slice_bounds()
             state.cell_count = timeline.current_count
             state.displayed_cell_count = timeline.current_displayed_count
             state.vessel_count = timeline.current_vessel_count
@@ -318,9 +479,31 @@ def build_app(run_directory: Path, debounce_ms: int = 250):
                 label="Vessel radius", hide_details=True, style="max-width: 220px",
             )
             vuetify3.VSelect(
-                v_model=("vessel_color", "perfused"),
-                items=("vessel_color_options",), label="Vessel color",
-                hide_details=True, density="compact", style="max-width: 180px",
+                v_model=("slice_mode", "whole"), items=("slice_mode_options",),
+                label="View", hide_details=True, density="compact",
+                style="max-width: 120px",
+            )
+            vuetify3.VSelect(
+                v_model=("slice_axis", "Z"), items=("slice_axis_options",),
+                label="Slice axis", hide_details=True, density="compact",
+                disabled=("slice_mode === 'whole'",), style="max-width: 110px",
+            )
+            vuetify3.VSlider(
+                v_model=("slice_position", 0.0), min=("slice_min",),
+                max=("slice_max",), step=0.5, label="Slice position",
+                hide_details=True, disabled=("slice_mode === 'whole'",),
+                style="min-width: 220px",
+            )
+            vuetify3.VSlider(
+                v_model=("slice_thickness", 2.0), min=0.5,
+                max=("Math.max(slice_max - slice_min, 1)",), step=0.5,
+                label="Slab thickness", hide_details=True,
+                disabled=("slice_mode !== 'slab'",), style="max-width: 200px",
+            )
+            vuetify3.VSwitch(
+                v_model=("slice_invert", False), label="Invert cut",
+                hide_details=True, density="compact",
+                disabled=("slice_mode !== 'cut'",),
             )
         with layout.content:
             view = vtk_widgets.VtkRemoteView(backend.view, interactive_ratio=1)

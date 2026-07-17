@@ -28,6 +28,8 @@ int main() {
     const auto checksum = first.state_checksum();
 
     config.threads = 4;
+    config.parallel_min_events_per_thread = 1;
+    config.parallel_thread_thresholds = {{0, 1.0}};
     Simulation3D second(config);
     second.run();
     assert(second.state_checksum() == checksum);

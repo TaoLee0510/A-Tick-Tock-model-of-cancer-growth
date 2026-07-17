@@ -111,7 +111,24 @@ initial:
 simulation:
   end_time_hours: 24.0
   max_events: 1000000
-  threads: 1
+  threads: 4
+parallel:
+  mode: adaptive_cells_and_events_v1
+  min_threads: 1
+  min_events_per_thread: 1024
+  cell_thresholds:
+    - minimum_cells: 0
+      max_thread_fraction: 0.50
+    - minimum_cells: 5000
+      max_thread_fraction: 0.60
+    - minimum_cells: 10000
+      max_thread_fraction: 0.70
+    - minimum_cells: 15000
+      max_thread_fraction: 0.80
+    - minimum_cells: 20000
+      max_thread_fraction: 0.90
+    - minimum_cells: 25000
+      max_thread_fraction: 1.00
 scheduler:
   backend: event_queue_v1
   conflict_bucket_hours: 0.0
@@ -161,7 +178,7 @@ angiogenesis:
     decay_length_voxels: 4.0
     cutoff_radius_voxels: 12.0
     scope: growth_density
-    activation: after_outward_connection
+    activation: immediate
 output:
   enabled: false
   preview_mode: stable_uid_hash_v1

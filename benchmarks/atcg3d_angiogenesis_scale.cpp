@@ -85,7 +85,9 @@ int main(int argc, char** argv) {
         config.migration_activation_enabled = false;
         config.end_time_hours = production_profile ? 720.0 : 24.0;
         config.max_events = max_events;
-        config.threads = threads;
+            config.threads = threads;
+            config.parallel_min_events_per_thread = 1;
+            config.parallel_thread_thresholds = {{0, 1.0}};
 
         config.angiogenesis.enabled = true;
         if (production_profile) {
@@ -117,7 +119,7 @@ int main(int argc, char** argv) {
             config.angiogenesis.outward_max_length_voxels = 12;
             config.angiogenesis.inward_target_tolerance_voxels = 0.0;
             config.angiogenesis.outward_external_connection_distance_voxels = 4.0;
-            config.angiogenesis.influence_activation = "after_outward_connection";
+            config.angiogenesis.influence_activation = "immediate";
         }
         config.validate();
 

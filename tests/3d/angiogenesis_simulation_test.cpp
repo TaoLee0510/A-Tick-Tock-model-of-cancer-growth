@@ -22,6 +22,8 @@ atcg3d::Model3DConfig test_config(int threads) {
     config.end_time_hours = 2.0;
     config.max_events = 100000;
     config.threads = threads;
+    config.parallel_min_events_per_thread = 1;
+    config.parallel_thread_thresholds = {{0, 1.0}};
 
     auto& vessels = config.angiogenesis;
     vessels.enabled = true;
@@ -38,7 +40,7 @@ atcg3d::Model3DConfig test_config(int threads) {
     vessels.inward_max_length_voxels = 12;
     vessels.outward_max_length_voxels = 12;
     vessels.outward_external_connection_distance_voxels = 1.0;
-    vessels.influence_activation = "after_outward_connection";
+    vessels.influence_activation = "immediate";
     vessels.influence_cutoff_radius_voxels = 3.0;
     vessels.influence_max_relief_fraction = 0.5;
     config.validate();
@@ -123,6 +125,13 @@ int main() {
     for (const Vec3i site : first.vessel_grid().occupied_sites()) {
         assert(!first.grid().available(site));
         assert(first.vessel_grid().vessel_id(site) != 0);
+        assert(first.vessel_grid().perfused(site));
+    }
+    for (const VesselNodeSlot slot : first.vessel_nodes().alive_slots()) {
+        assert(first.vessel_nodes().perfused(slot));
+    }
+    for (const VesselTipSlot slot : first.vessel_tips().alive_slots()) {
+        assert(first.vessel_tips().perfused(slot));
     }
 
     Simulation3D second(test_config(4));
@@ -135,6 +144,7 @@ int main() {
     assert(snapshot.process.committed_roots == 1);
     assert(snapshot.next_vessel_id == 2);
     assert(!snapshot.nodes.empty() && snapshot.tips.size() == 2);
+    assert(snapshot.perfused_vessels == std::vector<VesselId>{1});
 
     // The configured unit is sites/30 days: three roots require three Poisson
     // arrivals. One arrival is never multiplied by roots_per_event.

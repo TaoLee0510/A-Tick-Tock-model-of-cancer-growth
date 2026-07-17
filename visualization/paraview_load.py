@@ -8,15 +8,19 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 from paraview.simple import (ColorBy, GetActiveViewOrCreate, GetAnimationScene,
-                             Calculator, OpenDataFile, Render, ResetCamera, Show, Tube)
+                             GetColorTransferFunction, Calculator, OpenDataFile,
+                             Render, ResetCamera, Show, Tube)
+
+
+CELL_TYPE_ANNOTATIONS = ["1", "r", "2", "K"]
+CELL_TYPE_INDEXED_COLORS = [0.0, 0.72, 0.0, 0.90, 0.0, 0.0]
+VESSEL_SOLID_COLOR = [0.05, 0.25, 1.0]
 
 
 def main():
     parser = ArgumentParser()
     parser.add_argument("run_directory", type=Path)
     parser.add_argument("--quality", choices=("preview", "full"), default="preview")
-    parser.add_argument("--vessel-color", choices=("perfused", "branch_role"),
-                        default="perfused")
     parser.add_argument("--cell-radius-scale", type=float, default=1.0)
     parser.add_argument("--vessel-radius-scale", type=float, default=1.0)
     args = parser.parse_args()
@@ -37,6 +41,12 @@ def main():
     display.ScaleByArray = 1
     display.UseScaleFunction = 0
     ColorBy(display, ("POINTS", "cell_type"))
+    cell_lookup = GetColorTransferFunction("cell_type")
+    cell_lookup.InterpretValuesAsCategories = 1
+    cell_lookup.Annotations = CELL_TYPE_ANNOTATIONS
+    cell_lookup.IndexedColors = CELL_TYPE_INDEXED_COLORS
+    display.LookupTable = cell_lookup
+    display.SetScalarBarVisibility(view, True)
 
     vessel_source = None
     vessel_radius_calculator = None
@@ -60,7 +70,8 @@ def main():
         except Exception:  # ParaView-version dependent property exposure.
             pass
         vessel_display = Show(vessel_tube, view)
-        ColorBy(vessel_display, ("POINTS", args.vessel_color))
+        vessel_display.DiffuseColor = VESSEL_SOLID_COLOR
+        vessel_display.AmbientColor = VESSEL_SOLID_COLOR
 
     GetAnimationScene().UpdateAnimationUsingDataTimeSteps()
     ResetCamera(view)

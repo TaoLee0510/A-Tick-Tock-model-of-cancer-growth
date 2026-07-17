@@ -152,6 +152,7 @@ if(ATCG_BUILD_3D)
         ATCG3D/config/model_config.cpp
         ATCG3D/config/yaml_loader.cpp
         ATCG3D/core/cell_store.cpp
+        ATCG3D/engine/parallelism.cpp
         ATCG3D/engine/simulation.cpp
         ATCG3D/io/output_manager.cpp
         ATCG3D/io/preview_sampler.cpp
@@ -261,7 +262,7 @@ if(BUILD_TESTING)
     if(ATCG_BUILD_3D)
         foreach(test_name IN ITEMS
                 geometry config storage density migration lifecycle initialization initial_rates simulation io_core
-                angiogenesis_geometry angiogenesis_process angiogenesis_direction
+                angiogenesis_geometry angiogenesis_process angiogenesis_direction parallelism
                 angiogenesis_simulation vascular_density)
             add_executable(atcg3d_${test_name}_test tests/3d/${test_name}_test.cpp)
             target_link_libraries(atcg3d_${test_name}_test PRIVATE atcg3d_core)

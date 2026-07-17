@@ -71,7 +71,7 @@ atcg3d::Model3DConfig vascular_config(double end_time) {
     vessels.inward_max_length_voxels = 12;
     vessels.outward_max_length_voxels = 12;
     vessels.outward_external_connection_distance_voxels = 1.0;
-    vessels.influence_activation = "after_outward_connection";
+    vessels.influence_activation = "immediate";
     vessels.influence_cutoff_radius_voxels = 3.0;
     vessels.influence_max_relief_fraction = 0.5;
     config.validate();

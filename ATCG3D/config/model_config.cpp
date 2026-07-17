@@ -317,6 +317,30 @@ void Model3DConfig::validate() const {
         scheduler_backend != "event_queue_v1" || conflict_bucket_hours < 0.0) {
         throw std::invalid_argument("simulation or scheduler configuration is invalid");
     }
+    if ((parallel_mode != "fixed" &&
+         parallel_mode != "adaptive_cells_and_events_v1") ||
+        parallel_min_threads <= 0 || parallel_min_threads > threads ||
+        parallel_min_events_per_thread == 0 ||
+        parallel_thread_thresholds.empty()) {
+        throw std::invalid_argument("parallel configuration is invalid");
+    }
+    std::uint64_t previous_minimum = 0;
+    double previous_fraction = 0.0;
+    for (std::size_t index = 0; index < parallel_thread_thresholds.size(); ++index) {
+        const ParallelThreadThresholdConfig& threshold =
+            parallel_thread_thresholds[index];
+        require_probability(threshold.max_thread_fraction,
+                            "parallel.cell_thresholds.max_thread_fraction");
+        if ((index == 0 && threshold.minimum_cells != 0) ||
+            (index > 0 && threshold.minimum_cells <= previous_minimum) ||
+            threshold.max_thread_fraction <= 0.0 ||
+            threshold.max_thread_fraction < previous_fraction) {
+            throw std::invalid_argument(
+                "parallel cell thresholds must start at zero and increase");
+        }
+        previous_minimum = threshold.minimum_cells;
+        previous_fraction = threshold.max_thread_fraction;
+    }
     if (preview_mode != "stable_uid_hash_v1" || full_format != "vtkhdf_points_v1" ||
         checkpoint_format != "hdf5_v2") {
         throw std::invalid_argument("unsupported output strategy");
@@ -392,13 +416,11 @@ void Model3DConfig::validate() const {
         angiogenesis.influence_decay_length_voxels <= 0.0 ||
         angiogenesis.influence_cutoff_radius_voxels < angiogenesis.diameter_voxels * 0.5 ||
         angiogenesis.influence_scope != "growth_density" ||
-        (angiogenesis.influence_activation != "after_outward_connection" &&
-         angiogenesis.influence_activation != "immediate")) {
+        angiogenesis.influence_activation != "immediate") {
         throw std::invalid_argument("angiogenesis influence configuration is invalid");
     }
-    if (angiogenesis.influence_activation == "after_outward_connection" &&
-        angiogenesis.outward_external_connection_distance_voxels >
-            static_cast<double>(angiogenesis.outward_max_length_voxels)) {
+    if (angiogenesis.outward_external_connection_distance_voxels >
+        static_cast<double>(angiogenesis.outward_max_length_voxels)) {
         throw std::invalid_argument(
             "angiogenesis outward connection distance exceeds outward maximum length");
     }
@@ -588,6 +610,19 @@ std::string Model3DConfig::to_json() const {
         << "\"end_time_hours\":" << end_time_hours << ','
         << "\"max_events\":" << max_events << ','
         << "\"threads\":" << threads << ','
+        << "\"parallel_mode\":\"" << json_escape(parallel_mode) << "\","
+        << "\"parallel_min_threads\":" << parallel_min_threads << ','
+        << "\"parallel_min_events_per_thread\":"
+        << parallel_min_events_per_thread << ','
+        << "\"parallel_thread_thresholds\":[";
+    for (std::size_t index = 0; index < parallel_thread_thresholds.size(); ++index) {
+        if (index != 0) out << ',';
+        out << "{\"minimum_cells\":"
+            << parallel_thread_thresholds[index].minimum_cells
+            << ",\"max_thread_fraction\":"
+            << parallel_thread_thresholds[index].max_thread_fraction << '}';
+    }
+    out << "],"
         << "\"scheduler_backend\":\"" << json_escape(scheduler_backend) << "\","
         << "\"conflict_bucket_hours\":" << conflict_bucket_hours << ','
         << "\"output_enabled\":" << json_bool(output_enabled) << ','
@@ -653,6 +688,10 @@ std::string Model3DConfig::dynamics_json() const {
     normalized.end_time_hours = 0.0;
     normalized.max_events = 1;
     normalized.threads = 1;
+    normalized.parallel_mode = "fixed";
+    normalized.parallel_min_threads = 1;
+    normalized.parallel_min_events_per_thread = 1;
+    normalized.parallel_thread_thresholds = {{0, 1.0}};
     normalized.output_enabled = false;
     normalized.preview_mode = "stable_uid_hash_v1";
     normalized.full_format = "vtkhdf_points_v1";

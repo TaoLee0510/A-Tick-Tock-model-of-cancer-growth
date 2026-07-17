@@ -96,6 +96,15 @@ int main() {
     assert(std::abs(smoke.angiogenesis.seed_rate_sites_per_hour - 10.0 / 720.0) < 1e-15);
     assert(smoke.angiogenesis.roots_per_event == 1);
     assert(smoke.angiogenesis.influence_profile == "linear_cutoff");
+    assert(smoke.angiogenesis.influence_activation == "immediate");
+    assert(smoke.threads == 4);
+    assert(smoke.parallel_mode == "adaptive_cells_and_events_v1");
+    assert(smoke.parallel_min_threads == 1);
+    assert(smoke.parallel_min_events_per_thread == 1024);
+    assert(smoke.parallel_thread_thresholds.size() == 6);
+    assert(smoke.parallel_thread_thresholds.front().minimum_cells == 0);
+    assert(smoke.parallel_thread_thresholds.back().minimum_cells == 25000);
+    assert(smoke.parallel_thread_thresholds.back().max_thread_fraction == 1.0);
     assert(smoke.checkpoint_format == "hdf5_v2");
     assert(smoke.to_json().find("\"schema_version\":2") != std::string::npos);
 
@@ -129,6 +138,7 @@ int main() {
     assert(!production.initial_K_migration_beta.lower_clamp_enabled);
     assert(production.r_to_K_conversion.enabled);
     assert(production.angiogenesis.enabled);
+    assert(production.threads == 8);
     assert(production.to_json().find(
         "\"initial_growth_rate_model\":\"legacy_truncated_normal_v1\"") !=
         std::string::npos);
@@ -152,7 +162,7 @@ int main() {
                     replace_once(smoke_yaml, "profile: smoke_test_v2\n",
                                  "profile: smoke_test_v2\nprofile: duplicate\n"));
     expect_rejected("missing",
-                    replace_once(smoke_yaml, "  threads: 1\n", ""));
+                    replace_once(smoke_yaml, "  threads: 4\n", ""));
     expect_rejected("loose_bool",
                     replace_once(smoke_yaml, "  thin_layer: false\n",
                                  "  thin_layer: yes\n"));
@@ -173,8 +183,20 @@ int main() {
                                  "  minimum: [-1000000, -1000000, -1000000]\n",
                                  "  minimum: [0, 0]\n"));
     expect_rejected("integer_overflow",
-                    replace_once(smoke_yaml, "  threads: 1\n",
+                    replace_once(smoke_yaml, "  threads: 4\n",
                                  "  threads: 999999999999999999999999\n"));
+    expect_rejected("parallel_zero_events",
+                    replace_once(smoke_yaml, "  min_events_per_thread: 1024\n",
+                                 "  min_events_per_thread: 0\n"));
+    expect_rejected("parallel_unsorted_thresholds",
+                    replace_once(smoke_yaml, "    - minimum_cells: 5000\n",
+                                 "    - minimum_cells: 0\n"));
+    expect_rejected("parallel_decreasing_fraction",
+                    replace_once(smoke_yaml, "      max_thread_fraction: 0.60\n",
+                                 "      max_thread_fraction: 0.40\n"));
+    expect_rejected("delayed_perfusion",
+                    replace_once(smoke_yaml, "    activation: immediate\n",
+                                 "    activation: after_outward_connection\n"));
     expect_rejected("multiple_documents", smoke_yaml + "\n---\nprofile: second\n");
     expect_rejected("poisson_roots",
                     replace_once(smoke_yaml, "    roots_per_event: 1\n",

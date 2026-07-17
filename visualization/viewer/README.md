@@ -4,8 +4,11 @@ This is a thin client over a ParaView backend. It supports arbitrary 3D camera
 rotation/pan/zoom, time slider, play/pause, time and cell count, `cell_type`
 coloring, Point Gaussian display, radius scaling, preview/full status, and live
 series refresh. A synchronized server-side Tube overlay renders
-`vessels.vtkhdf.series`; the UI can color it by perfusion or inward/outward role
-and adjust its radius scale. The toolbar distinguishes the true live-cell count
+`vessels.vtkhdf.series`. r cells are fixed green, K cells fixed red, and vessel
+tubes fixed blue. The toolbar provides whole, one-sided cut, and adjustable
+X/Y/Z slab modes; the same backend planes clip cells and vessels while normal
+3D camera rotation remains available. Vessel radius remains adjustable. The
+toolbar distinguishes the true live-cell count
 stored in frame FieldData from the number of preview/full points currently
 displayed.
 

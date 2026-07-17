@@ -66,7 +66,7 @@ creates the display tube at render time.
 | `node_id` | UInt64 | stable vessel-node UID |
 | `vessel_id` | UInt64 | root/network identity |
 | `branch_role` | UInt8 | root=0, inward=1, outward=2 |
-| `perfused` | UInt8 | 0=no established perfusion, 1=perfused |
+| `perfused` | UInt8 | compatibility field; generated vessels are always 1 |
 | `diameter_voxels` | Float32 | configured biological diameter in lattice voxels |
 | `radius_voxels` | Float32 | `diameter_voxels / 2`; ParaView Tube absolute-radius scalar |
 
@@ -149,9 +149,11 @@ pvpython visualization/viewer/app.py RUN_DIRECTORY --port 8080
 ```
 
 It renders cells and Tube-filtered vascular Lines in the ParaView backend;
-10-million-point full data is not sent to the browser. Vessels can be colored
-by `perfused` or `branch_role`, and their rendered radius can be scaled without
-changing stored geometry. Drag/play loads preview cells plus the matching
+10-million-point full data is not sent to the browser. r cells use a fixed
+green categorical color, K cells fixed red, and vessels fixed blue. Vessel
+radius can be scaled without changing stored geometry. Whole, one-sided cut,
+and adjustable X/Y/Z slab modes clip both cells and vessel tubes in the backend
+while the camera remains freely rotatable. Drag/play loads preview cells plus the matching
 vessel frame. The toolbar reports both the true live-cell count from
 `total_cell_count` and the number of sampled points currently displayed. A
 250 ms idle debounce then loads a full cell frame only when its

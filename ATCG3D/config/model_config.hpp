@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 #include "core/types.hpp"
 
@@ -45,6 +46,11 @@ struct DisplayRadiusConfig {
     float large{1.0F};
     float small{0.5F};
     float ultrasmall{0.25F};
+};
+
+struct ParallelThreadThresholdConfig {
+    std::uint64_t minimum_cells{};
+    double max_thread_fraction{1.0};
 };
 
 struct TruncatedNormalRateConfig {
@@ -110,7 +116,9 @@ struct AngiogenesisConfig {
     double influence_decay_length_voxels{4.0};
     double influence_cutoff_radius_voxels{12.0};
     std::string influence_scope{"growth_density"};
-    std::string influence_activation{"after_outward_connection"};
+    // Every generated vessel is perfused immediately. The field remains in
+    // the versioned schema so older run metadata remains self-describing.
+    std::string influence_activation{"immediate"};
 };
 
 struct Model3DConfig {
@@ -199,7 +207,15 @@ struct Model3DConfig {
 
     double end_time_hours{24.0};
     std::uint64_t max_events{1000000};
+    // Maximum worker count. The adaptive policy may select fewer workers for
+    // small populations or small same-time event batches.
     int threads{1};
+    std::string parallel_mode{"adaptive_cells_and_events_v1"};
+    int parallel_min_threads{1};
+    std::uint64_t parallel_min_events_per_thread{1024};
+    std::vector<ParallelThreadThresholdConfig> parallel_thread_thresholds{
+        {0, 0.50}, {5000, 0.60}, {10000, 0.70},
+        {15000, 0.80}, {20000, 0.90}, {25000, 1.00}};
     std::string scheduler_backend{"event_queue_v1"};
     double conflict_bucket_hours{0.0};
 

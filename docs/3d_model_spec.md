@@ -172,9 +172,15 @@ judged against one density snapshot, committed together, and trigger one
 stage-recovery batch. Conflict priority is keyed only by seed, exact or
 configured time bucket, UID, and event kind, with UID as the final tie-break.
 Per-cell biological random draws separately use
-`(seed, uid, event_type, event_sequence)`. OpenMP parallelizes proposal creation
-where enabled; deterministic ordering controls the commit. Tests confirm equal
-final checksums for one and four threads.
+`(seed, uid, event_type, event_sequence)`. OpenMP parallelizes read-only death
+decisions plus division, migration, and vessel-growth proposal creation;
+deterministic ordering controls every commit. `simulation.threads` is the hard
+maximum. In `parallel.mode: adaptive_cells_and_events_v1`, a configurable
+population threshold selects a fraction of that maximum and
+`min_events_per_thread` independently caps workers for small same-time batches.
+The lower of those limits is used, bounded by the available OpenMP workers.
+Thread selection consumes no simulation RNG. Tests cover threshold boundaries
+and confirm equal final checksums for one and multiple threads.
 
 Same-time divisions also build immutable proposals before any contender
 mutates occupancy. Proposals reserve the complete daughter/shape-reduction

@@ -1,3 +1,4 @@
+import ast
 import json
 from pathlib import Path
 import sys
@@ -7,6 +8,12 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from visualization.viewer.controller import FrameCounts, PreviewFullController, SeriesCatalog
+from visualization.viewer.app import (
+    CELL_TYPE_ANNOTATIONS,
+    CELL_TYPE_INDEXED_COLORS,
+    VESSEL_SOLID_COLOR,
+    clipping_plane_specs,
+)
 
 
 class FakeBackend:
@@ -45,6 +52,38 @@ def write_series(path: Path, subdirectory: str, times):
 
 
 class ViewerControllerTest(unittest.TestCase):
+    def test_fixed_semantic_colors(self):
+        self.assertEqual(CELL_TYPE_ANNOTATIONS, ["1", "r", "2", "K"])
+        self.assertEqual(CELL_TYPE_INDEXED_COLORS[:3], [0.0, 0.72, 0.0])
+        self.assertEqual(CELL_TYPE_INDEXED_COLORS[3:], [0.90, 0.0, 0.0])
+        self.assertEqual(VESSEL_SOLID_COLOR, [0.05, 0.25, 1.0])
+
+    def test_whole_cut_and_slab_plane_specs(self):
+        self.assertEqual(clipping_plane_specs("whole", "Z", 3.0, 2.0), [])
+        self.assertEqual(
+            clipping_plane_specs("cut", "X", 3.0, 2.0, True),
+            [([3.0, 0.0, 0.0], [1.0, 0.0, 0.0], 1)],
+        )
+        self.assertEqual(
+            clipping_plane_specs("slab", "Z", 3.0, 2.0),
+            [
+                ([0.0, 0.0, 2.0], [0.0, 0.0, 1.0], 0),
+                ([0.0, 0.0, 4.0], [0.0, 0.0, 1.0], 1),
+            ],
+        )
+        with self.assertRaises(ValueError):
+            clipping_plane_specs("slab", "Z", 0.0, 0.0)
+
+    def test_server_ready_callback_accepts_trame_state_keywords(self):
+        app_path = Path(__file__).resolve().parents[2] / "visualization/viewer/app.py"
+        tree = ast.parse(app_path.read_text(encoding="utf-8"))
+        callbacks = [
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.AsyncFunctionDef) and node.name == "update_loop"
+        ]
+        self.assertEqual(len(callbacks), 1)
+        self.assertIsNotNone(callbacks[0].args.kwarg)
+
     def test_fast_slider_only_loads_last_full(self):
         with tempfile.TemporaryDirectory() as temporary:
             run = Path(temporary)

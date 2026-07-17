@@ -85,10 +85,11 @@ relief = maximum_relief * max(0, 1 - d / influence_radius)
 effective_density = raw_density * (1 - relief)
 ```
 
-Overlapping vessels combine by maximum relief.  The default scope excludes
-occupancy and migration rules.  A connected/perfused policy controls whether
-relief begins immediately or only after the outward branch reaches its external
-connection distance.
+Overlapping vessels combine by maximum relief. The default scope excludes
+occupancy and migration rules. Every generated vessel is perfused immediately,
+so relief begins at root creation and extends as each inward/outward segment is
+committed. The stored `perfused` compatibility field is therefore always one
+for newly generated vessel nodes and tips.
 
 Perfusion activation refreshes cells through the union of density blocks
 covered by the real capsule voxels plus this cutoff, not through a single
@@ -106,11 +107,11 @@ rate is 10 attempted surface sites per 30 days, at most one root per event, with
 
 Vessel diameter is 3 voxels. Inward tips grow at 0.50 voxel/hour toward the
 root-time tumour centroid and outward tips at 0.25 voxel/hour toward the
-exposed-face normal; each is limited to 128 voxels. Outward perfusion is
-established after 64 voxels. Direction and turn cones are both 45°, persistence
+exposed-face normal; each is limited to 128 voxels. Direction and turn cones
+are both 45°, persistence
 is 0.90, forward-direction weight is `exp(cos(angle))` at the default bias 1.0,
-and no extra Euclidean step-length weighting is applied. Once perfused,
-the linear influence has maximum density relief 0.50, decay length 4 voxels,
+and no extra Euclidean step-length weighting is applied. The immediately active
+linear influence has maximum density relief 0.50, decay length 4 voxels,
 and cutoff radius 12 voxels. These new vascular numbers are parameterized
 starting values rather than values inherited from the 2D model.
 
