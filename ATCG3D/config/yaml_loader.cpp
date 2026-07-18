@@ -176,12 +176,8 @@ TruncatedNormalRateConfig parse_truncated_normal_rate(const YAML::Node& parent,
     return result;
 }
 
-BetaRateConfig parse_beta_rate(const YAML::Node& parent,
-                               const std::string& key,
-                               const std::string& parent_path) {
-    const YAML::Node node = checked_section(
-        parent, key, parent_path, {"alpha", "beta", "scale", "lower_clamp"});
-    const std::string path = parent_path + '.' + key;
+BetaRateConfig parse_beta_rate_fields(const YAML::Node& node,
+                                      const std::string& path) {
     BetaRateConfig result;
     result.alpha = strict_double(required(node, "alpha", path), path + ".alpha");
     result.beta = strict_double(required(node, "beta", path), path + ".beta");
@@ -206,6 +202,14 @@ BetaRateConfig parse_beta_rate(const YAML::Node& parent,
         check_map(clamp, path + ".lower_clamp", {"enabled"});
     }
     return result;
+}
+
+BetaRateConfig parse_beta_rate(const YAML::Node& parent,
+                               const std::string& key,
+                               const std::string& parent_path) {
+    const YAML::Node node = checked_section(
+        parent, key, parent_path, {"alpha", "beta", "scale", "lower_clamp"});
+    return parse_beta_rate_fields(node, parent_path + '.' + key);
 }
 
 }  // namespace
@@ -340,7 +344,8 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     const YAML::Node migration = checked_section(
         root, "migration", "$", {"activation_enabled", "activation_window_edge",
                                    "activation_block_edge", "activation_threshold",
-                                   "normal_r_rate", "activation_duration"});
+                                   "normal_r_rate", "activated_r_rate",
+                                   "activation_duration"});
     config.migration_activation_enabled = strict_bool(
         required(migration, "activation_enabled", "$.migration"),
         "migration.activation_enabled");
@@ -373,6 +378,20 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     config.normal_r_migration_beta.lower_clamp_enabled = false;
     config.normal_r_migration_beta.lower_clamp_threshold = 0.0;
     config.normal_r_migration_beta.lower_clamp_value = 0.0;
+
+    const YAML::Node activated_r_rate = checked_section(
+        migration, "activated_r_rate", "$.migration",
+        {"model", "alpha", "beta", "scale", "lower_clamp"});
+    config.activated_r_migration_rate_model = strict_string(
+        required(activated_r_rate, "model", "$.migration.activated_r_rate"),
+        "migration.activated_r_rate.model");
+    if (config.activated_r_migration_rate_model != "beta") {
+        config_error(required(activated_r_rate, "model",
+                              "$.migration.activated_r_rate"),
+                     "migration.activated_r_rate.model", "unsupported model");
+    }
+    config.activated_r_migration_beta = parse_beta_rate_fields(
+        activated_r_rate, "migration.activated_r_rate");
 
     const YAML::Node activation_duration = checked_section(
         migration, "activation_duration", "$.migration",
@@ -558,34 +577,32 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
                      "initial.growth_rate.model", "unsupported model");
     }
 
-    const YAML::Node migration_rate = required(initial, "migration_rate", "$.initial");
-    if (!migration_rate || !migration_rate.IsMap()) {
-        config_error(migration_rate, "$.initial.migration_rate", "must be a mapping");
+    const YAML::Node migration_rate = checked_section(
+        initial, "migration_rate", "$.initial", {"K"});
+    const YAML::Node K_migration_rate = required(
+        migration_rate, "K", "$.initial.migration_rate");
+    if (!K_migration_rate || !K_migration_rate.IsMap()) {
+        config_error(K_migration_rate, "$.initial.migration_rate.K",
+                     "must be a mapping");
     }
-    config.initial_migration_rate_model = strict_string(
-        required(migration_rate, "model", "$.initial.migration_rate"),
-        "initial.migration_rate.model");
-    if (config.initial_migration_rate_model == "fixed") {
-        check_map(migration_rate, "$.initial.migration_rate", {"model", "fixed"});
-        const YAML::Node fixed = checked_section(
-            migration_rate, "fixed", "$.initial.migration_rate", {"r", "K"});
-        config.initial_r_migration_rate = strict_double(
-            required(fixed, "r", "$.initial.migration_rate.fixed"),
-            "initial.migration_rate.fixed.r");
+    config.initial_K_migration_rate_model = strict_string(
+        required(K_migration_rate, "model", "$.initial.migration_rate.K"),
+        "initial.migration_rate.K.model");
+    if (config.initial_K_migration_rate_model == "fixed") {
+        check_map(K_migration_rate, "$.initial.migration_rate.K",
+                  {"model", "value"});
         config.initial_K_migration_rate = strict_double(
-            required(fixed, "K", "$.initial.migration_rate.fixed"),
-            "initial.migration_rate.fixed.K");
-    } else if (config.initial_migration_rate_model == "legacy_beta_v1") {
-        check_map(migration_rate, "$.initial.migration_rate", {"model", "beta"});
-        const YAML::Node beta = checked_section(
-            migration_rate, "beta", "$.initial.migration_rate", {"r", "K"});
-        config.initial_r_migration_beta = parse_beta_rate(
-            beta, "r", "$.initial.migration_rate.beta");
+            required(K_migration_rate, "value", "$.initial.migration_rate.K"),
+            "initial.migration_rate.K.value");
+    } else if (config.initial_K_migration_rate_model == "legacy_beta_v1") {
+        check_map(K_migration_rate, "$.initial.migration_rate.K",
+                  {"model", "beta"});
         config.initial_K_migration_beta = parse_beta_rate(
-            beta, "K", "$.initial.migration_rate.beta");
+            K_migration_rate, "beta", "$.initial.migration_rate.K");
     } else {
-        config_error(required(migration_rate, "model", "$.initial.migration_rate"),
-                     "initial.migration_rate.model", "unsupported model");
+        config_error(required(K_migration_rate, "model",
+                              "$.initial.migration_rate.K"),
+                     "initial.migration_rate.K.model", "unsupported model");
     }
 
     const YAML::Node simulation = checked_section(
@@ -641,14 +658,59 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
         "scheduler.conflict_bucket_hours");
 
     const YAML::Node angiogenesis = checked_section(
-        root, "angiogenesis", "$", {"enabled", "trigger", "seed_process", "vessel",
-                                     "direction", "influence"});
+        root, "angiogenesis", "$", {"enabled", "lesion_detection", "trigger",
+                                     "seed_process", "vessel", "direction",
+                                     "influence"});
     config.angiogenesis.enabled = strict_bool(
         required(angiogenesis, "enabled", "$.angiogenesis"), "angiogenesis.enabled");
+    const YAML::Node lesion_detection = checked_section(
+        angiogenesis, "lesion_detection", "$.angiogenesis",
+        {"backend", "block_edge", "connectivity",
+         "core_activation_occupied_fraction",
+         "core_deactivation_occupied_fraction",
+         "minimum_cells_per_core_block",
+         "minimum_biological_volume_per_core_block", "halo_blocks",
+         "refresh_interval_hours"});
+    config.angiogenesis.lesion_detection_backend = strict_string(
+        required(lesion_detection, "backend", "$.angiogenesis.lesion_detection"),
+        "angiogenesis.lesion_detection.backend");
+    config.angiogenesis.lesion_block_edge = strict_integer<int>(
+        required(lesion_detection, "block_edge", "$.angiogenesis.lesion_detection"),
+        "angiogenesis.lesion_detection.block_edge");
+    config.angiogenesis.lesion_connectivity = strict_integer<int>(
+        required(lesion_detection, "connectivity", "$.angiogenesis.lesion_detection"),
+        "angiogenesis.lesion_detection.connectivity");
+    config.angiogenesis.lesion_core_activation_occupied_fraction = strict_double(
+        required(lesion_detection, "core_activation_occupied_fraction",
+                 "$.angiogenesis.lesion_detection"),
+        "angiogenesis.lesion_detection.core_activation_occupied_fraction");
+    config.angiogenesis.lesion_core_deactivation_occupied_fraction = strict_double(
+        required(lesion_detection, "core_deactivation_occupied_fraction",
+                 "$.angiogenesis.lesion_detection"),
+        "angiogenesis.lesion_detection.core_deactivation_occupied_fraction");
+    config.angiogenesis.lesion_minimum_cells_per_core_block =
+        strict_integer<std::uint64_t>(
+            required(lesion_detection, "minimum_cells_per_core_block",
+                     "$.angiogenesis.lesion_detection"),
+            "angiogenesis.lesion_detection.minimum_cells_per_core_block");
+    config.angiogenesis.lesion_minimum_biological_volume_per_core_block =
+        strict_double(
+            required(lesion_detection,
+                     "minimum_biological_volume_per_core_block",
+                     "$.angiogenesis.lesion_detection"),
+            "angiogenesis.lesion_detection.minimum_biological_volume_per_core_block");
+    config.angiogenesis.lesion_halo_blocks = strict_integer<int>(
+        required(lesion_detection, "halo_blocks",
+                 "$.angiogenesis.lesion_detection"),
+        "angiogenesis.lesion_detection.halo_blocks");
+    config.angiogenesis.lesion_refresh_interval_hours = strict_double(
+        required(lesion_detection, "refresh_interval_hours",
+                 "$.angiogenesis.lesion_detection"),
+        "angiogenesis.lesion_detection.refresh_interval_hours");
     const YAML::Node trigger = checked_section(
         angiogenesis, "trigger", "$.angiogenesis",
         {"metric", "activation_volume_voxels3", "deactivation_volume_voxels3",
-         "delay_hours", "stage_biological_volume_voxels3"});
+         "delay_hours", "minimum_core_blocks", "stage_biological_volume_voxels3"});
     config.angiogenesis.trigger_metric = strict_string(
         required(trigger, "metric", "$.angiogenesis.trigger"),
         "angiogenesis.trigger.metric");
@@ -661,6 +723,9 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     config.angiogenesis.trigger_delay_hours = strict_double(
         required(trigger, "delay_hours", "$.angiogenesis.trigger"),
         "angiogenesis.trigger.delay_hours");
+    config.angiogenesis.trigger_minimum_core_blocks = strict_integer<std::uint64_t>(
+        required(trigger, "minimum_core_blocks", "$.angiogenesis.trigger"),
+        "angiogenesis.trigger.minimum_core_blocks");
     const YAML::Node stage_volume = checked_section(
         trigger, "stage_biological_volume_voxels3", "$.angiogenesis.trigger",
         {"stage0", "stage1", "stage2"});
@@ -676,12 +741,17 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
 
     const YAML::Node seed_process = checked_section(
         angiogenesis, "seed_process", "$.angiogenesis",
-        {"model", "rate_sites_per_30_days", "roots_per_event",
+        {"model", "scope", "rate_sites_per_30_days", "roots_per_event",
          "surface_min_separation_voxels", "surface_max_sampling_attempts",
-         "max_total_roots", "max_active_tips"});
+         "surface_min_local_cells", "root_position_policy",
+         "max_total_roots", "max_active_tips", "max_roots_per_lesion",
+         "max_active_tips_per_lesion"});
     config.angiogenesis.seed_process_model = strict_string(
         required(seed_process, "model", "$.angiogenesis.seed_process"),
         "angiogenesis.seed_process.model");
+    config.angiogenesis.seed_process_scope = strict_string(
+        required(seed_process, "scope", "$.angiogenesis.seed_process"),
+        "angiogenesis.seed_process.scope");
     config.angiogenesis.seed_rate_sites_per_30_days = strict_double(
         required(seed_process, "rate_sites_per_30_days", "$.angiogenesis.seed_process"),
         "angiogenesis.seed_process.rate_sites_per_30_days");
@@ -696,12 +766,25 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     config.angiogenesis.surface_max_sampling_attempts = strict_integer<std::uint32_t>(
         required(seed_process, "surface_max_sampling_attempts", "$.angiogenesis.seed_process"),
         "angiogenesis.seed_process.surface_max_sampling_attempts");
+    config.angiogenesis.surface_min_local_cells = strict_integer<std::uint64_t>(
+        required(seed_process, "surface_min_local_cells", "$.angiogenesis.seed_process"),
+        "angiogenesis.seed_process.surface_min_local_cells");
+    config.angiogenesis.root_position_policy = strict_string(
+        required(seed_process, "root_position_policy", "$.angiogenesis.seed_process"),
+        "angiogenesis.seed_process.root_position_policy");
     config.angiogenesis.max_total_roots = strict_integer<std::uint64_t>(
         required(seed_process, "max_total_roots", "$.angiogenesis.seed_process"),
         "angiogenesis.seed_process.max_total_roots");
     config.angiogenesis.max_active_tips = strict_integer<std::uint64_t>(
         required(seed_process, "max_active_tips", "$.angiogenesis.seed_process"),
         "angiogenesis.seed_process.max_active_tips");
+    config.angiogenesis.max_roots_per_lesion = strict_integer<std::uint64_t>(
+        required(seed_process, "max_roots_per_lesion", "$.angiogenesis.seed_process"),
+        "angiogenesis.seed_process.max_roots_per_lesion");
+    config.angiogenesis.max_active_tips_per_lesion = strict_integer<std::uint64_t>(
+        required(seed_process, "max_active_tips_per_lesion",
+                 "$.angiogenesis.seed_process"),
+        "angiogenesis.seed_process.max_active_tips_per_lesion");
 
     const YAML::Node vessel = checked_section(
         angiogenesis, "vessel", "$.angiogenesis",

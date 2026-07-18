@@ -72,28 +72,47 @@ struct BetaRateConfig {
 struct AngiogenesisConfig {
     bool enabled{false};
 
-    std::string trigger_metric{"biological_cell_volume_voxels3"};
+    std::string lesion_detection_backend{"sparse_coarse_blocks_v1"};
+    int lesion_block_edge{8};
+    int lesion_connectivity{26};
+    double lesion_core_activation_occupied_fraction{0.15};
+    double lesion_core_deactivation_occupied_fraction{0.10};
+    std::uint64_t lesion_minimum_cells_per_core_block{8};
+    double lesion_minimum_biological_volume_per_core_block{0.0};
+    int lesion_halo_blocks{1};
+    double lesion_refresh_interval_hours{1.0};
+
+    std::string trigger_metric{"per_lesion_biological_cell_volume_voxels3"};
     double trigger_activation_volume_voxels3{100000.0};
     double trigger_deactivation_volume_voxels3{80000.0};
     double trigger_delay_hours{0.0};
+    std::uint64_t trigger_minimum_core_blocks{4};
     double stage0_biological_volume_voxels3{8.0};
     double stage1_biological_volume_voxels3{1.0};
     double stage2_biological_volume_voxels3{0.5};
 
     std::string seed_process_model{"homogeneous_poisson"};
+    std::string seed_process_scope{"per_eligible_lesion"};
     double seed_rate_sites_per_30_days{10.0};
     double seed_rate_sites_per_hour{10.0 / 720.0};
-    // Schema-v2 invariant: one Poisson site arrival attempts at most one root.
+    // Schema-v3 invariant: one Poisson site arrival attempts at most one root.
     // Multiple roots arise from multiple arrivals, so this must remain 1.
     std::uint32_t roots_per_event{1};
     int surface_min_separation_voxels{8};
     std::uint32_t surface_max_sampling_attempts{4096};
     std::uint64_t max_total_roots{64};
     std::uint64_t max_active_tips{128};
+    std::uint64_t max_roots_per_lesion{64};
+    std::uint64_t max_active_tips_per_lesion{128};
+    std::string root_position_policy{"inside_surface_voxel"};
+    std::uint64_t surface_min_local_cells{1};
 
     double diameter_voxels{3.0};
     double inward_speed_voxels_per_hour{0.50};
-    double outward_speed_voxels_per_hour{0.25};
+    // Must exceed the maximum possible activated-r 3D path speed.  Cell
+    // migration rates are moves/hour and one fixed-26 step can span sqrt(3)
+    // voxels, whereas vessel speed is already expressed in voxels/hour.
+    double outward_speed_voxels_per_hour{2.0};
     int inward_max_length_voxels{128};
     int outward_max_length_voxels{128};
     double inward_target_tolerance_voxels{2.0};
@@ -123,8 +142,8 @@ struct AngiogenesisConfig {
 
 struct Model3DConfig {
     std::string schema_name{"atcg3d.model_config"};
-    std::uint32_t schema_version{2};
-    std::string profile{"legacy_2d_mapped_v2"};
+    std::uint32_t schema_version{3};
+    std::string profile{"legacy_2d_mapped_v3"};
     Legacy2DMappingConfig legacy_mapping{};
     std::uint64_t seed{1};
 
@@ -152,6 +171,12 @@ struct Model3DConfig {
     double migration_activation_threshold{0.90};
     BetaRateConfig normal_r_migration_beta{
         5.0, 5.0, 0.5, false, 0.0, 0.0};
+    // Inherent r-cell migration rate used while density activation is active.
+    // This is deliberately independent of initialization: initial r cells and
+    // each newly committed r division cycle draw from the same configured law.
+    std::string activated_r_migration_rate_model{"beta"};
+    BetaRateConfig activated_r_migration_beta{
+        0.01, 0.0566666667, 1.0, true, 0.5, 0.25};
     double migration_activation_duration_alpha{0.005};
     double migration_activation_duration_mean_fraction{0.30};
     double migration_activation_duration_beta{0.011666666666666667};
@@ -190,11 +215,10 @@ struct Model3DConfig {
         1.1832, 0.2441, 1.0722619, 1.3171805};
     TruncatedNormalRateConfig initial_K_growth_truncated_normal{
         0.6832, 0.3764, 0.33963482, 0.99505180};
-    std::string initial_migration_rate_model{"fixed"};
-    double initial_r_migration_rate{0.25};
+    // Initial/cycle K-cell migration is configured separately because K cells
+    // do not use the r-cell density-activation state machine.
+    std::string initial_K_migration_rate_model{"fixed"};
     double initial_K_migration_rate{0.25};
-    BetaRateConfig initial_r_migration_beta{
-        0.01, 0.0566666667, 200.0, true, 0.5, 0.25};
     BetaRateConfig initial_K_migration_beta{
         5.0, 5.0, 0.25, false, 0.0, 0.0};
     std::string death_delay_model{"legacy_geometric_mean_v1"};
@@ -222,7 +246,7 @@ struct Model3DConfig {
     bool output_enabled{false};
     std::string preview_mode{"stable_uid_hash_v1"};
     std::string full_format{"vtkhdf_points_v1"};
-    std::string checkpoint_format{"hdf5_v2"};
+    std::string checkpoint_format{"hdf5_v3"};
     std::filesystem::path output_directory{"atcg3d_run"};
     double preview_every_hours{1.0};
     double full_every_hours{6.0};

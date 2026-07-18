@@ -96,12 +96,11 @@ float sample_cycle_inherent_migration_rate(CellType type,
                                            const Model3DConfig& config,
                                            CellUid uid,
                                            std::uint64_t event_sequence) {
-    if (config.initial_migration_rate_model == "fixed") {
-        return static_cast<float>(type == CellType::r
-            ? config.initial_r_migration_rate : config.initial_K_migration_rate);
+    if (type == CellType::K && config.initial_K_migration_rate_model == "fixed") {
+        return static_cast<float>(config.initial_K_migration_rate);
     }
     const BetaRateConfig& parameters = type == CellType::r
-        ? config.initial_r_migration_beta : config.initial_K_migration_beta;
+        ? config.activated_r_migration_beta : config.initial_K_migration_beta;
     double rate = parameters.scale * sample_stateless_beta_fraction(
         parameters.alpha, parameters.beta, config.seed, uid,
         kDivisionMigrationRateDomain + (type == CellType::r ? 0U : 16U),

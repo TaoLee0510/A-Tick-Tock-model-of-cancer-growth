@@ -220,9 +220,12 @@ int main() {
         assert((cells.flags(result.daughter) & kMigrationActive) == 0);
         assert(cells.migration_activation_end_time(mother) == 0.0);
         assert(cells.migration_activation_end_time(result.daughter) == 0.0);
-        assert(cells.migration_rate(mother) == config.initial_r_migration_rate);
-        assert(cells.migration_rate(result.daughter) ==
-               config.initial_r_migration_rate);
+        assert(cells.migration_rate(mother) == 0.25F ||
+               (cells.migration_rate(mother) > 0.5F &&
+                cells.migration_rate(mother) <= 1.0F));
+        assert(cells.migration_rate(result.daughter) == 0.25F ||
+               (cells.migration_rate(result.daughter) > 0.5F &&
+                cells.migration_rate(result.daughter) <= 1.0F));
         assert(cells.normal_migration_rate(mother) > 0.0F);
         assert(cells.normal_migration_rate(result.daughter) > 0.0F);
     }
@@ -246,7 +249,7 @@ int main() {
         config.division_timing.K_max_inherent_growth_rate = 0.90;
         config.initial_growth_rate_model = "fixed";
         config.initial_K_growth_rate = 2.5;
-        config.initial_migration_rate_model = "fixed";
+        config.initial_K_migration_rate_model = "fixed";
         config.initial_K_migration_rate = 0.125;
         DomainPolicy domain(config);
         SparseChunkGrid3D grid(8, domain);

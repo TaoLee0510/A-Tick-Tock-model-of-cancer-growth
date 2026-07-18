@@ -102,6 +102,12 @@ int main(int argc, char** argv) {
             config.angiogenesis.seed_rate_sites_per_30_days = 10.0;
             config.angiogenesis.seed_rate_sites_per_hour = 10.0 / 720.0;
         } else {
+            config.angiogenesis.lesion_block_edge = 8;
+            config.angiogenesis.lesion_core_activation_occupied_fraction =
+                1.0 / 512.0;
+            config.angiogenesis.lesion_core_deactivation_occupied_fraction = 0.0;
+            config.angiogenesis.lesion_minimum_cells_per_core_block = 1;
+            config.angiogenesis.trigger_minimum_core_blocks = 1;
             config.angiogenesis.trigger_activation_volume_voxels3 = 1.0;
             config.angiogenesis.trigger_deactivation_volume_voxels3 = 0.0;
             config.angiogenesis.trigger_delay_hours = 0.0;
@@ -155,25 +161,17 @@ int main(int argc, char** argv) {
             records.push_back(cell);
         }
 
-        atcg3d::VasculatureState3D vasculature;
-        vasculature.process.eligible = true;
-        vasculature.process.next_seed_time_hours =
-            atcg3d::AngiogenesisProcess3D::sample_waiting_hours(
-                config.seed, 0,
-                config.angiogenesis.seed_rate_sites_per_30_days);
-        vasculature.process.eligibility_started_hours = 0.0;
-        vasculature.process.event_sequence = 1;
-        vasculature.process.schedule_generation = 1;
-        if (!(vasculature.process.next_seed_time_hours > 0.0) ||
-            vasculature.process.next_seed_time_hours >= config.end_time_hours) {
+        atcg3d::Simulation3D simulation(config);
+        simulation.restore(records, cell_count + 1, {}, {}, {});
+        const auto process_state = simulation.angiogenesis_state();
+        if (!process_state.eligible ||
+            !(process_state.next_seed_time_hours > 0.0) ||
+            process_state.next_seed_time_hours >= config.end_time_hours) {
             throw std::runtime_error(
-                "deterministic Poisson seed falls outside the benchmark horizon");
+                "per-lesion Poisson seed falls outside the benchmark horizon");
         }
         const double scheduled_seed_time_hours =
-            vasculature.process.next_seed_time_hours;
-
-        atcg3d::Simulation3D simulation(config);
-        simulation.restore(records, cell_count + 1, {}, {}, {}, vasculature);
+            process_state.next_seed_time_hours;
         const std::size_t initial_surface_faces = simulation.tumor_surface().size();
         const std::size_t initial_chunks = simulation.grid().chunk_count();
         std::vector<atcg3d::CellInit>().swap(records);
@@ -278,13 +276,16 @@ int main(int argc, char** argv) {
             simulation.vessel_tips().allocated_bytes();
         const std::uint64_t vascular_influence_bytes =
             simulation.vascular_influence().allocated_bytes();
+        const std::uint64_t lesion_index_bytes =
+            simulation.lesion_index().allocated_bytes();
         // This subtotal deliberately covers only components with explicit
         // allocation accounting. Surface hash tables, scheduler storage, and
         // allocator overhead are represented by peak_rss_bytes instead.
         const std::uint64_t tracked_component_bytes =
             cell_store_bytes + cell_grid_bytes + density_index_bytes +
             vessel_grid_bytes + vessel_node_store_bytes +
-            vessel_tip_store_bytes + vascular_influence_bytes;
+            vessel_tip_store_bytes + vascular_influence_bytes +
+            lesion_index_bytes;
         std::cout << std::setprecision(17)
                   << "{\n"
                   << "  \"schema\": \"atcg3d.angiogenesis_scale.v1\",\n"
@@ -296,6 +297,8 @@ int main(int argc, char** argv) {
                   << "  \"initial_surface_faces\": "
                   << initial_surface_faces << ",\n"
                   << "  \"initial_chunks\": " << initial_chunks << ",\n"
+                  << "  \"lesions\": "
+                  << simulation.lesion_index().lesions().size() << ",\n"
                   << "  \"completed_events\": "
                   << simulation.clock().completed_events << ",\n"
                   << "  \"simulated_hours\": "
@@ -378,6 +381,8 @@ int main(int argc, char** argv) {
                   << vessel_tip_store_bytes << ",\n"
                   << "  \"vascular_influence_bytes\": "
                   << vascular_influence_bytes << ",\n"
+                  << "  \"lesion_index_bytes\": "
+                  << lesion_index_bytes << ",\n"
                   << "  \"tracked_component_bytes\": "
                   << tracked_component_bytes << ",\n"
                   << "  \"tracked_bytes_per_initial_cell\": "

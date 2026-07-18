@@ -16,13 +16,14 @@ struct AngiogenesisProcessState3D {
     std::uint64_t rejected_events{};
 };
 
-// Event-driven global homogeneous Poisson process. The configured intensity is
-// the expected number of surface-root sites per 30 eligible days for the whole
-// tumour, not a probability and not a per-surface-voxel rate. One arrival is
-// one attempted site and can commit at most one root.
+// Event-driven homogeneous Poisson process for one spatial lesion. The
+// configured intensity is the expected number of attempted surface-root sites
+// per 30 eligible days for that lesion, not a per-surface-voxel rate. One
+// arrival attempts at most one root.
 class AngiogenesisProcess3D {
 public:
-    explicit AngiogenesisProcess3D(std::uint64_t seed = 1) : seed_(seed) {}
+    explicit AngiogenesisProcess3D(std::uint64_t seed = 1,
+                                   std::uint64_t process_uid = 0) noexcept;
 
     const AngiogenesisProcessState3D& state() const noexcept { return state_; }
     void restore(AngiogenesisProcessState3D state);
@@ -49,6 +50,10 @@ public:
     static double sample_waiting_hours(std::uint64_t seed,
                                        std::uint64_t event_sequence,
                                        double rate_sites_per_30_days);
+    static double sample_waiting_hours(std::uint64_t seed,
+                                       std::uint64_t process_uid,
+                                       std::uint64_t event_sequence,
+                                       double rate_sites_per_30_days);
 
 private:
     void schedule_next(double now_hours,
@@ -57,6 +62,7 @@ private:
     void accumulate_eligible_time(double now_hours);
 
     std::uint64_t seed_{};
+    std::uint64_t process_uid_{};
     AngiogenesisProcessState3D state_{};
 };
 

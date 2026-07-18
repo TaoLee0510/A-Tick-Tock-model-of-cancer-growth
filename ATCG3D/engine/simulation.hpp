@@ -15,6 +15,7 @@
 #include "space/density_index.hpp"
 #include "vasculature/angiogenesis_process.hpp"
 #include "vasculature/influence_field.hpp"
+#include "vasculature/lesion_index.hpp"
 #include "vasculature/surface_index.hpp"
 #include "vasculature/vessel_grid.hpp"
 #include "vasculature/vessel_store.hpp"
@@ -24,11 +25,12 @@ namespace atcg3d {
 // Numeric order is the deterministic within-time-bucket biological priority.
 enum class EventKind : std::uint8_t {
     death = 0,
-    angiogenesis_seed = 1,
-    vessel_growth = 2,
-    migration_activation_end = 3,
-    division = 4,
-    migration = 5,
+    lesion_refresh = 1,
+    angiogenesis_seed = 2,
+    vessel_growth = 3,
+    migration_activation_end = 4,
+    division = 5,
+    migration = 6,
 };
 
 struct SimulationClock3D {
@@ -60,8 +62,38 @@ struct VascularRefreshDiagnostics3D {
     std::uint64_t refreshed_cell_slots{};
 };
 
-struct VasculatureState3D {
+struct LesionAngiogenesisState3D {
+    LesionId lesion_id{kNoLesionId};
     AngiogenesisProcessState3D process;
+};
+
+// Immutable vessel provenance remains source_lesion_id.  This sparse table
+// maps a historical source to its current topological owner after merges and
+// removals.  current_lesion_id == kNoLesionId means the source no longer has a
+// living lesion owner.  Identity mappings are implicit and are not stored.
+struct LesionSourceOwnership3D {
+    LesionId source_lesion_id{kNoLesionId};
+    LesionId current_lesion_id{kNoLesionId};
+
+    constexpr bool operator==(const LesionSourceOwnership3D&) const = default;
+};
+
+struct LesionSimulationState3D {
+    LesionId next_lesion_id{1};
+    double last_refresh_time_hours{};
+    double next_refresh_time_hours{};
+    std::uint32_t refresh_schedule_generation{};
+    std::vector<LesionCoreIdentity3D> core_identity;
+    std::vector<LesionDirtyBlockState3D> dirty_blocks;
+    std::vector<LesionAngiogenesisState3D> processes;
+    std::vector<LesionSourceOwnership3D> source_ownership;
+};
+
+struct VasculatureState3D {
+    // Aggregate compatibility summary. Scheduling uses lesions.processes;
+    // counters are the exact sum of every current or retired lesion record.
+    AngiogenesisProcessState3D process;
+    LesionSimulationState3D lesions;
     std::vector<VesselNodeInit3D> nodes;
     std::vector<VesselTipInit3D> tips;
     std::vector<VesselId> perfused_vessels;
@@ -69,6 +101,14 @@ struct VasculatureState3D {
     VesselNodeUid next_node_uid{1};
     VesselTipUid next_tip_uid{1};
 };
+
+// Builds the compatibility summary in lesion-id order.  Active intervals are
+// folded through snapshot_time_hours, so accumulated_eligible_hours is the
+// exact sum at the snapshot and an active aggregate starts a fresh interval at
+// that same time.  Throws on duplicate IDs, invalid time, or counter overflow.
+AngiogenesisProcessState3D aggregate_angiogenesis_process_states(
+    std::span<const LesionAngiogenesisState3D> processes,
+    double snapshot_time_hours);
 
 class Simulation3D {
 public:
@@ -123,10 +163,10 @@ public:
         return vascular_influence_;
     }
     const TumorSurfaceIndex3D& tumor_surface() const noexcept { return tumor_surface_; }
-    const AngiogenesisProcessState3D& angiogenesis_state() const noexcept {
-        return angiogenesis_process_.state();
-    }
+    const LesionIndex3D& lesion_index() const noexcept { return lesion_index_; }
+    AngiogenesisProcessState3D angiogenesis_state() const;
     std::size_t active_vessel_tip_count() const;
+    std::size_t active_vessel_tip_count(LesionId source_lesion_id) const;
     double biological_tumor_volume() const noexcept;
     VasculatureState3D snapshot_vasculature() const;
 
@@ -182,11 +222,24 @@ private:
 
     void rebuild_tumor_surface();
     void refresh_tumor_surface(std::span<const Vec3i> changed_sites);
-    void sync_angiogenesis_eligibility();
-    void schedule_seed_event();
+    void rebuild_lesion_index();
+    void mark_lesion_dirty(std::span<const Vec3i> changed_sites);
+    bool refresh_lesion_index(bool force);
+    void schedule_lesion_refresh_event();
+    void sync_angiogenesis_eligibility(bool force_refresh = false);
+    void recompute_aggregate_angiogenesis_state();
+    LesionId current_lesion_for_source(LesionId source_lesion_id) const noexcept;
+    void update_lesion_source_ownership(
+        const std::unordered_map<LesionId, LesionId>& successors,
+        const std::unordered_set<LesionId>& current_lesions);
+    void schedule_seed_event(LesionId lesion_id);
     bool process_seed_event(const Event& event);
-    bool create_vessel_root(const ExposedFace3D& face,
+    bool create_vessel_root(LesionId source_lesion_id,
+                            const ExposedFace3D& face,
+                            Vec3i inward_target,
                             std::uint64_t seed_event_sequence);
+    bool root_has_local_support(LesionId source_lesion_id,
+                                std::span<const Vec3i> root_capsule) const;
 
     std::vector<DirectionId> feasible_vessel_directions(VesselTipSlot slot) const;
     void schedule_vessel_tip(VesselTipSlot slot);
@@ -219,7 +272,14 @@ private:
     VesselTipStore3D vessel_tips_;
     VascularInfluenceField3D vascular_influence_;
     TumorSurfaceIndex3D tumor_surface_;
-    AngiogenesisProcess3D angiogenesis_process_;
+    LesionIndex3D lesion_index_;
+    std::unordered_map<LesionId, AngiogenesisProcess3D>
+        lesion_angiogenesis_processes_;
+    std::unordered_map<LesionId, LesionId> lesion_source_ownership_;
+    AngiogenesisProcessState3D aggregate_angiogenesis_state_{};
+    double last_lesion_refresh_time_hours_{};
+    double next_lesion_refresh_time_hours_{};
+    std::uint32_t lesion_refresh_schedule_generation_{};
     std::unordered_map<Vec3i, VesselNodeSlot, Vec3iHash> centerline_nodes_;
     std::unordered_set<VesselId> perfused_vessels_;
     std::vector<LineageEdge> lineage_;

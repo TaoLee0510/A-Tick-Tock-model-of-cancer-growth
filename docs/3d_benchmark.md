@@ -1,7 +1,16 @@
 # ATCG3D validation and scale benchmark
 
-Last measured: 2026-07-15. The machine-readable report is
-`benchmarks/results/atcg3d_macos_arm64_2026-07-15.json`.
+Last complete 10^3-through-10^7 measurement: 2026-07-15. The machine-readable
+report is `benchmarks/results/atcg3d_macos_arm64_2026-07-15.json`.
+
+The scale figures below are a historical schema-v2 baseline. They predate the
+schema-v3 per-lesion index, per-lesion angiogenesis schedulers, checkpoint
+tables, and the additional VTK `lesion_id`/`source_lesion_id` arrays. They must
+not be cited as current schema-v3 memory, file-size, throughput, or checksum
+measurements. The current change was validated with the build/test matrix
+below. The complete storage/output/checkpoint suite has not yet been rerun
+after this change, but a current schema-v3 ten-million-cell
+lesion/angiogenesis progression is recorded separately below.
 
 ## Measured platform
 
@@ -15,16 +24,19 @@ simulation path, but this report does not claim either platform as tested.
 
 ## Build and test matrix
 
-Six clean builds were configured, built, and tested:
+The schema-v3 implementation was rebuilt and tested on 2026-07-17:
 
 | Build | Legacy 2D | 3D | HDF5 | VTK-HDF | Result |
 |---|:---:|:---:|:---:|:---:|---:|
 | legacy Release | yes | no | no | no | 2/2 passed |
-| core Release | no | yes | no | no | 19/19 passed |
-| HDF5 Release | no | yes | yes | no | 20/20 passed |
-| VTK + HDF5 Release | no | yes | yes | yes | 21/21 passed |
-| ASan + UBSan Debug core | no | yes | no | no | 19/19 passed |
-| `-Wall -Wextra -Wpedantic -Werror` Release core | no | yes | no | no | 19/19 passed |
+| core Release | no | yes | no | no | 21/21 passed |
+| HDF5 Release | no | yes | yes | no | 22/22 passed |
+| VTK + HDF5 Release | no | yes | yes | yes | 23/23 passed |
+| `-Wall -Wextra -Wpedantic -Werror` Release core | no | yes | no | no | 21/21 passed |
+
+A targeted ASan + UBSan run of the new lesion-index test also passed. The
+complete schema-v3 sanitizer suite was not rerun, so the older full-suite
+sanitizer result is not promoted as current evidence.
 
 Apple AddressSanitizer does not support LeakSanitizer, so leak detection was
 disabled; AddressSanitizer and UndefinedBehaviorSanitizer remained enabled.
@@ -40,11 +52,43 @@ cmake --build build-3d --parallel
 ctest --test-dir build-3d --output-on-failure
 ```
 
-`atcg3d --config ... --dry-run` accepted both schema-v2 YAML profiles. An
+`atcg3d --config ... --dry-run` accepted both schema-v3 YAML profiles. An
 attempted `--set simulation.threads=4` override failed nonzero, confirming that
 model and run values are supplied only by YAML.
 
-## Synthetic 10^3 through 10^7 storage benchmark
+## Current schema-v3 ten-million-cell lesion/angiogenesis progression
+
+The per-lesion index, independent Poisson scheduler, bidirectional vascular
+growth, displacement, and density-relief paths were measured after the final
+schema-v3 changes on 2026-07-18, after enforcing an outward vessel speed of
+2.0 voxel/hour above the activated-r maximum path speed. The machine-readable
+result is
+`benchmarks/results/atcg3d_angiogenesis_schema_v3_macos_arm64_2026-07-18.json`:
+
+```sh
+build-full/atcg3d_angiogenesis_scale_benchmark \
+  --cells 10000000 --events 4096 --threads 18 --profile production
+```
+
+The run reached 720 model hours in 1,713 events. It attempted and committed
+eight roots, committed 1,419 vascular growth steps, displaced 6,364 cells, and
+ended with 9,993,636 live cells. The result contained 1,427 vessel nodes,
+14,969 occupied vessel voxels, and 1,038,282 vascular-influence voxels. Build
+and run time were 3.100 s and 21.164 s respectively (80.94 events/s), with
+checksum `2698773685244278503`.
+
+Peak RSS was 3,492,675,584 B. Explicitly tracked components used
+1,156,777,916 B, or 115.68 B per initial cell; this includes a 980,032,768 B
+cell store and a 5,420,380 B lesion index. The benchmark freezes the synthetic
+background cells' migration, division, and death schedules so that vascular
+scaling is interpretable. It is evidence for the ten-million-cell lesion and
+vascular paths, not a wall-time estimate for a fully evolving tumour.
+
+An initial run with `--events 256` stopped normally at its configured event
+limit (208.53 model hours) and was rejected by the benchmark because it had not
+reached the required 720-hour horizon. It is not counted as a passing result.
+
+## Historical synthetic 10^3 through 10^7 storage benchmark
 
 The four sizes were run in the required order with:
 
@@ -84,11 +128,11 @@ The 10^7 full frame contains every cell and required fixed-width array. Its
 311,162,142 bytes are inside the requested approximate 260–320 MB range. The
 preview contains the configured maximum one million stable-hash samples.
 
-## Legacy-mapped initialization and biology
+## Historical legacy-mapped initialization and biology
 
 ```sh
 build-3d/atcg3d_initialization_benchmark \
-  --config configs/atcg3d_legacy_2d_mapped_v2.yaml
+  --config configs/atcg3d_legacy_2d_mapped_v3.yaml
 ```
 
 The production profile created 568,900 non-overlapping cells in 0.90792 s:
@@ -103,7 +147,7 @@ real executable. It progressed 377 events, attempted 336 migrations, committed
 331 migrations and 41 divisions, recorded no death or angiogenesis event, and
 grew from 64 to 105 live cells. Checksum: `7994067227480867429`.
 
-## Real migration-event progression
+## Historical real migration-event progression
 
 ```sh
 build-3d/atcg3d_event_benchmark --cells N --events 10000 --threads T
@@ -133,7 +177,7 @@ not a production promise: the production model has heterogeneous rates,
 division, death, density activation, vessels, and changing population. A real
 ETA must use the run's observed event count and throughput.
 
-## Ten-million-cell angiogenesis progression
+## Historical ten-million-cell angiogenesis progression
 
 ```sh
 build-3d/atcg3d_angiogenesis_scale_benchmark \
@@ -177,16 +221,17 @@ build-3d/atcg3d_angiogenesis_scale_benchmark \
   --cells 10000000 --events 100000 --threads T --profile production
 ```
 
-The production integration benchmark advances ten million cells for 720 model
-hours with the YAML defaults: 10 sites per 30 days; activation/deactivation
+The historical production-like integration benchmark did not parse a YAML
+file; it programmatically constructed the then-current default configuration
+and advanced ten million cells for 720 model hours: 10 sites per 30 days;
+activation/deactivation
 volumes 100,000/80,000 voxel^3; at most 64 roots and 128 active tips; diameter
 3; inward/outward speeds 0.5/0.25 voxel/h; inward/outward maximum lengths 128;
 external-connection distance 64; influence cutoff 12; and maximum density
 relief 0.5.
 
 For benchmark isolation, only the synthetic `CellInit` background schedules
-are neutralized. The benchmark does not alter the YAML, legacy-mapped density
-or death rules, or any vessel parameter. Vessel occupancy, inward cell
+were neutralized. Vessel occupancy, inward cell
 replacement/displacement, and vascular density-influence updates all execute
 through the real model paths.
 
@@ -200,7 +245,7 @@ store, 44,982,824 B cell grid, 92,481,624 B density index, 22,122,776 B vessel
 grid, 4,005,336 B influence field, and 114,336 B combined vessel node/tip
 stores. The equal checksum confirms deterministic one- and four-thread results.
 
-## Checkpoint, output, and visualization
+## Historical checkpoint, output, and visualization measurements
 
 An output-enabled run was checkpointed at 2 h, resumed to 4 h, and compared
 with an uninterrupted 4 h run. Both final biological checksums were

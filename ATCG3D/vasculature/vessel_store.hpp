@@ -14,6 +14,7 @@ struct VesselNodeInit3D {
     VesselNodeUid parent_uid{};
     VesselNodeSlot parent_node_slot{kEmptyVesselNodeSlot};
     VesselId vessel_id{};
+    LesionId source_lesion_id{kNoLesionId};
     VesselBranchRole role{VesselBranchRole::root};
     bool perfused{};
     float diameter_voxels{1.0F};
@@ -40,6 +41,9 @@ public:
         return parent_node_slot_.at(slot);
     }
     VesselId vessel_id(VesselNodeSlot slot) const { return vessel_id_.at(slot); }
+    LesionId source_lesion_id(VesselNodeSlot slot) const {
+        return source_lesion_id_.at(slot);
+    }
     VesselBranchRole role(VesselNodeSlot slot) const {
         return static_cast<VesselBranchRole>(role_.at(slot));
     }
@@ -62,6 +66,7 @@ private:
     std::vector<VesselNodeUid> parent_uid_;
     std::vector<VesselNodeSlot> parent_node_slot_;
     std::vector<VesselId> vessel_id_;
+    std::vector<LesionId> source_lesion_id_;
     std::vector<std::uint8_t> role_;
     std::vector<std::uint8_t> perfused_;
     std::vector<std::uint8_t> alive_;
@@ -77,6 +82,7 @@ struct VesselTipInit3D {
     Vec3i target{};
     VesselTipUid uid{};
     VesselId vessel_id{};
+    LesionId source_lesion_id{kNoLesionId};
     VesselNodeUid current_node_uid{};
     VesselNodeSlot current_node_slot{kEmptyVesselNodeSlot};
     VesselBranchRole role{VesselBranchRole::inward};
@@ -111,6 +117,9 @@ public:
     Vec3i target(VesselTipSlot slot) const;
     VesselTipUid uid(VesselTipSlot slot) const { return uid_.at(slot); }
     VesselId vessel_id(VesselTipSlot slot) const { return vessel_id_.at(slot); }
+    LesionId source_lesion_id(VesselTipSlot slot) const {
+        return source_lesion_id_.at(slot);
+    }
     VesselNodeUid current_node_uid(VesselTipSlot slot) const { return current_node_uid_.at(slot); }
     VesselNodeSlot current_node_slot(VesselTipSlot slot) const {
         return current_node_slot_.at(slot);
@@ -183,6 +192,7 @@ private:
     std::vector<std::int32_t> target_z_;
     std::vector<VesselTipUid> uid_;
     std::vector<VesselId> vessel_id_;
+    std::vector<LesionId> source_lesion_id_;
     std::vector<VesselNodeUid> current_node_uid_;
     std::vector<VesselNodeSlot> current_node_slot_;
     std::vector<std::uint8_t> role_;

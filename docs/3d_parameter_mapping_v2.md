@@ -1,9 +1,12 @@
 # ATCG 2D to 3D parameter mapping v2
 
+Here `v2` names the scientific mapping revision; it is not the model-config
+schema version. The supplied configurations using this mapping are schema v3.
+
 ## Scope
 
 This document defines the numerical mapping used by the
-`legacy_2d_mapped_v2` profile. The input configuration keeps
+`legacy_2d_mapped_v3` profile. The input configuration keeps
 the source 2D values and the mapping revision.  Startup resolves those values
 once into an effective 3D configuration; simulation hot loops never multiply
 an already-resolved value again.
@@ -39,6 +42,9 @@ Other legacy mappings are:
 - persistence and turn half-angle: `0.90` and `45 degrees`;
 - migration activation: `70 x 70` to `70 x 70 x 70`, threshold `0.90`;
 - normal r migration: `Beta(5,5) * 0.5`; K uses its own base rate;
+- activated r migration: `Beta(0.01,0.0566666667)` with a separately
+  configurable multiplier whose schema-v3 and supplied-profile default is 1
+  (the historical hard-coded multiplier was 200);
 - finite activation duration: `Beta(0.005, 0.011666666666666667)` times the
   remaining division-cycle time (mean fraction `0.30`);
 - r-to-K daughter conversion density: `70 x 70` to `70 x 70 x 70`, with
@@ -62,7 +68,7 @@ The production profile enables r-to-K conversion. Its 70³ query uses the
 incremental anchor block index (`query_block_edge=32`), not a voxel scan. The
 smoke profile disables conversion so small deterministic smoke runs do not
 silently change their cell-type composition, while retaining all parameters
-as explicit schema-v2 fields.
+as explicit schema-v3 fields.
 
 ## Values without a 2D biological counterpart
 

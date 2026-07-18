@@ -60,6 +60,25 @@ void require_sequence(const YAML::Node& node,
     }
 }
 
+void require_string_sequence(
+    const YAML::Node& node,
+    const std::filesystem::path& path,
+    std::string_view context,
+    std::initializer_list<std::string_view> expected) {
+    require_sequence(node, path, context);
+    if (node.size() != expected.size()) {
+        malformed(path, std::string(context) + " has the wrong length");
+    }
+    std::size_t index = 0;
+    for (const std::string_view value : expected) {
+        if (!node[index].IsScalar() || node[index].Scalar() != value) {
+            malformed(path, std::string(context) +
+                                " does not match the schema-v3 array catalog");
+        }
+        ++index;
+    }
+}
+
 void require_exact_keys(const YAML::Node& node,
                         const std::filesystem::path& path,
                         std::string_view context,
@@ -245,10 +264,10 @@ void write_run_manifest_atomic(const std::filesystem::path& run_directory,
             << "  \"vessel_frames\": " << vessels.size() << ",\n"
             << "  \"checkpoint_enabled\": " << (checkpoint_enabled ? "true" : "false") << ",\n"
             << "  \"cell_topology\": \"vtkPolyData.points_only\",\n"
-            << "  \"cell_point_arrays\": [\"cell_id\",\"clone_id\",\"cell_type\",\"stage\",\"viability\",\"display_radius\"],\n"
+            << "  \"cell_point_arrays\": [\"cell_id\",\"lesion_id\",\"clone_id\",\"cell_type\",\"stage\",\"viability\",\"display_radius\"],\n"
             << "  \"cell_field_arrays\": [\"total_cell_count\"],\n"
             << "  \"vessel_topology\": \"vtkPolyData.lines\",\n"
-            << "  \"vessel_point_arrays\": [\"node_id\",\"vessel_id\",\"branch_role\",\"perfused\",\"diameter_voxels\",\"radius_voxels\"],\n"
+            << "  \"vessel_point_arrays\": [\"node_id\",\"vessel_id\",\"source_lesion_id\",\"branch_role\",\"perfused\",\"diameter_voxels\",\"radius_voxels\"],\n"
             << "  \"dynamics_config_json\": \""
             << escape_json(config.dynamics_json()) << "\",\n"
             << "  \"effective_config\": " << config.to_json()
@@ -280,6 +299,32 @@ ExistingRunOutput3D load_existing_run_output(
                                "vessel_series") != "vessels.vtkhdf.series") {
         malformed(manifest_path, "non-canonical series path");
     }
+    if (scalar_as<std::string>(manifest["coordinate_system"], manifest_path,
+                               "coordinate_system") != "cartesian" ||
+        scalar_as<std::string>(manifest["coordinate_units"], manifest_path,
+                               "coordinate_units") != "lattice_voxel" ||
+        scalar_as<std::string>(manifest["time_units"], manifest_path,
+                               "time_units") != "hours" ||
+        scalar_as<std::string>(manifest["cell_topology"], manifest_path,
+                               "cell_topology") != "vtkPolyData.points_only" ||
+        scalar_as<std::string>(manifest["vessel_topology"], manifest_path,
+                               "vessel_topology") != "vtkPolyData.lines") {
+        malformed(manifest_path, "coordinate units or topology do not match schema v3");
+    }
+    require_string_sequence(
+        manifest["cell_point_arrays"], manifest_path, "cell_point_arrays",
+        {"cell_id", "lesion_id", "clone_id", "cell_type", "stage",
+         "viability", "display_radius"});
+    require_string_sequence(manifest["cell_field_arrays"], manifest_path,
+                            "cell_field_arrays", {"total_cell_count"});
+    require_string_sequence(
+        manifest["vessel_point_arrays"], manifest_path, "vessel_point_arrays",
+        {"node_id", "vessel_id", "source_lesion_id", "branch_role",
+         "perfused", "diameter_voxels", "radius_voxels"});
+    (void)scalar_as<bool>(manifest["checkpoint_enabled"], manifest_path,
+                          "checkpoint_enabled");
+    require_map(manifest["effective_config"], manifest_path,
+                "effective_config");
     if (scalar_as<std::string>(manifest["dynamics_config_json"], manifest_path,
                                "dynamics_config_json") != resume_config.dynamics_json()) {
         malformed(manifest_path, "dynamics configuration does not match resume checkpoint");

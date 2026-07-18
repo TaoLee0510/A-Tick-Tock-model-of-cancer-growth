@@ -30,6 +30,7 @@ a points-only `vtkPolyData`:
 |---|---|---|
 | `Points` | Float32 `[N,3]` | one center per biological cell |
 | `cell_id` | UInt64 | stable UID |
+| `lesion_id` | UInt64 | stable owning lesion ID; `0` for an unassigned/free cell |
 | `clone_id` | UInt32 | clone identity |
 | `cell_type` | UInt8 | r=1, K=2 (legacy-compatible labels) |
 | `stage` | UInt8 | large=0, small=1, ultrasmall=2 |
@@ -42,10 +43,15 @@ Each cell frame also has one dataset-level FieldData value:
 |---|---|---|
 | `total_cell_count` | UInt64 scalar | all live biological cells at this time, including cells omitted by preview sampling |
 
-No Verts, Lines, Polys, sphere meshes, or footprint voxels are stored. The six
-required arrays plus float coordinates use 31 uncompressed bytes per biological
+No Verts, Lines, Polys, sphere meshes, or footprint voxels are stored. The seven
+required arrays plus float coordinates use 39 uncompressed bytes per biological
 cell before HDF5 metadata/alignment. Optional growth or migration arrays are not
-enabled in the v1 profile.
+enabled by the `vtkhdf_points_v1` format strategy.
+
+`lesion_id` is read from the simulation's current sparse lesion index and does
+not trigger a cell-wide topology rebuild during output. Preview and full frames
+use the same attribution rule. Cells outside every attributed core/halo block,
+including isolated migrating cells, receive the reserved value `0`.
 
 Lattice anchors are voxel-corner coordinates. A stage-1/stage-2 cell at anchor
 `p` and a vessel node occupying voxel `p` are both written at `p + (0.5,0.5,0.5)`.
@@ -65,13 +71,15 @@ creates the display tube at render time.
 |---|---|---|
 | `node_id` | UInt64 | stable vessel-node UID |
 | `vessel_id` | UInt64 | root/network identity |
+| `source_lesion_id` | UInt64 | lesion that generated this vessel network; `0` only when unassigned |
 | `branch_role` | UInt8 | root=0, inward=1, outward=2 |
 | `perfused` | UInt8 | compatibility field; generated vessels are always 1 |
 | `diameter_voxels` | Float32 | configured biological diameter in lattice voxels |
 | `radius_voxels` | Float32 | `diameter_voxels / 2`; ParaView Tube absolute-radius scalar |
 
 `run.json` schema version 3 declares the cell and vessel topology, both array
-catalogs (including the cell FieldData catalog), and `vessel_series`. The cell
+catalogs (including `lesion_id`, `source_lesion_id`, and the cell FieldData
+catalog), and `vessel_series`. The cell
 dataset remains strictly points-only:
 one point per biological cell, including large cells whose occupancy footprint
 contains eight voxels.
@@ -127,9 +135,12 @@ future frames are moved, so readers never see a committed catalog pointing to a
 quarantined frame. The next resumed frame reuses the first free canonical index;
 the preserved recovery copy is not overwritten.
 
-Periodic preview/full/checkpoint schedules restart at the first regular
-boundary strictly after the restored time, so the checkpoint instant is not
-emitted twice. Fresh `run.mode: new` runs continue to reject an output directory
+Periodic preview/full/checkpoint schedules are exact simulation-clock
+boundaries even when no biological event occurs in the interval; observing or
+writing them does not consume simulation RNG or change event ordering. After
+resume they restart at the first regular boundary strictly after the restored
+time, so the checkpoint instant is not emitted twice. Fresh `run.mode: new`
+runs continue to reject an output directory
 that already has a `run.json`.
 
 ## Visualization clients

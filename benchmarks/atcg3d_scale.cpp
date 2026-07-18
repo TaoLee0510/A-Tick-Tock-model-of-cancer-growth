@@ -161,13 +161,15 @@ int main(int argc, char** argv) {
         std::uint64_t preview_bytes = 0;
         if (options.write_vtk && vtkhdf_output_available()) {
             const std::vector<Slot> all = simulation.cells().alive_slots();
-            const SimulationSnapshotView3D full_view{simulation.cells(), all, {}};
+            const SimulationSnapshotView3D full_view{
+                simulation.cells(), all, simulation.lesion_index(), {}};
             const auto full_start = Clock::now();
             const auto full_path = options.directory / "full.vtkhdf";
             write_vtkhdf_points_atomic(full_path, full_view);
             vtk_write_seconds = seconds_since(full_start);
             full_bytes = std::filesystem::file_size(full_path);
-            const SimulationSnapshotView3D preview_view{simulation.cells(), preview, {}};
+            const SimulationSnapshotView3D preview_view{
+                simulation.cells(), preview, simulation.lesion_index(), {}};
             const auto preview_path = options.directory / "preview.vtkhdf";
             write_vtkhdf_points_atomic(preview_path, preview_view);
             preview_bytes = std::filesystem::file_size(preview_path);

@@ -75,6 +75,7 @@ void write_vtkhdf_points_atomic(const std::filesystem::path& path,
         points->SetDataTypeToFloat();
         points->SetNumberOfPoints(count);
         auto cell_id = make_array<vtkUnsignedLongLongArray>("cell_id", count);
+        auto lesion_id = make_array<vtkUnsignedLongLongArray>("lesion_id", count);
         auto clone_id = make_array<vtkUnsignedIntArray>("clone_id", count);
         auto cell_type = make_array<vtkUnsignedCharArray>("cell_type", count);
         auto stage = make_array<vtkUnsignedCharArray>("stage", count);
@@ -91,6 +92,7 @@ void write_vtkhdf_points_atomic(const std::filesystem::path& path,
             const auto center = snapshot.center(source);
             points->SetPoint(index, center[0], center[1], center[2]);
             cell_id->SetValue(index, snapshot.cells.uid(slot));
+            lesion_id->SetValue(index, snapshot.lesion_id(source));
             clone_id->SetValue(index, snapshot.cells.clone_id(slot));
             cell_type->SetValue(index, static_cast<unsigned char>(snapshot.cells.type(slot)));
             stage->SetValue(index, static_cast<unsigned char>(snapshot.cells.stage(slot)));
@@ -101,6 +103,7 @@ void write_vtkhdf_points_atomic(const std::filesystem::path& path,
         vtkSmartPointer<vtkPolyData> data = vtkSmartPointer<vtkPolyData>::New();
         data->SetPoints(points);
         data->GetPointData()->AddArray(cell_id);
+        data->GetPointData()->AddArray(lesion_id);
         data->GetPointData()->AddArray(clone_id);
         data->GetPointData()->AddArray(cell_type);
         data->GetPointData()->AddArray(stage);
@@ -127,6 +130,8 @@ void write_vtkhdf_vessels_atomic(const std::filesystem::path& path,
         points->SetNumberOfPoints(count);
         auto node_id = make_array<vtkUnsignedLongLongArray>("node_id", count);
         auto vessel_id = make_array<vtkUnsignedLongLongArray>("vessel_id", count);
+        auto source_lesion_id =
+            make_array<vtkUnsignedLongLongArray>("source_lesion_id", count);
         auto branch_role = make_array<vtkUnsignedCharArray>("branch_role", count);
         auto perfused = make_array<vtkUnsignedCharArray>("perfused", count);
         auto diameter_voxels = make_array<vtkFloatArray>("diameter_voxels", count);
@@ -145,6 +150,7 @@ void write_vtkhdf_vessels_atomic(const std::filesystem::path& path,
                              static_cast<float>(position.z) + 0.5F);
             node_id->SetValue(index, nodes.uid(slot));
             vessel_id->SetValue(index, nodes.vessel_id(slot));
+            source_lesion_id->SetValue(index, nodes.source_lesion_id(slot));
             branch_role->SetValue(index, static_cast<unsigned char>(nodes.role(slot)));
             perfused->SetValue(index, nodes.perfused(slot) ? 1U : 0U);
             diameter_voxels->SetValue(index, nodes.diameter_voxels(slot));
@@ -168,6 +174,7 @@ void write_vtkhdf_vessels_atomic(const std::filesystem::path& path,
         data->SetLines(lines);
         data->GetPointData()->AddArray(node_id);
         data->GetPointData()->AddArray(vessel_id);
+        data->GetPointData()->AddArray(source_lesion_id);
         data->GetPointData()->AddArray(branch_role);
         data->GetPointData()->AddArray(perfused);
         data->GetPointData()->AddArray(diameter_voxels);

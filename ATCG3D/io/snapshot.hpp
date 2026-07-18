@@ -11,6 +11,7 @@ namespace atcg3d {
 struct SimulationSnapshotView3D {
     const CellStore3D& cells;
     std::span<const Slot> slots;
+    const LesionIndex3D& lesion_index;
     SimulationClock3D clock;
     DisplayRadiusConfig radii{};
 
@@ -33,6 +34,11 @@ struct SimulationSnapshotView3D {
             case CellStage::ultrasmall: return static_cast<float>(radii.ultrasmall);
         }
         return static_cast<float>(radii.small);
+    }
+
+    LesionId lesion_id(std::size_t index) const noexcept {
+        return lesion_index.lesion_for_anchor(cells.anchor(slot(index)))
+            .value_or(kNoLesionId);
     }
 };
 

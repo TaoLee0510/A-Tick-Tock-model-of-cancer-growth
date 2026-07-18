@@ -168,6 +168,7 @@ if(ATCG_BUILD_3D)
         ATCG3D/vasculature/geometry.cpp
         ATCG3D/vasculature/growth_rules.cpp
         ATCG3D/vasculature/influence_field.cpp
+        ATCG3D/vasculature/lesion_index.cpp
         ATCG3D/vasculature/surface_index.cpp
         ATCG3D/vasculature/vessel_grid.cpp
         ATCG3D/vasculature/vessel_store.cpp
@@ -177,7 +178,7 @@ if(ATCG_BUILD_3D)
         ${CMAKE_CURRENT_SOURCE_DIR}/ATCG
     )
     target_link_libraries(atcg3d_core PUBLIC atcg_openmp PRIVATE ${ATCG3D_YAML_TARGET})
-    target_compile_definitions(atcg3d_core PUBLIC ATCG3D_SCHEMA_VERSION=2)
+    target_compile_definitions(atcg3d_core PUBLIC ATCG3D_SCHEMA_VERSION=3)
 
     add_executable(atcg3d ATCG3D/app/main.cpp)
     target_link_libraries(atcg3d PRIVATE atcg3d_core)
@@ -193,7 +194,13 @@ if(ATCG_BUILD_3D)
     target_link_libraries(atcg3d_angiogenesis_scale_benchmark PRIVATE atcg3d_core)
 
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/configs)
-    foreach(config_name IN ITEMS atcg3d_legacy_2d_mapped_v2.yaml atcg3d_smoke_test_v2.yaml)
+    # Remove stale schema-v2-named copies from an existing build tree so a
+    # renamed profile cannot be selected accidentally after reconfiguration.
+    file(REMOVE
+        ${CMAKE_CURRENT_BINARY_DIR}/configs/atcg3d_legacy_2d_mapped_v2.yaml
+        ${CMAKE_CURRENT_BINARY_DIR}/configs/atcg3d_smoke_test_v2.yaml
+    )
+    foreach(config_name IN ITEMS atcg3d_legacy_2d_mapped_v3.yaml atcg3d_smoke_test_v3.yaml)
         configure_file(
             ${CMAKE_CURRENT_SOURCE_DIR}/configs/${config_name}
             ${CMAKE_CURRENT_BINARY_DIR}/configs/${config_name}
@@ -263,7 +270,7 @@ if(BUILD_TESTING)
         foreach(test_name IN ITEMS
                 geometry config storage density migration lifecycle initialization initial_rates simulation io_core
                 angiogenesis_geometry angiogenesis_process angiogenesis_direction parallelism
-                angiogenesis_simulation vascular_density)
+                angiogenesis_simulation lesion_index vascular_density)
             add_executable(atcg3d_${test_name}_test tests/3d/${test_name}_test.cpp)
             target_link_libraries(atcg3d_${test_name}_test PRIVATE atcg3d_core)
             target_compile_options(atcg3d_${test_name}_test PRIVATE -UNDEBUG)

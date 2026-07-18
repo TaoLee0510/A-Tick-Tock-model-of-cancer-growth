@@ -8,6 +8,7 @@
 #include "config/model_config.hpp"
 #include "core/cell_store.hpp"
 #include "geometry/footprint.hpp"
+#include "rules/initial_rates.hpp"
 #include "rules/initialization.hpp"
 #include "space/chunk_grid.hpp"
 #include "space/density_index.hpp"
@@ -85,12 +86,10 @@ void verify_geometry(const InitializedModel& model,
             assert(model.cells.inherent_growth_rate(slot) ==
                    static_cast<float>(expected_growth));
         }
-        if (config.initial_migration_rate_model == "fixed") {
-            const double expected_migration = model.cells.type(slot) == CellType::r
-                ? config.initial_r_migration_rate : config.initial_K_migration_rate;
-            assert(model.cells.migration_rate(slot) ==
-                   static_cast<float>(expected_migration));
-        }
+        const double expected_migration = sample_initial_migration_rate(
+            config, model.cells.type(slot), config.seed, model.cells.uid(slot));
+        assert(model.cells.migration_rate(slot) ==
+               static_cast<float>(expected_migration));
 
         if (model.cells.stage(slot) == CellStage::large) {
             assert(anchor.x % 2 == 0 && anchor.y % 2 == 0 && anchor.z % 2 == 0);
@@ -139,7 +138,6 @@ Model3DConfig geometry_config() {
     config.initial_r_fraction = 0.375;
     config.initial_r_growth_rate = 1.25;
     config.initial_K_growth_rate = 0.75;
-    config.initial_r_migration_rate = 0.4;
     config.initial_K_migration_rate = 0.2;
     config.migration_activation_enabled = false;
     return config;

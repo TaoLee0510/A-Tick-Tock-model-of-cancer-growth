@@ -31,12 +31,34 @@ int main() {
     small.anchor = {8, -1, 2};
     small.type = CellType::K;
     const Slot second = cells.create(small);
+    CellInit supporting;
+    supporting.uid = 44;
+    supporting.anchor = {-1, 3, 4};
+    const Slot third = cells.create(supporting);
     const std::vector<Slot> slots{first, second};
+    LesionIndexConfig3D lesion_config;
+    lesion_config.block_edge = 8;
+    lesion_config.core_activation_occupied_fraction = 0.0;
+    lesion_config.core_deactivation_occupied_fraction = 0.0;
+    lesion_config.minimum_cells_per_core_block = 2;
+    lesion_config.halo_blocks = 0;
+    LesionIndex3D lesions(lesion_config);
+    for (const Slot slot : {first, second, third}) {
+        lesions.add_cell_anchor(cells.anchor(slot));
+        lesions.add_occupied_site(cells.anchor(slot));
+    }
+    lesions.refresh_topology();
+    const LesionId first_lesion = lesions.lesion_for_anchor(large.anchor)
+        .value_or(kNoLesionId);
+    assert(first_lesion != kNoLesionId);
+    assert(lesions.lesion_for_anchor(supporting.anchor) == first_lesion);
+    assert(!lesions.lesion_for_anchor(small.anchor).has_value());
     DisplayRadiusConfig radii;
     radii.large = 1.75;
     radii.small = 0.625;
     radii.ultrasmall = 0.2;
-    const SimulationSnapshotView3D snapshot{cells, slots, {3, 1.5}, radii};
+    const SimulationSnapshotView3D snapshot{
+        cells, slots, lesions, {3, 1.5}, radii};
 
     const auto path = std::filesystem::temp_directory_path() / "atcg3d_vtkhdf_test.vtkhdf";
     std::filesystem::remove(path);
@@ -53,6 +75,10 @@ int main() {
     assert(data->GetNumberOfPoints() == 2);
     assert(data->GetNumberOfCells() == 0);
     assert(data->GetPointData()->GetArray("cell_id")->GetDataTypeSize() == 8);
+    assert(data->GetPointData()->GetArray("lesion_id")->GetDataTypeSize() == 8);
+    assert(data->GetPointData()->GetArray("lesion_id")->GetTuple1(0) ==
+           static_cast<double>(first_lesion));
+    assert(data->GetPointData()->GetArray("lesion_id")->GetTuple1(1) == 0.0);
     assert(data->GetPointData()->GetArray("clone_id")->GetDataTypeSize() == 4);
     assert(data->GetPointData()->GetArray("cell_type")->GetDataTypeSize() == 1);
     assert(data->GetPointData()->GetArray("stage")->GetDataTypeSize() == 1);
@@ -62,7 +88,7 @@ int main() {
     assert(data->GetPointData()->GetArray("display_radius")->GetTuple1(1) == 0.625);
     assert(data->GetFieldData()->GetArray("total_cell_count") != nullptr);
     assert(data->GetFieldData()->GetArray("total_cell_count")->GetDataTypeSize() == 8);
-    assert(data->GetFieldData()->GetArray("total_cell_count")->GetTuple1(0) == 2.0);
+    assert(data->GetFieldData()->GetArray("total_cell_count")->GetTuple1(0) == 3.0);
     double point[3]{};
     data->GetPoint(0, point);
     assert(point[0] == -1.0 && point[1] == 4.0 && point[2] == 5.0);
@@ -75,6 +101,7 @@ int main() {
     root.position = {0, 0, 0};
     root.uid = 101;
     root.vessel_id = 77;
+    root.source_lesion_id = 19;
     root.role = VesselBranchRole::root;
     root.perfused = true;
     root.diameter_voxels = 2.0F;
@@ -85,6 +112,7 @@ int main() {
     child.parent_uid = root.uid;
     child.parent_node_slot = root_slot;
     child.vessel_id = root.vessel_id;
+    child.source_lesion_id = root.source_lesion_id;
     child.role = VesselBranchRole::outward;
     child.perfused = false;
     child.diameter_voxels = 3.0F;
@@ -110,6 +138,9 @@ int main() {
     assert(vessel_data->GetNumberOfPolys() == 0);
     assert(vessel_data->GetPointData()->GetArray("node_id")->GetDataTypeSize() == 8);
     assert(vessel_data->GetPointData()->GetArray("vessel_id")->GetDataTypeSize() == 8);
+    assert(vessel_data->GetPointData()->GetArray("source_lesion_id")->GetDataTypeSize() == 8);
+    assert(vessel_data->GetPointData()->GetArray("source_lesion_id")->GetTuple1(0) == 19.0);
+    assert(vessel_data->GetPointData()->GetArray("source_lesion_id")->GetTuple1(1) == 19.0);
     assert(vessel_data->GetPointData()->GetArray("branch_role")->GetDataTypeSize() == 1);
     assert(vessel_data->GetPointData()->GetArray("perfused")->GetDataTypeSize() == 1);
     assert(vessel_data->GetPointData()->GetArray("diameter_voxels")->GetDataTypeSize() == 4);

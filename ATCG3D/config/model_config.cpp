@@ -101,7 +101,7 @@ const char* json_bool(bool value) {
 }  // namespace
 
 void Model3DConfig::validate() const {
-    if (schema_name != "atcg3d.model_config" || schema_version != 2) {
+    if (schema_name != "atcg3d.model_config" || schema_version != 3) {
         throw std::invalid_argument("unsupported model configuration schema");
     }
     if (profile.empty()) throw std::invalid_argument("profile must not be empty");
@@ -191,6 +191,11 @@ void Model3DConfig::validate() const {
     }
     require_probability(migration_activation_threshold, "migration.activation_threshold");
     validate_beta_rate(normal_r_migration_beta, "migration.normal_r_rate");
+    if (activated_r_migration_rate_model != "beta") {
+        throw std::invalid_argument("unsupported migration.activated_r_rate.model");
+    }
+    validate_beta_rate(activated_r_migration_beta,
+                       "migration.activated_r_rate");
     require_finite(migration_activation_duration_alpha,
                    "migration.activation_duration.alpha");
     require_probability(migration_activation_duration_mean_fraction,
@@ -279,15 +284,15 @@ void Model3DConfig::validate() const {
     } else {
         throw std::invalid_argument("unsupported initial.growth_rate.model");
     }
-    if (initial_migration_rate_model == "fixed") {
-        if (initial_r_migration_rate < 0.0 || initial_K_migration_rate < 0.0) {
-            throw std::invalid_argument("fixed initial migration rates must be non-negative");
+    if (initial_K_migration_rate_model == "fixed") {
+        if (initial_K_migration_rate < 0.0) {
+            throw std::invalid_argument(
+                "fixed initial K migration rate must be non-negative");
         }
-    } else if (initial_migration_rate_model == "legacy_beta_v1") {
-        validate_beta_rate(initial_r_migration_beta, "initial.migration_rate.beta.r");
+    } else if (initial_K_migration_rate_model == "legacy_beta_v1") {
         validate_beta_rate(initial_K_migration_beta, "initial.migration_rate.beta.K");
     } else {
-        throw std::invalid_argument("unsupported initial.migration_rate.model");
+        throw std::invalid_argument("unsupported initial.migration_rate.K.model");
     }
     if (death_delay_model != "legacy_geometric_mean_v1" ||
         death_growth_rate_threshold < 0.0 ||
@@ -342,7 +347,7 @@ void Model3DConfig::validate() const {
         previous_fraction = threshold.max_thread_fraction;
     }
     if (preview_mode != "stable_uid_hash_v1" || full_format != "vtkhdf_points_v1" ||
-        checkpoint_format != "hdf5_v2") {
+        checkpoint_format != "hdf5_v3") {
         throw std::invalid_argument("unsupported output strategy");
     }
     if (output_enabled && output_directory.empty()) {
@@ -357,7 +362,31 @@ void Model3DConfig::validate() const {
         throw std::invalid_argument("visualization display radii must be positive");
     }
 
-    if (angiogenesis.trigger_metric != "biological_cell_volume_voxels3") {
+    if (angiogenesis.lesion_detection_backend != "sparse_coarse_blocks_v1" ||
+        angiogenesis.lesion_block_edge <= 0 ||
+        (angiogenesis.lesion_connectivity != 6 &&
+         angiogenesis.lesion_connectivity != 26) ||
+        angiogenesis.lesion_core_activation_occupied_fraction < 0.0 ||
+        angiogenesis.lesion_core_activation_occupied_fraction > 1.0 ||
+        angiogenesis.lesion_core_deactivation_occupied_fraction < 0.0 ||
+        angiogenesis.lesion_core_deactivation_occupied_fraction >
+            angiogenesis.lesion_core_activation_occupied_fraction ||
+        angiogenesis.lesion_minimum_cells_per_core_block == 0 ||
+        angiogenesis.lesion_minimum_biological_volume_per_core_block < 0.0 ||
+        angiogenesis.lesion_halo_blocks < 0 ||
+        angiogenesis.lesion_halo_blocks > 1024 ||
+        angiogenesis.lesion_refresh_interval_hours <= 0.0) {
+        throw std::invalid_argument("angiogenesis lesion detection configuration is invalid");
+    }
+    const std::uint64_t lesion_edge =
+        static_cast<std::uint64_t>(angiogenesis.lesion_block_edge);
+    if (lesion_edge > std::numeric_limits<std::uint64_t>::max() / lesion_edge ||
+        lesion_edge * lesion_edge >
+            std::numeric_limits<std::uint64_t>::max() / lesion_edge) {
+        throw std::invalid_argument("angiogenesis lesion block volume overflows uint64");
+    }
+    if (angiogenesis.trigger_metric !=
+        "per_lesion_biological_cell_volume_voxels3") {
         throw std::invalid_argument("unsupported angiogenesis trigger.metric");
     }
     if (angiogenesis.trigger_activation_volume_voxels3 <= 0.0 ||
@@ -365,19 +394,25 @@ void Model3DConfig::validate() const {
         angiogenesis.trigger_deactivation_volume_voxels3 >
             angiogenesis.trigger_activation_volume_voxels3 ||
         angiogenesis.trigger_delay_hours < 0.0 ||
+        angiogenesis.trigger_minimum_core_blocks == 0 ||
         angiogenesis.stage0_biological_volume_voxels3 <= 0.0 ||
         angiogenesis.stage1_biological_volume_voxels3 <= 0.0 ||
         angiogenesis.stage2_biological_volume_voxels3 <= 0.0) {
         throw std::invalid_argument("angiogenesis trigger/biological volume configuration is invalid");
     }
     if (angiogenesis.seed_process_model != "homogeneous_poisson" ||
+        angiogenesis.seed_process_scope != "per_eligible_lesion" ||
         angiogenesis.seed_rate_sites_per_30_days <= 0.0 ||
         !approximately_equal(angiogenesis.seed_rate_sites_per_hour,
                              angiogenesis.seed_rate_sites_per_30_days / 720.0) ||
         angiogenesis.roots_per_event != 1 ||
         angiogenesis.surface_min_separation_voxels < 0 ||
         angiogenesis.surface_max_sampling_attempts == 0 ||
-        angiogenesis.max_total_roots == 0 || angiogenesis.max_active_tips < 2) {
+        angiogenesis.max_total_roots == 0 || angiogenesis.max_active_tips < 2 ||
+        angiogenesis.max_roots_per_lesion == 0 ||
+        angiogenesis.max_active_tips_per_lesion < 2 ||
+        angiogenesis.root_position_policy != "inside_surface_voxel" ||
+        angiogenesis.surface_min_local_cells == 0) {
         throw std::invalid_argument("angiogenesis homogeneous Poisson seed process is invalid");
     }
     if (angiogenesis.diameter_voxels <= 0.0 ||
@@ -388,6 +423,24 @@ void Model3DConfig::validate() const {
         angiogenesis.inward_target_tolerance_voxels < 0.0 ||
         angiogenesis.outward_external_connection_distance_voxels <= 0.0) {
         throw std::invalid_argument("angiogenesis vessel geometry/growth configuration is invalid");
+    }
+    // Cell migration rates schedule one lattice move every 1/rate hours.
+    // A fixed-26 spatial-diagonal move has path length sqrt(3), so comparing
+    // the two raw configuration numbers would mix moves/hour with
+    // voxels/hour. Enforce the user's biological ordering against the
+    // activated-r distribution's conservative path-speed supremum.
+    const double activated_r_rate_upper_bound = std::max(
+        activated_r_migration_beta.scale,
+        activated_r_migration_beta.lower_clamp_enabled
+            ? activated_r_migration_beta.lower_clamp_value : 0.0);
+    const double activated_r_path_speed_upper_bound =
+        std::sqrt(3.0) * activated_r_rate_upper_bound;
+    if (angiogenesis.enabled &&
+        !(angiogenesis.outward_speed_voxels_per_hour >
+          activated_r_path_speed_upper_bound)) {
+        throw std::invalid_argument(
+            "angiogenesis outward vessel speed must exceed the maximum "
+            "activated-r 3D path speed");
     }
     if (angiogenesis.direction_model != "forward_biased_26_v1" ||
         angiogenesis.direction_forward_bias < 0.0 ||
@@ -430,7 +483,7 @@ void Model3DConfig::validate() const {
         direction_density_half_angle_degrees, direction_density_threshold,
         distance_weight_exponent, r_limit, K_limit, carrying_capacity_r,
         carrying_capacity_K, alpha, beta, initial_r_growth_rate,
-        initial_K_growth_rate, initial_r_migration_rate, initial_K_migration_rate,
+        initial_K_growth_rate, initial_K_migration_rate,
         initial_r_growth_truncated_normal.mean,
         initial_r_growth_truncated_normal.standard_deviation,
         initial_r_growth_truncated_normal.minimum,
@@ -439,10 +492,6 @@ void Model3DConfig::validate() const {
         initial_K_growth_truncated_normal.standard_deviation,
         initial_K_growth_truncated_normal.minimum,
         initial_K_growth_truncated_normal.maximum,
-        initial_r_migration_beta.alpha, initial_r_migration_beta.beta,
-        initial_r_migration_beta.scale,
-        initial_r_migration_beta.lower_clamp_threshold,
-        initial_r_migration_beta.lower_clamp_value,
         initial_K_migration_beta.alpha, initial_K_migration_beta.beta,
         initial_K_migration_beta.scale,
         initial_K_migration_beta.lower_clamp_threshold,
@@ -461,12 +510,21 @@ void Model3DConfig::validate() const {
         checkpoint_every_hours, migration_activation_threshold,
         normal_r_migration_beta.alpha, normal_r_migration_beta.beta,
         normal_r_migration_beta.scale,
+        activated_r_migration_beta.alpha,
+        activated_r_migration_beta.beta,
+        activated_r_migration_beta.scale,
+        activated_r_migration_beta.lower_clamp_threshold,
+        activated_r_migration_beta.lower_clamp_value,
         migration_activation_duration_alpha,
         migration_activation_duration_mean_fraction,
         migration_activation_duration_beta,
         angiogenesis.trigger_activation_volume_voxels3,
         angiogenesis.trigger_deactivation_volume_voxels3,
         angiogenesis.trigger_delay_hours,
+        angiogenesis.lesion_core_activation_occupied_fraction,
+        angiogenesis.lesion_core_deactivation_occupied_fraction,
+        angiogenesis.lesion_minimum_biological_volume_per_core_block,
+        angiogenesis.lesion_refresh_interval_hours,
         angiogenesis.stage0_biological_volume_voxels3,
         angiogenesis.stage1_biological_volume_voxels3,
         angiogenesis.stage2_biological_volume_voxels3,
@@ -536,6 +594,13 @@ std::string Model3DConfig::to_json() const {
         << "\"normal_r_migration_beta_alpha\":" << normal_r_migration_beta.alpha << ','
         << "\"normal_r_migration_beta_beta\":" << normal_r_migration_beta.beta << ','
         << "\"normal_r_migration_beta_scale\":" << normal_r_migration_beta.scale << ','
+        << "\"activated_r_migration_rate_model\":\"" << json_escape(activated_r_migration_rate_model) << "\","
+        << "\"activated_r_migration_beta_alpha\":" << activated_r_migration_beta.alpha << ','
+        << "\"activated_r_migration_beta_beta\":" << activated_r_migration_beta.beta << ','
+        << "\"activated_r_migration_beta_scale\":" << activated_r_migration_beta.scale << ','
+        << "\"activated_r_migration_beta_lower_clamp_enabled\":" << json_bool(activated_r_migration_beta.lower_clamp_enabled) << ','
+        << "\"activated_r_migration_beta_lower_clamp_threshold\":" << activated_r_migration_beta.lower_clamp_threshold << ','
+        << "\"activated_r_migration_beta_lower_clamp_value\":" << activated_r_migration_beta.lower_clamp_value << ','
         << "\"migration_activation_duration_alpha\":" << migration_activation_duration_alpha << ','
         << "\"migration_activation_duration_mean_fraction\":" << migration_activation_duration_mean_fraction << ','
         << "\"migration_activation_duration_beta\":" << migration_activation_duration_beta << ','
@@ -574,15 +639,8 @@ std::string Model3DConfig::to_json() const {
         << "\"initial_K_growth_truncated_normal_standard_deviation\":" << initial_K_growth_truncated_normal.standard_deviation << ','
         << "\"initial_K_growth_truncated_normal_minimum\":" << initial_K_growth_truncated_normal.minimum << ','
         << "\"initial_K_growth_truncated_normal_maximum\":" << initial_K_growth_truncated_normal.maximum << ','
-        << "\"initial_migration_rate_model\":\"" << json_escape(initial_migration_rate_model) << "\","
-        << "\"initial_r_migration_rate\":" << initial_r_migration_rate << ','
+        << "\"initial_K_migration_rate_model\":\"" << json_escape(initial_K_migration_rate_model) << "\","
         << "\"initial_K_migration_rate\":" << initial_K_migration_rate << ','
-        << "\"initial_r_migration_beta_alpha\":" << initial_r_migration_beta.alpha << ','
-        << "\"initial_r_migration_beta_beta\":" << initial_r_migration_beta.beta << ','
-        << "\"initial_r_migration_beta_scale\":" << initial_r_migration_beta.scale << ','
-        << "\"initial_r_migration_beta_lower_clamp_enabled\":" << json_bool(initial_r_migration_beta.lower_clamp_enabled) << ','
-        << "\"initial_r_migration_beta_lower_clamp_threshold\":" << initial_r_migration_beta.lower_clamp_threshold << ','
-        << "\"initial_r_migration_beta_lower_clamp_value\":" << initial_r_migration_beta.lower_clamp_value << ','
         << "\"initial_K_migration_beta_alpha\":" << initial_K_migration_beta.alpha << ','
         << "\"initial_K_migration_beta_beta\":" << initial_K_migration_beta.beta << ','
         << "\"initial_K_migration_beta_scale\":" << initial_K_migration_beta.scale << ','
@@ -639,14 +697,25 @@ std::string Model3DConfig::to_json() const {
         << "\"display_radius_small\":" << display_radius.small << ','
         << "\"display_radius_ultrasmall\":" << display_radius.ultrasmall << ','
         << "\"angiogenesis_enabled\":" << json_bool(angiogenesis.enabled) << ','
+        << "\"angiogenesis_lesion_detection_backend\":\"" << json_escape(angiogenesis.lesion_detection_backend) << "\","
+        << "\"angiogenesis_lesion_block_edge\":" << angiogenesis.lesion_block_edge << ','
+        << "\"angiogenesis_lesion_connectivity\":" << angiogenesis.lesion_connectivity << ','
+        << "\"angiogenesis_lesion_core_activation_occupied_fraction\":" << angiogenesis.lesion_core_activation_occupied_fraction << ','
+        << "\"angiogenesis_lesion_core_deactivation_occupied_fraction\":" << angiogenesis.lesion_core_deactivation_occupied_fraction << ','
+        << "\"angiogenesis_lesion_minimum_cells_per_core_block\":" << angiogenesis.lesion_minimum_cells_per_core_block << ','
+        << "\"angiogenesis_lesion_minimum_biological_volume_per_core_block\":" << angiogenesis.lesion_minimum_biological_volume_per_core_block << ','
+        << "\"angiogenesis_lesion_halo_blocks\":" << angiogenesis.lesion_halo_blocks << ','
+        << "\"angiogenesis_lesion_refresh_interval_hours\":" << angiogenesis.lesion_refresh_interval_hours << ','
         << "\"angiogenesis_trigger_metric\":\"" << json_escape(angiogenesis.trigger_metric) << "\","
         << "\"angiogenesis_trigger_activation_volume_voxels3\":" << angiogenesis.trigger_activation_volume_voxels3 << ','
         << "\"angiogenesis_trigger_deactivation_volume_voxels3\":" << angiogenesis.trigger_deactivation_volume_voxels3 << ','
         << "\"angiogenesis_trigger_delay_hours\":" << angiogenesis.trigger_delay_hours << ','
+        << "\"angiogenesis_trigger_minimum_core_blocks\":" << angiogenesis.trigger_minimum_core_blocks << ','
         << "\"angiogenesis_stage0_biological_volume_voxels3\":" << angiogenesis.stage0_biological_volume_voxels3 << ','
         << "\"angiogenesis_stage1_biological_volume_voxels3\":" << angiogenesis.stage1_biological_volume_voxels3 << ','
         << "\"angiogenesis_stage2_biological_volume_voxels3\":" << angiogenesis.stage2_biological_volume_voxels3 << ','
         << "\"angiogenesis_seed_process_model\":\"" << json_escape(angiogenesis.seed_process_model) << "\","
+        << "\"angiogenesis_seed_process_scope\":\"" << json_escape(angiogenesis.seed_process_scope) << "\","
         << "\"angiogenesis_seed_rate_sites_per_30_days\":" << angiogenesis.seed_rate_sites_per_30_days << ','
         << "\"angiogenesis_seed_rate_sites_per_hour\":" << angiogenesis.seed_rate_sites_per_hour << ','
         << "\"angiogenesis_roots_per_event\":" << angiogenesis.roots_per_event << ','
@@ -654,6 +723,10 @@ std::string Model3DConfig::to_json() const {
         << "\"angiogenesis_surface_max_sampling_attempts\":" << angiogenesis.surface_max_sampling_attempts << ','
         << "\"angiogenesis_max_total_roots\":" << angiogenesis.max_total_roots << ','
         << "\"angiogenesis_max_active_tips\":" << angiogenesis.max_active_tips << ','
+        << "\"angiogenesis_max_roots_per_lesion\":" << angiogenesis.max_roots_per_lesion << ','
+        << "\"angiogenesis_max_active_tips_per_lesion\":" << angiogenesis.max_active_tips_per_lesion << ','
+        << "\"angiogenesis_root_position_policy\":\"" << json_escape(angiogenesis.root_position_policy) << "\","
+        << "\"angiogenesis_surface_min_local_cells\":" << angiogenesis.surface_min_local_cells << ','
         << "\"angiogenesis_diameter_voxels\":" << angiogenesis.diameter_voxels << ','
         << "\"angiogenesis_inward_speed_voxels_per_hour\":" << angiogenesis.inward_speed_voxels_per_hour << ','
         << "\"angiogenesis_outward_speed_voxels_per_hour\":" << angiogenesis.outward_speed_voxels_per_hour << ','
@@ -695,7 +768,7 @@ std::string Model3DConfig::dynamics_json() const {
     normalized.output_enabled = false;
     normalized.preview_mode = "stable_uid_hash_v1";
     normalized.full_format = "vtkhdf_points_v1";
-    normalized.checkpoint_format = "hdf5_v2";
+    normalized.checkpoint_format = "hdf5_v3";
     normalized.output_directory.clear();
     normalized.preview_every_hours = 0.0;
     normalized.full_every_hours = 0.0;

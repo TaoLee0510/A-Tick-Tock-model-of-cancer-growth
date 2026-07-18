@@ -3,8 +3,8 @@
 # from the legacy 6x6 2D window to the 6x6x6 3D window (factor 216/36 = 6).
 schema:
   name: atcg3d.model_config
-  version: 2
-profile: legacy_2d_mapped_v2
+  version: 3
+profile: legacy_2d_mapped_v3
 
 calibration:
   source_profile: legacy_2d_default_no_ultrasmall
@@ -53,6 +53,17 @@ migration:
     alpha: 5.0
     beta: 5.0
     scale: 0.5
+  # Historical 2D code used 200.0; schema v3 deliberately defaults this
+  # independently configurable multiplier to 1.0.
+  activated_r_rate:
+    model: beta
+    alpha: 0.01
+    beta: 0.0566666667
+    scale: 1.0
+    lower_clamp:
+      enabled: true
+      threshold: 0.5
+      value: 0.25
   activation_duration:
     model: beta_remaining_division_cycle
     alpha: 0.005
@@ -122,17 +133,9 @@ initial:
         minimum: 0.33963482
         maximum: 0.99505180
   migration_rate:
-    model: legacy_beta_v1
-    beta:
-      r:
-        alpha: 0.01
-        beta: 0.0566666667
-        scale: 200.0
-        lower_clamp:
-          enabled: true
-          threshold: 0.5
-          value: 0.25
-      K:
+    K:
+      model: legacy_beta_v1
+      beta:
         alpha: 5.0
         beta: 5.0
         scale: 0.25
@@ -168,23 +171,39 @@ scheduler:
 
 angiogenesis:
   enabled: true
+  lesion_detection:
+    backend: sparse_coarse_blocks_v1
+    block_edge: 8
+    connectivity: 26
+    core_activation_occupied_fraction: 0.15
+    core_deactivation_occupied_fraction: 0.10
+    minimum_cells_per_core_block: 8
+    minimum_biological_volume_per_core_block: 0.0
+    halo_blocks: 1
+    refresh_interval_hours: 1.0
   trigger:
-    metric: biological_cell_volume_voxels3
+    metric: per_lesion_biological_cell_volume_voxels3
     activation_volume_voxels3: 100000.0
     deactivation_volume_voxels3: 80000.0
     delay_hours: 0.0
+    minimum_core_blocks: 4
     stage_biological_volume_voxels3:
       stage0: 8.0
       stage1: 1.0
       stage2: 0.5
   seed_process:
     model: homogeneous_poisson
+    scope: per_eligible_lesion
     rate_sites_per_30_days: 10.0
     roots_per_event: 1
     surface_min_separation_voxels: 8
     surface_max_sampling_attempts: 4096
+    surface_min_local_cells: 1
+    root_position_policy: inside_surface_voxel
     max_total_roots: 64
     max_active_tips: 128
+    max_roots_per_lesion: 64
+    max_active_tips_per_lesion: 128
   vessel:
     diameter_voxels: 3.0
     inward:
@@ -193,7 +212,9 @@ angiogenesis:
       target_tolerance_voxels: 2.0
       replacement_policy: remove_whole_cells
     outward:
-      speed_voxels_per_hour: 0.25
+      # Activated-r is at most 1 move/hour and a 3D step is at most sqrt(3)
+      # voxels, so 2.0 is strictly faster than its maximum path speed.
+      speed_voxels_per_hour: 2.0
       max_length_voxels: 128
       external_connection_distance_voxels: 64.0
       occupancy_policy: permanent_reserved_placeholder
@@ -218,7 +239,7 @@ output:
   enabled: false
   preview_mode: stable_uid_hash_v1
   full_format: vtkhdf_points_v1
-  checkpoint_format: hdf5_v2
+  checkpoint_format: hdf5_v3
   directory: atcg3d_run
   preview_every_hours: 1.0
   full_every_hours: 6.0

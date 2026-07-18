@@ -74,6 +74,14 @@ persistence unless `direction.persistence_uses_density=true`.
 Defaults are radius 5, density half-angle 45°, threshold 0.60, turn half-angle
 45°, continuation 0.90, and distance exponent 0.
 
+The r-cell inherent rate used while density activation is active is sampled
+from `migration.activated_r_rate`. Its schema-v3 and supplied-profile default
+is `Beta(0.01,0.0566666667) * 1`. The historical hard-coded multiplier was
+200; it is now an ordinary YAML value and is no longer the default. The same
+configured law is used for initial r cells and new division cycles. K
+migration remains independently configured. See
+`docs/3d_initial_rate_sampling.md` for the clamp and deterministic RNG domains.
+
 ## Division and death
 
 Large division enumerates the radius-2 Chebyshev shell around the mother
@@ -109,11 +117,22 @@ generates actual sphere/shell candidate anchors by z/y slices rather than
 scanning the global sparse domain or a dense X×Y×Z array. Footprint availability
 is checked before every placement.
 
-The angiogenesis surface index is updated only near occupancy changes. Its
-centroid sums are incremental. Root sampling excludes sealed internal cavities
-by retaining only faces with an unobstructed outward-normal axis ray, then uses
-a deterministic stable-hash top-K sample. It is O(S + S log K), K≤4096, and
-does not copy or sort the complete exposed-face set.
+Angiogenesis first identifies solid lesions through sparse configurable coarse
+blocks. Only core blocks participate in 6/26-neighbour connectivity; halo
+blocks can be attributed for statistics and surface ownership but cannot let a
+sparse migration path bridge two lesions. IDs continue by deterministic
+maximum core-block overlap across growth, merge, and split. Every lesion has an
+independent volume threshold and Poisson clock, so a distant metastasis begins
+its own angiogenesis only after it reaches the same configured requirements.
+
+The tumour surface index is updated only near occupancy changes. Root sampling
+is restricted to faces owned by the event's source lesion and excludes sealed
+internal cavities by retaining only faces with an unobstructed outward-normal
+axis ray. A deterministic stable-hash top-K sample is O(S + S log K), K≤4096,
+and does not copy or sort the complete exposed-face set. A committed root is
+placed at the occupied `face.inside` voxel, replaces intersected whole cells,
+retains local source-lesion support, and sends the inward tip toward that
+lesion's root-time centroid. Nodes and tips preserve `source_lesion_id`.
 
 When a vessel becomes perfused, growth refresh does not query the global AABB
 of the whole curved network. Capsule voxels are mapped to the union of density
@@ -154,7 +173,9 @@ the actual current allocation when rerun.
 
 There is no fixed 0.005-hour global scan. Each cell schedules migration,
 division, and death times. Density/growth updates are lazy and local occupancy
-changes refresh only affected neighborhoods. Elapsed work is deducted with the
+changes refresh only affected neighborhoods. Dirty lesion blocks are batched
+by an explicit refresh event, so eligibility still advances at the configured
+interval when no cell event occurs at that instant. Elapsed work is deducted with the
 previous density rate; density changes adjust the predicted completion time but
 never redraw the cell cycle. Generation values invalidate stale
 queue entries. When the heap grows by 25% (with a small fixed minimum slack),
@@ -220,9 +241,9 @@ all residents of unchanged query blocks, nor 70³ voxels per cell.
 ## Configuration and build
 
 The complete production profile is
-`configs/atcg3d_legacy_2d_mapped_v2.yaml`; the separate
-`configs/atcg3d_smoke_test_v2.yaml` profile is only for small CI/developer
-runs. Schema v2 rejects missing, unknown, and duplicate keys, loose boolean
+`configs/atcg3d_legacy_2d_mapped_v3.yaml`; the separate
+`configs/atcg3d_smoke_test_v3.yaml` profile is only for small CI/developer
+runs. Schema v3 rejects missing, unknown, and duplicate keys, loose boolean
 spellings, integer overflow, NaN/infinity, negative times, invalid ranges, and
 contradictory settings. There are no command-line value overrides: all model,
 run, output, and resume parameters come from the selected YAML file. Strategy
@@ -250,8 +271,8 @@ fails clearly if the corresponding output capability is requested.
 Run and validation examples:
 
 ```sh
-./build-3d/atcg3d --config configs/atcg3d_legacy_2d_mapped_v2.yaml --dry-run
-./build-3d/atcg3d --config configs/atcg3d_legacy_2d_mapped_v2.yaml
+./build-3d/atcg3d --config configs/atcg3d_legacy_2d_mapped_v3.yaml --dry-run
+./build-3d/atcg3d --config configs/atcg3d_legacy_2d_mapped_v3.yaml
 ```
 
 To resume, create a YAML run file with `run.mode: resume` and

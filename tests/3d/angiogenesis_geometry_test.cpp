@@ -180,6 +180,24 @@ int main() {
     assert(rebuilt_surface.faces() == surface.faces());
     assert(rebuilt_surface.approximate_centroid() == surface.approximate_centroid());
 
+    // Lesion-specific sampling must build axial extrema from the selected
+    // component only. A remote component is neither a candidate nor an
+    // occluder for the requested lesion.
+    std::unordered_set<Vec3i, Vec3iHash> two_components{{0, 0, 0}, {10, 0, 0}};
+    const std::vector<Vec3i> two_component_sites{{0, 0, 0}, {10, 0, 0}};
+    TumorSurfaceIndex3D component_surface;
+    component_surface.rebuild(two_component_sites,
+        [&two_components](Vec3i site) { return two_components.contains(site); });
+    const auto first_component_faces =
+        component_surface.sample_external_subset_without_replacement(
+            component_surface.size(), 0.0, 7, 0,
+            [](const ExposedFace3D& face) { return face.inside.x < 5; });
+    assert(first_component_faces.size() == 6U);
+    assert(std::all_of(first_component_faces.begin(), first_component_faces.end(),
+                       [](const ExposedFace3D& face) {
+                           return face.inside == Vec3i{0, 0, 0};
+                       }));
+
     // A one-voxel-thick 5x5x5 shell exposes both its outside and its enclosed
     // 3x3x3 cavity. Axis-visible sampling must retain exactly the 6*5*5 outer
     // faces and must never select an inward-facing cavity wall.

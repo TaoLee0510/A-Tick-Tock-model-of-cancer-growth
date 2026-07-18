@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <unordered_set>
 #include <vector>
@@ -112,6 +113,17 @@ public:
         double minimum_separation_voxels,
         std::uint64_t seed,
         std::uint64_t event_sequence = 0) const;
+
+    // The extrema and stable-hash sample are both computed from the accepted
+    // subset. This is important for independent lesions: a remote component
+    // must neither contribute candidates nor hide another lesion's exterior
+    // face in a shared transverse column.
+    std::vector<ExposedFace3D> sample_external_subset_without_replacement(
+        std::size_t count,
+        double minimum_separation_voxels,
+        std::uint64_t seed,
+        std::uint64_t event_sequence,
+        const std::function<bool(const ExposedFace3D&)>& include_face) const;
 
 private:
     void insert_face(const ExposedFace3D& face);

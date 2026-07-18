@@ -84,6 +84,7 @@ void VesselNodeStore3D::reserve(std::size_t count) {
     parent_uid_.reserve(count);
     parent_node_slot_.reserve(count);
     vessel_id_.reserve(count);
+    source_lesion_id_.reserve(count);
     role_.reserve(count);
     perfused_.reserve(count);
     alive_.reserve(count);
@@ -131,7 +132,8 @@ std::vector<VesselNodeSlot> VesselNodeStore3D::alive_slots() const {
 VesselNodeInit3D VesselNodeStore3D::snapshot(VesselNodeSlot slot) const {
     if (!valid(slot)) throw std::out_of_range("invalid vessel node slot");
     return {position(slot), uid(slot), parent_uid(slot), parent_node_slot(slot), vessel_id(slot),
-            role(slot), perfused(slot), diameter_voxels(slot), created_time_hours(slot)};
+            source_lesion_id(slot), role(slot), perfused(slot), diameter_voxels(slot),
+            created_time_hours(slot)};
 }
 
 Vec3i VesselNodeStore3D::position(VesselNodeSlot slot) const {
@@ -147,6 +149,7 @@ void VesselNodeStore3D::append(const VesselNodeInit3D& node) {
     parent_uid_.push_back(node.parent_uid);
     parent_node_slot_.push_back(node.parent_node_slot);
     vessel_id_.push_back(node.vessel_id);
+    source_lesion_id_.push_back(node.source_lesion_id);
     role_.push_back(static_cast<std::uint8_t>(node.role));
     perfused_.push_back(node.perfused ? 1U : 0U);
     alive_.push_back(1U);
@@ -162,6 +165,7 @@ void VesselNodeStore3D::assign(VesselNodeSlot slot, const VesselNodeInit3D& node
     parent_uid_.at(slot) = node.parent_uid;
     parent_node_slot_.at(slot) = node.parent_node_slot;
     vessel_id_.at(slot) = node.vessel_id;
+    source_lesion_id_.at(slot) = node.source_lesion_id;
     role_.at(slot) = static_cast<std::uint8_t>(node.role);
     perfused_.at(slot) = node.perfused ? 1U : 0U;
     alive_.at(slot) = 1U;
@@ -172,6 +176,7 @@ void VesselNodeStore3D::assign(VesselNodeSlot slot, const VesselNodeInit3D& node
 std::size_t VesselNodeStore3D::allocated_bytes() const noexcept {
     return vector_bytes(x_) + vector_bytes(y_) + vector_bytes(z_) + vector_bytes(uid_) +
            vector_bytes(parent_uid_) + vector_bytes(parent_node_slot_) + vector_bytes(vessel_id_) +
+           vector_bytes(source_lesion_id_) +
            vector_bytes(role_) + vector_bytes(perfused_) + vector_bytes(alive_) +
            vector_bytes(diameter_voxels_) + vector_bytes(created_time_hours_) +
            vector_bytes(free_slots_);
@@ -189,6 +194,7 @@ void VesselTipStore3D::reserve(std::size_t count) {
     target_z_.reserve(count);
     uid_.reserve(count);
     vessel_id_.reserve(count);
+    source_lesion_id_.reserve(count);
     current_node_uid_.reserve(count);
     current_node_slot_.reserve(count);
     role_.reserve(count);
@@ -249,6 +255,7 @@ VesselTipInit3D VesselTipStore3D::snapshot(VesselTipSlot slot) const {
     tip.target = target(slot);
     tip.uid = uid(slot);
     tip.vessel_id = vessel_id(slot);
+    tip.source_lesion_id = source_lesion_id(slot);
     tip.current_node_uid = current_node_uid(slot);
     tip.current_node_slot = current_node_slot(slot);
     tip.role = role(slot);
@@ -328,6 +335,7 @@ void VesselTipStore3D::append(const VesselTipInit3D& tip) {
     target_z_.push_back(tip.target.z);
     uid_.push_back(tip.uid);
     vessel_id_.push_back(tip.vessel_id);
+    source_lesion_id_.push_back(tip.source_lesion_id);
     current_node_uid_.push_back(tip.current_node_uid);
     current_node_slot_.push_back(tip.current_node_slot);
     role_.push_back(static_cast<std::uint8_t>(tip.role));
@@ -357,6 +365,7 @@ void VesselTipStore3D::assign(VesselTipSlot slot, const VesselTipInit3D& tip) {
     target_z_.at(slot) = tip.target.z;
     uid_.at(slot) = tip.uid;
     vessel_id_.at(slot) = tip.vessel_id;
+    source_lesion_id_.at(slot) = tip.source_lesion_id;
     current_node_uid_.at(slot) = tip.current_node_uid;
     current_node_slot_.at(slot) = tip.current_node_slot;
     role_.at(slot) = static_cast<std::uint8_t>(tip.role);
@@ -379,6 +388,7 @@ std::size_t VesselTipStore3D::allocated_bytes() const noexcept {
            vector_bytes(bias_y_) + vector_bytes(bias_z_) + vector_bytes(target_x_) +
            vector_bytes(target_y_) + vector_bytes(target_z_) + vector_bytes(uid_) +
            vector_bytes(vessel_id_) + vector_bytes(current_node_uid_) +
+           vector_bytes(source_lesion_id_) +
            vector_bytes(current_node_slot_) + vector_bytes(role_) +
            vector_bytes(status_) + vector_bytes(perfused_) + vector_bytes(last_direction_) +
            vector_bytes(pending_direction_) + vector_bytes(alive_) +

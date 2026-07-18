@@ -8,10 +8,13 @@
 namespace atcg3d {
 
 using VesselId = std::uint64_t;
+using LesionId = std::uint64_t;
 using VesselNodeUid = std::uint64_t;
 using VesselTipUid = std::uint64_t;
 using VesselNodeSlot = std::uint32_t;
 using VesselTipSlot = std::uint32_t;
+
+inline constexpr LesionId kNoLesionId = 0;
 
 inline constexpr VesselNodeSlot kEmptyVesselNodeSlot =
     std::numeric_limits<VesselNodeSlot>::max();

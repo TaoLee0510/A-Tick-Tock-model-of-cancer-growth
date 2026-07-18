@@ -1,30 +1,68 @@
 # ATCG3D dynamic angiogenesis specification
 
-## Eligibility and seed process
+## Spatial lesions, eligibility, and seed processes
 
-Angiogenesis is a continuing stochastic process, not a one-shot action.  It is
-eligible while biological tumour volume is at or above an activation threshold
-and becomes ineligible below a configurable deactivation threshold.  Existing
-vessels continue to grow when seed generation is ineligible.
+Angiogenesis is a continuing stochastic process, not a one-shot action. The
+model does not assume that the tumour nearest the coordinate origin is the only
+source. It identifies every spatially disconnected solid lesion, including a
+distant metastasis, and evaluates it independently.
 
-Biological tumour volume is the sum of per-cell stage volumes.  Vessel voxels
-are excluded.  Stage-2 co-located cells contribute separately.
+The production detector aggregates cells and occupied sites into sparse 8³
+coarse blocks. A block becomes core only after crossing the configurable
+occupied-fraction, minimum-cell, and optional biological-volume thresholds; a
+lower occupied-fraction threshold controls deactivation. Core blocks use
+configurable 6- or 26-neighbour connectivity. Non-core occupied blocks within
+the configured halo may be attributed to a nearby lesion for statistics and
+surface lookup, but never connect two components. A sparse migration trail
+therefore cannot falsely merge a primary and a metastatic lesion.
 
-The configured `rate_sites_per_30_days` is a global Poisson intensity of
-attempted surface-root sites for the whole tumour during eligible time; it is
-not multiplied by surface area. With 30 days equal to 720 hours,
+Stable lesion IDs follow the component with greatest prior core-block overlap.
+On a split, the retained child keeps the process and new children start
+independent eligibility histories. A refresh can contain a split and a merge
+simultaneously, so a predecessor that remains as a retained child keeps its
+process even when it also overlaps another result. Every removed predecessor
+is assigned at most one successor, chosen deterministically, and its process is
+transferred exactly once. On a merge, predecessor counters are combined under
+the retained ID, the earliest valid pending arrival is kept, and predecessor
+queue entries are invalidated. Before combining, every active predecessor
+folds `refresh_time - eligibility_started_hours` into its accumulated eligible
+time; the active merged process starts a new interval at the refresh time.
+Thus different predecessor start times are summed without losing or
+double-counting elapsed eligibility.
+
+Existing vessel `source_lesion_id` values remain immutable historical
+provenance. A sparse ownership table maps each non-current historical source to
+its current lesion, or to zero after removal. Later topology changes retarget
+all existing mappings directly, without alias chains. Global tip limits count
+all active tips, while a per-lesion limit resolves historical tip sources
+through this ownership table. A lesion therefore cannot evade its active-tip
+cap merely by merging after vessel birth.
+
+Biological lesion volume is the sum of its uniquely counted cells' configured
+stage volumes. Vessel voxels are excluded and co-located stage-2 cells count
+separately. A lesion must have the configured minimum number of core blocks and
+reach its activation volume before its process becomes eligible; it becomes
+ineligible below the lower deactivation volume. Existing vessels continue to
+grow after their source lesion loses seed eligibility.
+
+Each eligible lesion has its own homogeneous Poisson process. The configured
+`rate_sites_per_30_days` is the expected number of attempted roots per eligible
+lesion per 30 days; it is not multiplied by cell count, lesion surface area, or
+`roots_per_event`. With 30 days equal to 720 hours,
 
 ```
 rate_per_hour = rate_sites_per_30_days / 720
 waiting_hours = -log(U) / rate_per_hour
 ```
 
-Each Poisson arrival is exactly one attempted surface site and can create at
-most one root. `roots_per_event` remains in schema v2 for an explicit invariant,
-but must equal 1; it is not a multiplier. Multiple starting points arise only
-from multiple arrivals as the process continues through time. Minimum
-separation, the finite surface-candidate budget, capsule collisions,
-`max_total_roots`, and the two-active-tips budget can reject an arrival.
+The uniform `U` is keyed by `(seed, lesion_id, event_sequence)`, so different
+lesions have independent, reproducible waiting times. Each arrival is exactly
+one attempted surface site and can create at most one root. `roots_per_event`
+is a schema-v3 invariant and must equal 1. Multiple starting points arise from
+successive arrivals and from multiple eligible lesions. Minimum separation,
+the finite surface-candidate budget, local support, capsule collisions, global
+and per-lesion root limits, and global and per-lesion active-tip limits can
+reject an arrival.
 `attempted_events`, `committed_roots`, and `rejected_events` therefore satisfy
 `attempted_events = committed_roots + rejected_events`.
 
@@ -32,24 +70,42 @@ A rate of one site per 30 days means an expected attempted-site count of one
 and a probability `1-exp(-1)` of at least one arrival; it does not guarantee a
 root because the sampled arrival may be rejected.
 
-If eligibility is lost, the pending seed event is invalidated.  A new waiting
-time is sampled on re-entry.  Checkpoints preserve eligibility, next seed time,
-event sequence, and generation so resume does not resample history.
+If eligibility is lost, its pending seed event is invalidated and a new waiting
+time is sampled on re-entry. Occupancy changes mark only affected coarse blocks
+dirty. A deterministic lesion-refresh event at the configured interval batches
+those local scans; a seed event also forces current geometry validation before
+committing. Checkpoints preserve the pre-refresh dirty observations, refresh
+deadline/generation, stable core identity, and every lesion process, so resume
+neither applies geometry early nor resamples history.
+
+The tumour-wide process exposed for compatibility is a derived snapshot only.
+Lesion records are ordered by stable lesion ID before checked accumulation.
+Each active interval is folded through the snapshot time, and an eligible
+aggregate is rebased to start at that same time. Counter overflow is a hard
+error. Consequently insertion or hash-table iteration order cannot change the
+aggregate or the simulation checksum.
 
 ## Root and tip construction
 
-At event time, the sampler first excludes closed-cavity walls: a face is
-external when its outward-normal axis ray is unobstructed to infinity (the
-outermost positive/negative face of its transverse lattice column). A stable
-hash sample is uniform over that explicit external-face set. Configurable
-minimum root separation against existing roots and a finite attempt limit
-prevent duplicate roots and unbounded rejection loops. Candidate order is keyed
-by the site-arrival sequence, so selection is deterministic and independent of
-worker thread order. One root
-creates two independently scheduled tips:
+At event time, surface candidates are restricted to faces owned by the source
+lesion. The sampler excludes closed-cavity walls: a face is external when its
+outward-normal axis ray is unobstructed to infinity (the outermost
+positive/negative face of its transverse lattice column). Subset extrema are
+computed for that lesion, so another lesion cannot hide its boundary. A stable
+hash top-K sample is uniform over the eligible external-face set without
+copying or sorting the complete tumour surface.
+
+The root position is `face.inside`, not the empty outside voxel. The root
+capsule must replace at least one cell owned by the source lesion and leave the
+configured number of neighbouring source cells outside the capsule. Candidate
+ownership, inside occupancy, outside emptiness, vascular collision, separation,
+and local support are revalidated immediately before atomic commit. One root
+creates two independently scheduled tips carrying the same
+`source_lesion_id`:
 
 - outward, initially aligned with the exposed-face normal;
-- inward, initially aligned toward the tumour centroid captured at root birth.
+- inward, initially aligned toward the source lesion centroid captured at root
+  birth.
 
 Directions are selected from the fixed 26-direction set using a forward cone,
 turn cone, persistence probability, and stateless RNG.  A step of Euclidean
@@ -98,17 +154,29 @@ Euclidean cutoff test and have positive stored relief. Consequently, a long or
 bent vessel does not refresh unrelated cells merely because they lie inside its
 coarse AABB.
 
-## Current legacy-mapped-v2 defaults
+## Current schema-v3 defaults
 
-The production YAML enables the process at 100,000 biological voxel³ and
-disables new root seeding below 80,000 voxel³. Its global homogeneous Poisson
-rate is 10 attempted surface sites per 30 days, at most one root per event, with an
-8-voxel minimum root separation, at most 64 roots, and at most 128 active tips.
+The production YAML uses 8³ lesion blocks, 26-neighbour core connectivity,
+occupied-fraction activation/deactivation thresholds 0.15/0.10, at least eight
+cells per core block, a one-block attribution halo, a one-hour refresh interval,
+and at least four core blocks. These are configurable numerical starting values
+and require scientific/sensitivity calibration.
+
+Each lesion enables seeding at 100,000 biological voxel³ and disables it below
+80,000 voxel³. Its homogeneous Poisson rate is 10 attempted sites per eligible
+lesion per 30 days. One arrival attempts one root. Defaults include an 8-voxel
+minimum root separation, 64 global/per-lesion roots, 128 global/per-lesion
+active tips, inside-surface roots, and at least one surviving local support
+cell.
 
 Vessel diameter is 3 voxels. Inward tips grow at 0.50 voxel/hour toward the
-root-time tumour centroid and outward tips at 0.25 voxel/hour toward the
-exposed-face normal; each is limited to 128 voxels. Direction and turn cones
-are both 45°, persistence
+root-time source-lesion centroid and outward tips at 2.0 voxel/hour toward the
+exposed-face normal; each is limited to 128 voxels. An activated-r migration
+rate is measured in moves/hour, while a fixed-26 move spans at most `sqrt(3)`
+voxels. Configuration validation therefore requires
+`outward_speed_voxels_per_hour > sqrt(3) * activated_r_rate_upper_bound`; the
+default `2.0` is strictly above the current bound `sqrt(3) * 1.0`. Direction
+and turn cones are both 45°, persistence
 is 0.90, forward-direction weight is `exp(cos(angle))` at the default bias 1.0,
 and no extra Euclidean step-length weighting is applied. The immediately active
 linear influence has maximum density relief 0.50, decay length 4 voxels,
@@ -118,8 +186,10 @@ starting values rather than values inherited from the 2D model.
 ## Determinism and persistence
 
 Seed times, surface selection, tip directions, and conflicts use independent
-stateless RNG event kinds keyed by seed, actor UID, event sequence, and draw
-index.  Output never consumes this RNG.  Checkpoint schema v2 stores the
-angiogenesis controller, centreline nodes, active tips, pending steps, event
-times, sequences, and generations; sparse occupancy and relief layers are
-rebuilt and validated on restore.
+stateless RNG event kinds keyed by seed, actor UID/lesion ID, event sequence,
+and draw index. Output never consumes this RNG. Checkpoint schema v3 stores
+stable lesion identity, exact dirty-block observations, every lesion process,
+historical-source ownership aliases, the lesion-refresh scheduler, centreline
+nodes and tips with their immutable source lesion, pending vessel steps, event
+times, sequences, and generations. Sparse cell and vessel occupancy and relief
+layers are rebuilt and validated on restore.

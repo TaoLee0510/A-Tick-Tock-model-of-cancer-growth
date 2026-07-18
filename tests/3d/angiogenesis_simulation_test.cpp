@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
+#include <set>
 #include <vector>
 
 #include "config/model_config.hpp"
@@ -17,7 +18,6 @@ atcg3d::Model3DConfig test_config(int threads) {
     config.initial_shell_inner_radius = 6;
     config.initial_shell_thickness = 2;
     config.initial_inner_small_radius = 6;
-    config.initial_r_migration_rate = 0.0;
     config.initial_K_migration_rate = 0.0;
     config.end_time_hours = 2.0;
     config.max_events = 100000;
@@ -27,6 +27,14 @@ atcg3d::Model3DConfig test_config(int threads) {
 
     auto& vessels = config.angiogenesis;
     vessels.enabled = true;
+    // Small deterministic fixtures need a permissive lesion detector.  The
+    // production profile intentionally requires a substantially denser core.
+    vessels.lesion_block_edge = 8;
+    vessels.lesion_core_activation_occupied_fraction = 1.0 / 512.0;
+    vessels.lesion_core_deactivation_occupied_fraction = 0.0;
+    vessels.lesion_minimum_cells_per_core_block = 1;
+    vessels.lesion_minimum_biological_volume_per_core_block = 0.0;
+    vessels.trigger_minimum_core_blocks = 1;
     vessels.trigger_activation_volume_voxels3 = 1.0;
     vessels.trigger_deactivation_volume_voxels3 = 0.0;
     vessels.seed_rate_sites_per_30_days = 720000.0;
@@ -98,6 +106,49 @@ atcg3d::CellInit scheduled_cell(atcg3d::Vec3i anchor,
     return cell;
 }
 
+std::vector<atcg3d::CellInit> two_by_two_by_two_cluster(
+    atcg3d::Vec3i origin, atcg3d::CellUid& next_uid) {
+    std::vector<atcg3d::CellInit> cells;
+    cells.reserve(8);
+    for (int z = 0; z < 2; ++z) {
+        for (int y = 0; y < 2; ++y) {
+            for (int x = 0; x < 2; ++x) {
+                cells.push_back(scheduled_cell(
+                    origin + atcg3d::Vec3i{x, y, z}, next_uid++));
+            }
+        }
+    }
+    return cells;
+}
+
+atcg3d::Model3DConfig explicit_lesion_config(
+    std::uint64_t roots, std::uint64_t events, int threads = 1) {
+    atcg3d::Model3DConfig config = test_config(threads);
+    config.initial_r_cells = 0;
+    config.initial_K_cells = 0;
+    config.max_events = events;
+    config.end_time_hours = 2.0;
+    auto& vessels = config.angiogenesis;
+    vessels.lesion_block_edge = 1;
+    vessels.lesion_core_activation_occupied_fraction = 1.0;
+    vessels.lesion_core_deactivation_occupied_fraction = 1.0;
+    vessels.lesion_minimum_cells_per_core_block = 1;
+    vessels.lesion_halo_blocks = 0;
+    vessels.trigger_activation_volume_voxels3 = 4.0;
+    vessels.trigger_deactivation_volume_voxels3 = 0.0;
+    vessels.trigger_minimum_core_blocks = 1;
+    vessels.seed_rate_sites_per_30_days = 720000000.0;
+    vessels.seed_rate_sites_per_hour =
+        vessels.seed_rate_sites_per_30_days / 720.0;
+    vessels.max_total_roots = roots;
+    vessels.max_roots_per_lesion = 1;
+    vessels.max_active_tips = 2 * roots;
+    vessels.max_active_tips_per_lesion = 2;
+    vessels.surface_min_separation_voxels = 0;
+    config.validate();
+    return config;
+}
+
 }  // namespace
 
 int main() {
@@ -142,9 +193,192 @@ int main() {
 
     const VasculatureState3D snapshot = first.snapshot_vasculature();
     assert(snapshot.process.committed_roots == 1);
+    assert(snapshot.lesions.processes.size() == 1);
     assert(snapshot.next_vessel_id == 2);
     assert(!snapshot.nodes.empty() && snapshot.tips.size() == 2);
     assert(snapshot.perfused_vessels == std::vector<VesselId>{1});
+    const LesionId first_source = snapshot.nodes.front().source_lesion_id;
+    assert(first_source != kNoLesionId);
+    for (const VesselNodeInit3D& node : snapshot.nodes) {
+        assert(node.source_lesion_id == first_source);
+    }
+    for (const VesselTipInit3D& tip : snapshot.tips) {
+        assert(tip.source_lesion_id == first_source);
+    }
+
+    // A disconnected outlier or small metastatic focus is indexed but does
+    // not share the primary lesion's angiogenesis clock.  Until it crosses its
+    // own configured biological-volume threshold, only the mature lesion can
+    // create a root, and that root replaces a cell at the source lesion's
+    // inside surface voxel.
+    CellUid next_lesion_uid = 1000;
+    std::vector<CellInit> primary_cells =
+        two_by_two_by_two_cluster({0, 0, 0}, next_lesion_uid);
+    primary_cells.push_back(scheduled_cell({30, 0, 0}, next_lesion_uid++));
+    primary_cells.push_back(scheduled_cell({31, 0, 0}, next_lesion_uid++));
+    Simulation3D primary_only(explicit_lesion_config(1, 1));
+    primary_only.restore(primary_cells, next_lesion_uid, {}, {}, {});
+    assert(primary_only.lesion_index().lesions().size() == 2);
+    const LesionId primary_id =
+        *primary_only.lesion_index().lesion_for_site({0, 0, 0});
+    const LesionId small_metastasis_id =
+        *primary_only.lesion_index().lesion_for_site({30, 0, 0});
+    assert(primary_id != small_metastasis_id);
+    primary_only.run();
+    assert(primary_only.stats().angiogenesis_roots == 1);
+    const std::vector<Vec3i> primary_roots = root_positions(primary_only);
+    assert(primary_roots.size() == 1);
+    assert(primary_roots.front().x >= 0 && primary_roots.front().x <= 1);
+    assert(primary_roots.front().y >= 0 && primary_roots.front().y <= 1);
+    assert(primary_roots.front().z >= 0 && primary_roots.front().z <= 1);
+    const VasculatureState3D primary_state =
+        primary_only.snapshot_vasculature();
+    assert(primary_state.lesions.next_refresh_time_hours >
+           primary_only.clock().time_hours);
+    assert(primary_state.lesions.next_refresh_time_hours <=
+           primary_only.clock().time_hours +
+               primary_only.config().angiogenesis.lesion_refresh_interval_hours +
+               1e-12);
+    assert(primary_state.lesions.refresh_schedule_generation > 0);
+    assert(primary_state.nodes.front().source_lesion_id == primary_id);
+    const auto small_process = std::find_if(
+        primary_state.lesions.processes.begin(),
+        primary_state.lesions.processes.end(),
+        [small_metastasis_id](const LesionAngiogenesisState3D& state) {
+            return state.lesion_id == small_metastasis_id;
+        });
+    assert(small_process != primary_state.lesions.processes.end());
+    assert(!small_process->process.eligible);
+    assert(small_process->process.attempted_events == 0);
+
+    // Once two spatially disconnected lesions independently cross the same
+    // threshold, each owns a distinct Poisson process and creates at most one
+    // root from its own surface.  No centre-primary special case is used.
+    CellUid next_two_lesion_uid = 2000;
+    std::vector<CellInit> two_lesion_cells =
+        two_by_two_by_two_cluster({0, 0, 0}, next_two_lesion_uid);
+    std::vector<CellInit> distant_cells =
+        two_by_two_by_two_cluster({30, 0, 0}, next_two_lesion_uid);
+    two_lesion_cells.insert(two_lesion_cells.end(),
+                            distant_cells.begin(), distant_cells.end());
+    Simulation3D two_lesions(explicit_lesion_config(2, 2));
+    two_lesions.restore(two_lesion_cells, next_two_lesion_uid, {}, {}, {});
+    assert(two_lesions.lesion_index().lesions().size() == 2);
+    two_lesions.run();
+    assert(two_lesions.stats().angiogenesis_seed_attempts == 2);
+    assert(two_lesions.stats().angiogenesis_roots == 2);
+    std::set<LesionId> source_lesions;
+    for (const VesselNodeSlot slot : two_lesions.vessel_nodes().alive_slots()) {
+        if (two_lesions.vessel_nodes().role(slot) == VesselBranchRole::root) {
+            source_lesions.insert(
+                two_lesions.vessel_nodes().source_lesion_id(slot));
+        }
+    }
+    assert(source_lesions.size() == 2);
+    Simulation3D two_lesions_parallel(explicit_lesion_config(2, 2, 4));
+    two_lesions_parallel.restore(
+        two_lesion_cells, next_two_lesion_uid, {}, {}, {});
+    two_lesions_parallel.run();
+    assert(two_lesions_parallel.state_checksum() ==
+           two_lesions.state_checksum());
+
+    // One migration can split lesion A while its detached fragment merges
+    // into lesion B in the same coarse-topology refresh.  Both A and B remain
+    // current IDs, so neither independent Poisson process may be erased or
+    // merged into the other merely because A appears as B's predecessor.
+    Model3DConfig split_merge_config = explicit_lesion_config(10, 10);
+    split_merge_config.thin_layer = true;
+    split_merge_config.bounded_domain = true;
+    split_merge_config.domain_policy = "bounded";
+    split_merge_config.domain_min = {0, 0, 0};
+    split_merge_config.domain_max = {4, 0, 0};
+    split_merge_config.angiogenesis.lesion_refresh_interval_hours = 0.15;
+    split_merge_config.angiogenesis.trigger_activation_volume_voxels3 = 1.0;
+    split_merge_config.angiogenesis.seed_rate_sites_per_30_days = 1.0e-9;
+    split_merge_config.angiogenesis.seed_rate_sites_per_hour =
+        split_merge_config.angiogenesis.seed_rate_sites_per_30_days / 720.0;
+    split_merge_config.end_time_hours = 1.0;
+    split_merge_config.max_events = 2;
+    split_merge_config.validate();
+
+    std::vector<CellInit> split_merge_cells;
+    for (int x = 0; x <= 2; ++x) {
+        split_merge_cells.push_back(scheduled_cell({x, 0, 0}, 4000 + x));
+    }
+    split_merge_cells.push_back(scheduled_cell({4, 0, 0}, 4003));
+    CellInit& bridge_cell = split_merge_cells[2];
+    bridge_cell.type = CellType::K;
+    bridge_cell.migration_rate = 10.0F;
+    bridge_cell.normal_migration_rate = 10.0F;
+    bridge_cell.next_migration_time = 0.1;
+
+    Simulation3D split_merge(split_merge_config);
+    split_merge.restore(split_merge_cells, 4004, {}, {}, {});
+    const LesionId split_source =
+        *split_merge.lesion_index().lesion_for_site({0, 0, 0});
+    const LesionId merge_target =
+        *split_merge.lesion_index().lesion_for_site({4, 0, 0});
+    assert(split_source != merge_target);
+    const VasculatureState3D before_split_merge =
+        split_merge.snapshot_vasculature();
+    const auto process_for = [](const VasculatureState3D& state,
+                                LesionId id) -> const AngiogenesisProcessState3D& {
+        const auto found = std::find_if(
+            state.lesions.processes.begin(), state.lesions.processes.end(),
+            [id](const LesionAngiogenesisState3D& entry) {
+                return entry.lesion_id == id;
+            });
+        assert(found != state.lesions.processes.end());
+        return found->process;
+    };
+    const double split_seed_time =
+        process_for(before_split_merge, split_source).next_seed_time_hours;
+    const double target_seed_time =
+        process_for(before_split_merge, merge_target).next_seed_time_hours;
+
+    assert(split_merge.step());  // x=2 migrates to the only feasible site x=3
+    assert(split_merge.cells().anchor(2) == (Vec3i{3, 0, 0}));
+    assert(split_merge.step());  // the scheduled lesion refresh at t=0.15
+    assert(split_merge.clock().time_hours == 0.15);
+    assert(*split_merge.lesion_index().lesion_for_site({0, 0, 0}) ==
+           split_source);
+    assert(*split_merge.lesion_index().lesion_for_site({3, 0, 0}) ==
+           merge_target);
+    const VasculatureState3D after_split_merge =
+        split_merge.snapshot_vasculature();
+    assert(process_for(after_split_merge, split_source).next_seed_time_hours ==
+           split_seed_time);
+    assert(process_for(after_split_merge, merge_target).next_seed_time_hours ==
+           target_seed_time);
+    assert(after_split_merge.lesions.source_ownership.empty());
+
+    // Checkpoint-like in-memory restore between a root displacement and the
+    // next coarse-lesion refresh must preserve both the pre-refresh block
+    // observations and the pending refresh event.  Rebuilding directly from
+    // current cells would otherwise apply the displacement too early and
+    // diverge after resume.
+    CellUid next_resume_uid = 3000;
+    std::vector<CellInit> resume_cells =
+        two_by_two_by_two_cluster({0, 0, 0}, next_resume_uid);
+    Model3DConfig resume_config = explicit_lesion_config(1, 8);
+    Simulation3D uninterrupted(resume_config);
+    uninterrupted.restore(resume_cells, next_resume_uid, {}, {}, {});
+    assert(uninterrupted.step());  // the root arrival
+    const VasculatureState3D resume_vessels =
+        uninterrupted.snapshot_vasculature();
+    assert(!resume_vessels.lesions.dirty_blocks.empty());
+    assert(resume_vessels.lesions.next_refresh_time_hours >
+           uninterrupted.clock().time_hours);
+    Simulation3D resumed(resume_config);
+    resumed.restore(
+        uninterrupted.snapshot_cells(), uninterrupted.next_uid(),
+        uninterrupted.clock(), uninterrupted.stats(), uninterrupted.lineage(),
+        resume_vessels, uninterrupted.cells().slot_count(),
+        uninterrupted.snapshot_cell_slots(), uninterrupted.cells().free_slots());
+    assert(resumed.state_checksum() == uninterrupted.state_checksum());
+    uninterrupted.run();
+    resumed.run();
+    assert(resumed.state_checksum() == uninterrupted.state_checksum());
 
     // The configured unit is sites/30 days: three roots require three Poisson
     // arrivals. One arrival is never multiplied by roots_per_event.

@@ -28,6 +28,11 @@ void finite_nonnegative(double value, const char* name) {
 
 }  // namespace
 
+AngiogenesisProcess3D::AngiogenesisProcess3D(
+    std::uint64_t seed, std::uint64_t process_uid) noexcept
+    : seed_(seed),
+      process_uid_(process_uid == 0 ? kAngiogenesisProcessUid : process_uid) {}
+
 void AngiogenesisProcess3D::restore(AngiogenesisProcessState3D state) {
     finite_nonnegative(state.next_seed_time_hours, "next seed time");
     finite_nonnegative(state.eligibility_started_hours, "eligibility start time");
@@ -52,12 +57,21 @@ double AngiogenesisProcess3D::sample_waiting_hours(
     std::uint64_t seed,
     std::uint64_t event_sequence,
     double rate_sites_per_30_days) {
+    return sample_waiting_hours(seed, kAngiogenesisProcessUid, event_sequence,
+                                rate_sites_per_30_days);
+}
+
+double AngiogenesisProcess3D::sample_waiting_hours(
+    std::uint64_t seed,
+    std::uint64_t process_uid,
+    std::uint64_t event_sequence,
+    double rate_sites_per_30_days) {
     const double rate = rate_per_hour(rate_sites_per_30_days);
     if (!(rate > 0.0)) {
         return std::numeric_limits<double>::infinity();
     }
     const double uniform = std::clamp(
-        rng_unit(seed, kAngiogenesisProcessUid, kSeedWaitingEventKind, event_sequence),
+        rng_unit(seed, process_uid, kSeedWaitingEventKind, event_sequence),
         1e-15, 1.0 - 1e-15);
     return -std::log1p(-uniform) / rate;
 }
@@ -128,7 +142,8 @@ void AngiogenesisProcess3D::stop(double now_hours) {
 void AngiogenesisProcess3D::schedule_next(double now_hours,
                                           double delay_hours,
                                           double rate_sites_per_30_days) {
-    const double wait = sample_waiting_hours(seed_, state_.event_sequence++,
+    const double wait = sample_waiting_hours(seed_, process_uid_,
+                                             state_.event_sequence++,
                                              rate_sites_per_30_days);
     if (!std::isfinite(wait)) {
         state_.next_seed_time_hours = 0.0;

@@ -194,8 +194,23 @@ std::vector<ExposedFace3D> TumorSurfaceIndex3D::sample_external_without_replacem
     double minimum_separation_voxels,
     std::uint64_t seed,
     std::uint64_t event_sequence) const {
+    return sample_external_subset_without_replacement(
+        count, minimum_separation_voxels, seed, event_sequence,
+        [](const ExposedFace3D&) { return true; });
+}
+
+std::vector<ExposedFace3D>
+TumorSurfaceIndex3D::sample_external_subset_without_replacement(
+    std::size_t count,
+    double minimum_separation_voxels,
+    std::uint64_t seed,
+    std::uint64_t event_sequence,
+    const std::function<bool(const ExposedFace3D&)>& include_face) const {
     if (minimum_separation_voxels < 0.0 || !std::isfinite(minimum_separation_voxels)) {
         throw std::invalid_argument("surface seed separation must be finite and nonnegative");
+    }
+    if (!include_face) {
+        throw std::invalid_argument("surface subset predicate must be callable");
     }
     if (count == 0U || faces_.empty()) return {};
 
@@ -206,6 +221,7 @@ std::vector<ExposedFace3D> TumorSurfaceIndex3D::sample_external_without_replacem
                        SurfaceColumnKey3DHash> extrema;
     extrema.reserve(faces_.size());
     for (const ExposedFace3D& face : faces_) {
+        if (!include_face(face)) continue;
         const SurfaceColumnCoordinate3D column = surface_column(face);
         SurfaceColumnExtrema3D& limits = extrema[column.key];
         if (column.sign > 0) {
@@ -220,7 +236,8 @@ std::vector<ExposedFace3D> TumorSurfaceIndex3D::sample_external_without_replacem
 
     // Second pass is performed by the stable-hash sampler. Only O(K) ranked
     // candidates are retained; the surface itself is never copied or sorted.
-    const auto is_external = [&extrema](const ExposedFace3D& face) {
+    const auto is_external = [&extrema, &include_face](const ExposedFace3D& face) {
+        if (!include_face(face)) return false;
         const SurfaceColumnCoordinate3D column = surface_column(face);
         const auto found = extrema.find(column.key);
         if (found == extrema.end()) return false;

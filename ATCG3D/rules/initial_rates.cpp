@@ -204,17 +204,22 @@ double sample_initial_migration_rate(const Model3DConfig& config,
                                      CellType type,
                                      std::uint64_t seed,
                                      CellUid uid) {
-    if (config.initial_migration_rate_model == "fixed") {
-        return type == CellType::r ? config.initial_r_migration_rate
-                                   : config.initial_K_migration_rate;
+    if (type == CellType::r) {
+        if (config.activated_r_migration_rate_model != "beta") {
+            throw std::invalid_argument(
+                "unsupported activated r migration-rate model");
+        }
+        return sample_beta_rate(config.activated_r_migration_beta, seed, uid,
+                                kInitialMigrationDomain + type_offset(type));
     }
-    if (config.initial_migration_rate_model == "legacy_beta_v1") {
-        const BetaRateConfig& parameters = type == CellType::r
-            ? config.initial_r_migration_beta : config.initial_K_migration_beta;
-        return sample_beta_rate(
-            parameters, seed, uid, kInitialMigrationDomain + type_offset(type));
+    if (config.initial_K_migration_rate_model == "fixed") {
+        return config.initial_K_migration_rate;
     }
-    throw std::invalid_argument("unsupported initial migration-rate model");
+    if (config.initial_K_migration_rate_model == "legacy_beta_v1") {
+        return sample_beta_rate(config.initial_K_migration_beta, seed, uid,
+                                kInitialMigrationDomain + type_offset(type));
+    }
+    throw std::invalid_argument("unsupported initial K migration-rate model");
 }
 
 InitialCellRates3D sample_initial_cell_rates(const Model3DConfig& config,

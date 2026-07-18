@@ -2,6 +2,7 @@
 
 #include <H5Cpp.h>
 #include <hdf5.h>
+#include <yaml-cpp/yaml.h>
 
 #include <algorithm>
 #include <cmath>
@@ -9,6 +10,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -16,7 +18,7 @@
 namespace atcg3d {
 namespace {
 
-constexpr std::uint32_t kCheckpointSchemaVersion = 2;
+constexpr std::uint32_t kCheckpointSchemaVersion = 3;
 constexpr std::uint32_t kCheckpointDimension = 3;
 
 double float_storage_time_tolerance(double lhs, double rhs) noexcept {
@@ -42,6 +44,9 @@ template <> const H5::PredType& file_hdf_type<std::uint64_t>() {
 template <> const H5::PredType& file_hdf_type<std::int32_t>() {
     return H5::PredType::STD_I32LE;
 }
+template <> const H5::PredType& file_hdf_type<std::int64_t>() {
+    return H5::PredType::STD_I64LE;
+}
 template <> const H5::PredType& file_hdf_type<float>() {
     return H5::PredType::IEEE_F32LE;
 }
@@ -60,6 +65,9 @@ template <> const H5::PredType& native_hdf_type<std::uint64_t>() {
 }
 template <> const H5::PredType& native_hdf_type<std::int32_t>() {
     return H5::PredType::NATIVE_INT32;
+}
+template <> const H5::PredType& native_hdf_type<std::int64_t>() {
+    return H5::PredType::NATIVE_INT64;
 }
 template <> const H5::PredType& native_hdf_type<float>() {
     return H5::PredType::NATIVE_FLOAT;
@@ -148,6 +156,47 @@ std::string read_string_attribute(H5::H5Object& object, const std::string& name)
     std::string value;
     attribute.read(string_type, value);
     return value;
+}
+
+void validate_effective_config_provenance(
+    const std::string& text,
+    const Model3DConfig& expected_config) {
+    if (text.empty()) {
+        throw std::runtime_error(
+            "checkpoint effective configuration provenance is empty");
+    }
+    try {
+        const YAML::Node root = YAML::Load(text);
+        if (!root || !root.IsMap()) {
+            throw std::runtime_error(
+                "checkpoint effective configuration provenance is not an object");
+        }
+        const auto required_scalar = [&root](const char* key) -> YAML::Node {
+            const YAML::Node value = root[key];
+            if (!value || !value.IsScalar()) {
+                throw std::runtime_error(
+                    std::string("checkpoint effective configuration is missing scalar ") +
+                    key);
+            }
+            return value;
+        };
+        const std::string schema_name =
+            required_scalar("schema_name").as<std::string>();
+        const std::uint32_t schema_version =
+            required_scalar("schema_version").as<std::uint32_t>();
+        const std::string profile =
+            required_scalar("profile").as<std::string>();
+        if (schema_name != expected_config.schema_name ||
+            schema_version != expected_config.schema_version ||
+            profile != expected_config.profile) {
+            throw std::runtime_error(
+                "checkpoint effective configuration provenance identity does not match");
+        }
+    } catch (const YAML::Exception& error) {
+        throw std::runtime_error(
+            "checkpoint effective configuration provenance is malformed: " +
+            std::string(error.what()));
+    }
 }
 
 template <class Member, class Row, class Getter>
@@ -326,6 +375,428 @@ AngiogenesisProcessState3D read_process(H5::Group& group) {
     state.committed_roots = read_scalar_attribute<std::uint64_t>(group, "committed_roots");
     state.rejected_events = read_scalar_attribute<std::uint64_t>(group, "rejected_events");
     return state;
+}
+
+void write_lesion_core_identity(
+    H5::Group& group,
+    const std::vector<LesionCoreIdentity3D>& identity) {
+    write_vector(group, "block_x",
+                 column<std::int32_t>(identity,
+                                      [](const auto& entry) {
+                                          return entry.block.x;
+                                      }));
+    write_vector(group, "block_y",
+                 column<std::int32_t>(identity,
+                                      [](const auto& entry) {
+                                          return entry.block.y;
+                                      }));
+    write_vector(group, "block_z",
+                 column<std::int32_t>(identity,
+                                      [](const auto& entry) {
+                                          return entry.block.z;
+                                      }));
+    write_vector(group, "lesion_id",
+                 column<std::uint64_t>(identity,
+                                       [](const auto& entry) {
+                                           return entry.lesion_id;
+                                       }));
+}
+
+std::vector<LesionCoreIdentity3D> read_lesion_core_identity(
+    H5::Group& group, LesionId next_lesion_id) {
+    const auto x = read_vector<std::int32_t>(group, "block_x");
+    const auto y = read_vector<std::int32_t>(group, "block_y");
+    const auto z = read_vector<std::int32_t>(group, "block_z");
+    const auto lesion_id = read_vector<std::uint64_t>(group, "lesion_id");
+    require_equal_sizes("lesion core identity", lesion_id.size(),
+                        {{"block_x", x.size()}, {"block_y", y.size()},
+                         {"block_z", z.size()}});
+
+    std::vector<LesionCoreIdentity3D> identity(lesion_id.size());
+    Vec3i previous{};
+    for (std::size_t index = 0; index < identity.size(); ++index) {
+        const Vec3i block{x[index], y[index], z[index]};
+        if (lesion_id[index] == kNoLesionId ||
+            lesion_id[index] >= next_lesion_id) {
+            throw std::runtime_error(
+                "checkpoint lesion core identity contains an invalid lesion ID");
+        }
+        if (index != 0 && !(previous < block)) {
+            throw std::runtime_error(
+                "checkpoint lesion core identity must be sorted by unique block");
+        }
+        identity[index] = {block, lesion_id[index]};
+        previous = block;
+    }
+    return identity;
+}
+
+void write_lesion_dirty_blocks(
+    H5::Group& group,
+    const std::vector<LesionDirtyBlockState3D>& blocks) {
+    write_vector(group, "block_x",
+                 column<std::int32_t>(blocks, [](const auto& block) {
+                     return block.block.x;
+                 }));
+    write_vector(group, "block_y",
+                 column<std::int32_t>(blocks, [](const auto& block) {
+                     return block.block.y;
+                 }));
+    write_vector(group, "block_z",
+                 column<std::int32_t>(blocks, [](const auto& block) {
+                     return block.block.z;
+                 }));
+    write_vector(group, "exists",
+                 column<std::uint8_t>(blocks, [](const auto& block) {
+                     return static_cast<std::uint8_t>(block.exists ? 1U : 0U);
+                 }));
+    write_vector(group, "cell_count",
+                 column<std::uint64_t>(blocks, [](const auto& block) {
+                     return block.cell_count;
+                 }));
+    write_vector(group, "occupied_voxel_count",
+                 column<std::uint64_t>(blocks, [](const auto& block) {
+                     return block.occupied_voxel_count;
+                 }));
+    write_vector(group, "biological_volume",
+                 column<double>(blocks, [](const auto& block) {
+                     return block.biological_volume;
+                 }));
+    write_vector(group, "cell_coordinate_sum_x",
+                 column<std::int64_t>(blocks, [](const auto& block) {
+                     return block.cell_coordinate_sum_x;
+                 }));
+    write_vector(group, "cell_coordinate_sum_y",
+                 column<std::int64_t>(blocks, [](const auto& block) {
+                     return block.cell_coordinate_sum_y;
+                 }));
+    write_vector(group, "cell_coordinate_sum_z",
+                 column<std::int64_t>(blocks, [](const auto& block) {
+                     return block.cell_coordinate_sum_z;
+                 }));
+    write_vector(group, "occupied_coordinate_sum_x",
+                 column<std::int64_t>(blocks, [](const auto& block) {
+                     return block.occupied_coordinate_sum_x;
+                 }));
+    write_vector(group, "occupied_coordinate_sum_y",
+                 column<std::int64_t>(blocks, [](const auto& block) {
+                     return block.occupied_coordinate_sum_y;
+                 }));
+    write_vector(group, "occupied_coordinate_sum_z",
+                 column<std::int64_t>(blocks, [](const auto& block) {
+                     return block.occupied_coordinate_sum_z;
+                 }));
+}
+
+std::int32_t clamp_lattice_coordinate(std::int64_t value) noexcept {
+    return static_cast<std::int32_t>(std::clamp(
+        value,
+        static_cast<std::int64_t>(std::numeric_limits<std::int32_t>::min()),
+        static_cast<std::int64_t>(std::numeric_limits<std::int32_t>::max())));
+}
+
+void validate_coordinate_sum(std::int64_t sum, std::uint64_t count,
+                             std::int32_t minimum, std::int32_t maximum,
+                             const char* name) {
+    if (count == 0) {
+        if (sum != 0) {
+            throw std::runtime_error(std::string("checkpoint ") + name +
+                                     " must be zero for an empty count");
+        }
+        return;
+    }
+    const std::int64_t signed_count = static_cast<std::int64_t>(count);
+    const std::int64_t lower =
+        static_cast<std::int64_t>(minimum) * signed_count;
+    const std::int64_t upper =
+        static_cast<std::int64_t>(maximum) * signed_count;
+    if (sum < lower || sum > upper) {
+        throw std::runtime_error(std::string("checkpoint ") + name +
+                                 " lies outside its lesion block");
+    }
+}
+
+std::vector<LesionDirtyBlockState3D> read_lesion_dirty_blocks(
+    H5::Group& group, const Model3DConfig& config) {
+    const auto x = read_vector<std::int32_t>(group, "block_x");
+    const auto y = read_vector<std::int32_t>(group, "block_y");
+    const auto z = read_vector<std::int32_t>(group, "block_z");
+    const auto exists = read_vector<std::uint8_t>(group, "exists");
+    const auto cell_count = read_vector<std::uint64_t>(group, "cell_count");
+    const auto occupied_count =
+        read_vector<std::uint64_t>(group, "occupied_voxel_count");
+    const auto biological_volume =
+        read_vector<double>(group, "biological_volume");
+    const auto cell_sum_x =
+        read_vector<std::int64_t>(group, "cell_coordinate_sum_x");
+    const auto cell_sum_y =
+        read_vector<std::int64_t>(group, "cell_coordinate_sum_y");
+    const auto cell_sum_z =
+        read_vector<std::int64_t>(group, "cell_coordinate_sum_z");
+    const auto occupied_sum_x =
+        read_vector<std::int64_t>(group, "occupied_coordinate_sum_x");
+    const auto occupied_sum_y =
+        read_vector<std::int64_t>(group, "occupied_coordinate_sum_y");
+    const auto occupied_sum_z =
+        read_vector<std::int64_t>(group, "occupied_coordinate_sum_z");
+    const std::size_t count = x.size();
+    require_equal_sizes(
+        "lesion dirty block", count,
+        {{"block_y", y.size()}, {"block_z", z.size()},
+         {"exists", exists.size()}, {"cell_count", cell_count.size()},
+         {"occupied_voxel_count", occupied_count.size()},
+         {"biological_volume", biological_volume.size()},
+         {"cell_coordinate_sum_x", cell_sum_x.size()},
+         {"cell_coordinate_sum_y", cell_sum_y.size()},
+         {"cell_coordinate_sum_z", cell_sum_z.size()},
+         {"occupied_coordinate_sum_x", occupied_sum_x.size()},
+         {"occupied_coordinate_sum_y", occupied_sum_y.size()},
+         {"occupied_coordinate_sum_z", occupied_sum_z.size()}});
+
+    const std::uint64_t edge = static_cast<std::uint64_t>(
+        config.angiogenesis.lesion_block_edge);
+    if (edge == 0 ||
+        edge > std::numeric_limits<std::uint64_t>::max() / edge ||
+        edge * edge > std::numeric_limits<std::uint64_t>::max() / edge) {
+        throw std::runtime_error(
+            "checkpoint lesion block capacity is invalid");
+    }
+    const std::uint64_t voxel_capacity = edge * edge * edge;
+    std::vector<LesionDirtyBlockState3D> blocks(count);
+    Vec3i previous{};
+    for (std::size_t index = 0; index < count; ++index) {
+        const Vec3i coordinate{x[index], y[index], z[index]};
+        if (index != 0 && !(previous < coordinate)) {
+            throw std::runtime_error(
+                "checkpoint lesion dirty blocks must be sorted and unique");
+        }
+        if (exists[index] > 1U ||
+            !std::isfinite(biological_volume[index]) ||
+            biological_volume[index] < 0.0 ||
+            cell_count[index] > std::numeric_limits<Slot>::max() ||
+            occupied_count[index] > voxel_capacity) {
+            throw std::runtime_error(
+                "checkpoint lesion dirty block contains an invalid value");
+        }
+        const bool payload_is_zero =
+            cell_count[index] == 0 && occupied_count[index] == 0 &&
+            biological_volume[index] == 0.0 && cell_sum_x[index] == 0 &&
+            cell_sum_y[index] == 0 && cell_sum_z[index] == 0 &&
+            occupied_sum_x[index] == 0 && occupied_sum_y[index] == 0 &&
+            occupied_sum_z[index] == 0;
+        if ((exists[index] == 0 && !payload_is_zero) ||
+            (exists[index] != 0 && cell_count[index] == 0 &&
+             occupied_count[index] == 0) ||
+            (cell_count[index] == 0 && biological_volume[index] != 0.0) ||
+            (cell_count[index] != 0 && biological_volume[index] <= 0.0)) {
+            throw std::runtime_error(
+                "checkpoint lesion dirty block payload is inconsistent");
+        }
+
+        const std::int64_t coordinate_x = coordinate.x;
+        const std::int64_t coordinate_y = coordinate.y;
+        const std::int64_t coordinate_z = coordinate.z;
+        const std::int64_t signed_edge =
+            config.angiogenesis.lesion_block_edge;
+        const Vec3i minimum{
+            clamp_lattice_coordinate(coordinate_x * signed_edge),
+            clamp_lattice_coordinate(coordinate_y * signed_edge),
+            clamp_lattice_coordinate(coordinate_z * signed_edge)};
+        const Vec3i maximum{
+            clamp_lattice_coordinate(coordinate_x * signed_edge +
+                                     signed_edge - 1),
+            clamp_lattice_coordinate(coordinate_y * signed_edge +
+                                     signed_edge - 1),
+            clamp_lattice_coordinate(coordinate_z * signed_edge +
+                                     signed_edge - 1)};
+        validate_coordinate_sum(cell_sum_x[index], cell_count[index],
+                                minimum.x, maximum.x,
+                                "lesion dirty cell x sum");
+        validate_coordinate_sum(cell_sum_y[index], cell_count[index],
+                                minimum.y, maximum.y,
+                                "lesion dirty cell y sum");
+        validate_coordinate_sum(cell_sum_z[index], cell_count[index],
+                                minimum.z, maximum.z,
+                                "lesion dirty cell z sum");
+        validate_coordinate_sum(occupied_sum_x[index], occupied_count[index],
+                                minimum.x, maximum.x,
+                                "lesion dirty occupied x sum");
+        validate_coordinate_sum(occupied_sum_y[index], occupied_count[index],
+                                minimum.y, maximum.y,
+                                "lesion dirty occupied y sum");
+        validate_coordinate_sum(occupied_sum_z[index], occupied_count[index],
+                                minimum.z, maximum.z,
+                                "lesion dirty occupied z sum");
+
+        blocks[index] = {
+            .block = coordinate,
+            .exists = exists[index] != 0,
+            .cell_count = cell_count[index],
+            .occupied_voxel_count = occupied_count[index],
+            .biological_volume = biological_volume[index],
+            .cell_coordinate_sum_x = cell_sum_x[index],
+            .cell_coordinate_sum_y = cell_sum_y[index],
+            .cell_coordinate_sum_z = cell_sum_z[index],
+            .occupied_coordinate_sum_x = occupied_sum_x[index],
+            .occupied_coordinate_sum_y = occupied_sum_y[index],
+            .occupied_coordinate_sum_z = occupied_sum_z[index],
+        };
+        previous = coordinate;
+    }
+    return blocks;
+}
+
+void write_lesion_processes(
+    H5::Group& group,
+    const std::vector<LesionAngiogenesisState3D>& processes) {
+    write_vector(group, "lesion_id",
+                 column<std::uint64_t>(processes,
+                                       [](const auto& entry) {
+                                           return entry.lesion_id;
+                                       }));
+    write_vector(group, "eligible",
+                 column<std::uint8_t>(processes,
+                                      [](const auto& entry) {
+                                          return static_cast<std::uint8_t>(
+                                              entry.process.eligible ? 1U : 0U);
+                                      }));
+    write_vector(group, "next_seed_time_hours",
+                 column<double>(processes,
+                                [](const auto& entry) {
+                                    return entry.process.next_seed_time_hours;
+                                }));
+    write_vector(group, "eligibility_started_hours",
+                 column<double>(processes,
+                                [](const auto& entry) {
+                                    return entry.process.eligibility_started_hours;
+                                }));
+    write_vector(group, "accumulated_eligible_hours",
+                 column<double>(processes,
+                                [](const auto& entry) {
+                                    return entry.process.accumulated_eligible_hours;
+                                }));
+    write_vector(group, "event_sequence",
+                 column<std::uint64_t>(processes,
+                                       [](const auto& entry) {
+                                           return entry.process.event_sequence;
+                                       }));
+    write_vector(group, "schedule_generation",
+                 column<std::uint32_t>(processes,
+                                       [](const auto& entry) {
+                                           return entry.process.schedule_generation;
+                                       }));
+    write_vector(group, "attempted_events",
+                 column<std::uint64_t>(processes,
+                                       [](const auto& entry) {
+                                           return entry.process.attempted_events;
+                                       }));
+    write_vector(group, "committed_roots",
+                 column<std::uint64_t>(processes,
+                                       [](const auto& entry) {
+                                           return entry.process.committed_roots;
+                                       }));
+    write_vector(group, "rejected_events",
+                 column<std::uint64_t>(processes,
+                                       [](const auto& entry) {
+                                           return entry.process.rejected_events;
+                                       }));
+}
+
+std::vector<LesionAngiogenesisState3D> read_lesion_processes(
+    H5::Group& group, LesionId next_lesion_id, double checkpoint_time) {
+    const auto lesion_id = read_vector<std::uint64_t>(group, "lesion_id");
+    const auto eligible = read_vector<std::uint8_t>(group, "eligible");
+    const auto next_seed_time =
+        read_vector<double>(group, "next_seed_time_hours");
+    const auto eligibility_started =
+        read_vector<double>(group, "eligibility_started_hours");
+    const auto accumulated =
+        read_vector<double>(group, "accumulated_eligible_hours");
+    const auto event_sequence =
+        read_vector<std::uint64_t>(group, "event_sequence");
+    const auto generation =
+        read_vector<std::uint32_t>(group, "schedule_generation");
+    const auto attempted =
+        read_vector<std::uint64_t>(group, "attempted_events");
+    const auto committed =
+        read_vector<std::uint64_t>(group, "committed_roots");
+    const auto rejected =
+        read_vector<std::uint64_t>(group, "rejected_events");
+    const std::size_t count = lesion_id.size();
+    require_equal_sizes(
+        "lesion angiogenesis process", count,
+        {{"eligible", eligible.size()},
+         {"next_seed_time_hours", next_seed_time.size()},
+         {"eligibility_started_hours", eligibility_started.size()},
+         {"accumulated_eligible_hours", accumulated.size()},
+         {"event_sequence", event_sequence.size()},
+         {"schedule_generation", generation.size()},
+         {"attempted_events", attempted.size()},
+         {"committed_roots", committed.size()},
+         {"rejected_events", rejected.size()}});
+
+    std::vector<LesionAngiogenesisState3D> processes(count);
+    LesionId previous = kNoLesionId;
+    for (std::size_t index = 0; index < count; ++index) {
+        if (lesion_id[index] == kNoLesionId ||
+            lesion_id[index] >= next_lesion_id ||
+            (index != 0 && lesion_id[index] <= previous) ||
+            eligible[index] > 1U) {
+            throw std::runtime_error(
+                "checkpoint lesion process IDs/boolean must be sorted and valid");
+        }
+        AngiogenesisProcessState3D process;
+        process.eligible = eligible[index] != 0;
+        process.next_seed_time_hours = next_seed_time[index];
+        process.eligibility_started_hours = eligibility_started[index];
+        process.accumulated_eligible_hours = accumulated[index];
+        process.event_sequence = event_sequence[index];
+        process.schedule_generation = generation[index];
+        process.attempted_events = attempted[index];
+        process.committed_roots = committed[index];
+        process.rejected_events = rejected[index];
+        validate_process(process, checkpoint_time);
+        processes[index] = {lesion_id[index], process};
+        previous = lesion_id[index];
+    }
+    return processes;
+}
+
+void write_lesion_source_ownership(
+    H5::Group& group,
+    const std::vector<LesionSourceOwnership3D>& ownership) {
+    write_vector(group, "source_lesion_id",
+                 column<std::uint64_t>(ownership, [](const auto& entry) {
+                     return entry.source_lesion_id;
+                 }));
+    write_vector(group, "current_lesion_id",
+                 column<std::uint64_t>(ownership, [](const auto& entry) {
+                     return entry.current_lesion_id;
+                 }));
+}
+
+std::vector<LesionSourceOwnership3D> read_lesion_source_ownership(
+    H5::Group& group, LesionId next_lesion_id) {
+    const auto source =
+        read_vector<std::uint64_t>(group, "source_lesion_id");
+    const auto current =
+        read_vector<std::uint64_t>(group, "current_lesion_id");
+    require_equal_sizes("lesion source ownership", source.size(),
+                        {{"current_lesion_id", current.size()}});
+    std::vector<LesionSourceOwnership3D> result(source.size());
+    LesionId previous = kNoLesionId;
+    for (std::size_t index = 0; index < source.size(); ++index) {
+        if (source[index] == kNoLesionId || source[index] >= next_lesion_id ||
+            (index != 0 && source[index] <= previous) ||
+            current[index] >= next_lesion_id ||
+            source[index] == current[index]) {
+            throw std::runtime_error(
+                "checkpoint lesion source ownership IDs must be sorted and valid");
+        }
+        result[index] = {source[index], current[index]};
+        previous = source[index];
+    }
+    return result;
 }
 
 void write_cells(H5::Group& group,
@@ -520,6 +991,7 @@ void write_nodes(H5::Group& group, const std::vector<VesselNodeInit3D>& nodes) {
     write_vector(group, "parent_uid", column<std::uint64_t>(nodes, [](const auto& n) { return n.parent_uid; }));
     write_vector(group, "parent_node_slot", column<std::uint32_t>(nodes, [](const auto& n) { return n.parent_node_slot; }));
     write_vector(group, "vessel_id", column<std::uint64_t>(nodes, [](const auto& n) { return n.vessel_id; }));
+    write_vector(group, "source_lesion_id", column<std::uint64_t>(nodes, [](const auto& n) { return n.source_lesion_id; }));
     write_vector(group, "role", column<std::uint8_t>(nodes, [](const auto& n) { return static_cast<std::uint8_t>(n.role); }));
     write_vector(group, "perfused", column<std::uint8_t>(nodes, [](const auto& n) { return static_cast<std::uint8_t>(n.perfused ? 1U : 0U); }));
     write_vector(group, "diameter_voxels", column<float>(nodes, [](const auto& n) { return n.diameter_voxels; }));
@@ -537,6 +1009,7 @@ std::vector<VesselNodeInit3D> read_nodes(H5::Group& group,
     const auto parent_uid = read_vector<std::uint64_t>(group, "parent_uid");
     const auto parent_slot = read_vector<std::uint32_t>(group, "parent_node_slot");
     const auto vessel_id = read_vector<std::uint64_t>(group, "vessel_id");
+    const auto source_lesion_id = read_vector<std::uint64_t>(group, "source_lesion_id");
     const auto role = read_vector<std::uint8_t>(group, "role");
     const auto perfused = read_vector<std::uint8_t>(group, "perfused");
     const auto diameter = read_vector<float>(group, "diameter_voxels");
@@ -546,7 +1019,9 @@ std::vector<VesselNodeInit3D> read_nodes(H5::Group& group,
                         {{"x", x.size()}, {"y", y.size()}, {"z", z.size()},
                          {"parent_uid", parent_uid.size()},
                          {"parent_node_slot", parent_slot.size()},
-                         {"vessel_id", vessel_id.size()}, {"role", role.size()},
+                         {"vessel_id", vessel_id.size()},
+                         {"source_lesion_id", source_lesion_id.size()},
+                         {"role", role.size()},
                          {"perfused", perfused.size()}, {"diameter_voxels", diameter.size()},
                          {"created_time_hours", created_time.size()}});
     require_unique_nonzero_ids(uid, "vessel node uid");
@@ -562,7 +1037,7 @@ std::vector<VesselNodeInit3D> read_nodes(H5::Group& group,
             throw std::runtime_error("checkpoint vessel node id or creation time is invalid");
         }
         nodes[index] = {{x[index], y[index], z[index]}, uid[index], parent_uid[index],
-                        parent_slot[index], vessel_id[index],
+                        parent_slot[index], vessel_id[index], source_lesion_id[index],
                         static_cast<VesselBranchRole>(role[index]), perfused[index] != 0,
                         diameter[index], created_time[index]};
         if (nodes[index].role == VesselBranchRole::root) {
@@ -573,7 +1048,9 @@ std::vector<VesselNodeInit3D> read_nodes(H5::Group& group,
         } else if (nodes[index].parent_uid == 0 ||
                    nodes[index].parent_node_slot >= index ||
                    nodes[nodes[index].parent_node_slot].uid != nodes[index].parent_uid ||
-                   nodes[nodes[index].parent_node_slot].vessel_id != nodes[index].vessel_id) {
+                   nodes[nodes[index].parent_node_slot].vessel_id != nodes[index].vessel_id ||
+                   nodes[nodes[index].parent_node_slot].source_lesion_id !=
+                       nodes[index].source_lesion_id) {
             throw std::runtime_error("checkpoint vessel node parent reference is invalid");
         }
     }
@@ -592,6 +1069,7 @@ void write_tips(H5::Group& group, const std::vector<VesselTipInit3D>& tips) {
     write_vector(group, "target_z", column<std::int32_t>(tips, [](const auto& t) { return t.target.z; }));
     write_vector(group, "uid", column<std::uint64_t>(tips, [](const auto& t) { return t.uid; }));
     write_vector(group, "vessel_id", column<std::uint64_t>(tips, [](const auto& t) { return t.vessel_id; }));
+    write_vector(group, "source_lesion_id", column<std::uint64_t>(tips, [](const auto& t) { return t.source_lesion_id; }));
     write_vector(group, "current_node_uid", column<std::uint64_t>(tips, [](const auto& t) { return t.current_node_uid; }));
     write_vector(group, "current_node_slot", column<std::uint32_t>(tips, [](const auto& t) { return t.current_node_slot; }));
     write_vector(group, "role", column<std::uint8_t>(tips, [](const auto& t) { return static_cast<std::uint8_t>(t.role); }));
@@ -624,6 +1102,7 @@ std::vector<VesselTipInit3D> read_tips(H5::Group& group,
     const auto target_z = read_vector<std::int32_t>(group, "target_z");
     const auto uid = read_vector<std::uint64_t>(group, "uid");
     const auto vessel_id = read_vector<std::uint64_t>(group, "vessel_id");
+    const auto source_lesion_id = read_vector<std::uint64_t>(group, "source_lesion_id");
     const auto current_node_uid = read_vector<std::uint64_t>(group, "current_node_uid");
     const auto current_node_slot = read_vector<std::uint32_t>(group, "current_node_slot");
     const auto role = read_vector<std::uint8_t>(group, "role");
@@ -645,6 +1124,7 @@ std::vector<VesselTipInit3D> read_tips(H5::Group& group,
                          {"bias_z", bias_z.size()}, {"target_x", target_x.size()},
                          {"target_y", target_y.size()}, {"target_z", target_z.size()},
                          {"vessel_id", vessel_id.size()},
+                         {"source_lesion_id", source_lesion_id.size()},
                          {"current_node_uid", current_node_uid.size()},
                          {"current_node_slot", current_node_slot.size()},
                          {"role", role.size()}, {"status", status.size()},
@@ -666,6 +1146,7 @@ std::vector<VesselTipInit3D> read_tips(H5::Group& group,
             current_node_slot[index] >= nodes.size() ||
             nodes[current_node_slot[index]].uid != current_node_uid[index] ||
             nodes[current_node_slot[index]].vessel_id != vessel_id[index] ||
+            nodes[current_node_slot[index]].source_lesion_id != source_lesion_id[index] ||
             !valid_vessel_role(role[index]) || !valid_tip_status(status[index]) ||
             perfused[index] > 1U || last_direction[index] > 26 ||
             pending_direction[index] > 26 || !(diameter[index] > 0.0F) ||
@@ -694,6 +1175,7 @@ std::vector<VesselTipInit3D> read_tips(H5::Group& group,
         tip.target = {target_x[index], target_y[index], target_z[index]};
         tip.uid = uid[index];
         tip.vessel_id = vessel_id[index];
+        tip.source_lesion_id = source_lesion_id[index];
         tip.current_node_uid = current_node_uid[index];
         tip.current_node_slot = current_node_slot[index];
         tip.role = static_cast<VesselBranchRole>(role[index]);
@@ -712,6 +1194,35 @@ std::vector<VesselTipInit3D> read_tips(H5::Group& group,
     return tips;
 }
 
+void checked_add(std::uint64_t& total, std::uint64_t value,
+                 const char* field) {
+    if (value > std::numeric_limits<std::uint64_t>::max() - total) {
+        throw std::runtime_error(std::string("checkpoint angiogenesis ") +
+                                 field + " counter overflows");
+    }
+    total += value;
+}
+
+bool same_process_state(const AngiogenesisProcessState3D& lhs,
+                        const AngiogenesisProcessState3D& rhs,
+                        std::size_t process_count) noexcept {
+    const double sum_tolerance =
+        static_cast<double>(std::max<std::size_t>(process_count, 1U)) *
+        std::numeric_limits<double>::epsilon() *
+        std::max({1.0, std::abs(lhs.accumulated_eligible_hours),
+                  std::abs(rhs.accumulated_eligible_hours)});
+    return lhs.eligible == rhs.eligible &&
+           lhs.next_seed_time_hours == rhs.next_seed_time_hours &&
+           lhs.eligibility_started_hours == rhs.eligibility_started_hours &&
+           std::abs(lhs.accumulated_eligible_hours -
+                    rhs.accumulated_eligible_hours) <= sum_tolerance &&
+           lhs.event_sequence == rhs.event_sequence &&
+           lhs.schedule_generation == rhs.schedule_generation &&
+           lhs.attempted_events == rhs.attempted_events &&
+           lhs.committed_roots == rhs.committed_roots &&
+           lhs.rejected_events == rhs.rejected_events;
+}
+
 void validate_vasculature(VasculatureState3D& state,
                           const Model3DConfig& config,
                           const SimulationStats3D& stats,
@@ -719,22 +1230,127 @@ void validate_vasculature(VasculatureState3D& state,
     if (state.next_vessel_id == 0 || state.next_node_uid == 0 || state.next_tip_uid == 0) {
         throw std::runtime_error("checkpoint next vasculature id is zero");
     }
+    if (state.lesions.next_lesion_id == kNoLesionId) {
+        throw std::runtime_error("checkpoint next lesion id is zero");
+    }
+    require_finite_nonnegative(state.lesions.last_refresh_time_hours,
+                               "vasculature.lesions.last_refresh_time_hours");
+    require_finite_nonnegative(state.lesions.next_refresh_time_hours,
+                               "vasculature.lesions.next_refresh_time_hours");
+    if (state.lesions.last_refresh_time_hours > checkpoint_time) {
+        throw std::runtime_error(
+            "checkpoint lesion refresh time exceeds the checkpoint clock");
+    }
+    const double refresh_tolerance =
+        1e-10 * std::max({1.0, checkpoint_time,
+                          state.lesions.next_refresh_time_hours});
+    if (state.lesions.next_refresh_time_hours > 0.0 &&
+        state.lesions.next_refresh_time_hours + refresh_tolerance <
+            checkpoint_time) {
+        throw std::runtime_error(
+            "checkpoint next lesion refresh event is in the past");
+    }
+    if (state.lesions.dirty_blocks.empty() !=
+        (state.lesions.next_refresh_time_hours == 0.0)) {
+        throw std::runtime_error(
+            "checkpoint lesion dirty blocks and refresh event disagree");
+    }
+    if (state.lesions.next_refresh_time_hours > 0.0) {
+        const double expected_refresh =
+            state.lesions.last_refresh_time_hours +
+            config.angiogenesis.lesion_refresh_interval_hours;
+        const double interval_tolerance =
+            1e-10 * std::max({1.0, expected_refresh,
+                              state.lesions.next_refresh_time_hours});
+        if (std::abs(state.lesions.next_refresh_time_hours -
+                     expected_refresh) > interval_tolerance) {
+            throw std::runtime_error(
+                "checkpoint lesion refresh event does not match the configured interval");
+        }
+    }
+
     validate_process(state.process, checkpoint_time);
-    if (state.process.attempted_events != stats.angiogenesis_seed_attempts ||
-        state.process.committed_roots != stats.angiogenesis_roots ||
-        state.process.rejected_events != stats.angiogenesis_seed_rejections) {
+    const AngiogenesisProcessState3D aggregate =
+        aggregate_angiogenesis_process_states(
+            state.lesions.processes, checkpoint_time);
+    if (!same_process_state(state.process, aggregate,
+                            state.lesions.processes.size())) {
+        throw std::runtime_error(
+            "checkpoint aggregate angiogenesis process does not equal the "
+            "per-lesion processes");
+    }
+    if (aggregate.attempted_events != stats.angiogenesis_seed_attempts ||
+        aggregate.committed_roots != stats.angiogenesis_roots ||
+        aggregate.rejected_events != stats.angiogenesis_seed_rejections) {
         throw std::runtime_error("checkpoint angiogenesis process and simulation stats disagree");
     }
+
+    std::unordered_set<LesionId> process_ids;
+    process_ids.reserve(state.lesions.processes.size());
+    for (const LesionAngiogenesisState3D& entry :
+         state.lesions.processes) {
+        process_ids.insert(entry.lesion_id);
+    }
+    std::unordered_set<LesionId> current_lesion_ids;
+    current_lesion_ids.reserve(state.lesions.core_identity.size());
+    for (const LesionCoreIdentity3D& entry :
+         state.lesions.core_identity) {
+        current_lesion_ids.insert(entry.lesion_id);
+        if (!process_ids.contains(entry.lesion_id)) {
+            throw std::runtime_error(
+                "checkpoint current lesion has no angiogenesis process");
+        }
+    }
+    for (const LesionAngiogenesisState3D& entry :
+         state.lesions.processes) {
+        if (entry.process.eligible &&
+            !current_lesion_ids.contains(entry.lesion_id)) {
+            throw std::runtime_error(
+                "checkpoint eligible process references a retired lesion");
+        }
+    }
+    for (const LesionSourceOwnership3D& ownership :
+         state.lesions.source_ownership) {
+        if (current_lesion_ids.contains(ownership.source_lesion_id) ||
+            (ownership.current_lesion_id != kNoLesionId &&
+             !current_lesion_ids.contains(ownership.current_lesion_id))) {
+            throw std::runtime_error(
+                "checkpoint lesion source ownership is not a direct historical-to-current mapping");
+        }
+    }
+    std::unordered_set<LesionId> known_vessel_sources = current_lesion_ids;
+    known_vessel_sources.reserve(current_lesion_ids.size() +
+                                 state.lesions.source_ownership.size());
+    for (const LesionSourceOwnership3D& ownership :
+         state.lesions.source_ownership) {
+        known_vessel_sources.insert(ownership.source_lesion_id);
+    }
+
     if (!std::is_sorted(state.perfused_vessels.begin(), state.perfused_vessels.end()) ||
         std::adjacent_find(state.perfused_vessels.begin(), state.perfused_vessels.end()) !=
             state.perfused_vessels.end()) {
         throw std::runtime_error("checkpoint perfused vessel ids must be sorted and unique");
     }
     std::unordered_set<VesselId> vessels;
-    std::size_t root_count = 0;
+    std::unordered_map<VesselId, LesionId> vessel_sources;
+    std::uint64_t root_count = 0;
     for (const auto& node : state.nodes) {
         vessels.insert(node.vessel_id);
-        if (node.role == VesselBranchRole::root) ++root_count;
+        if (node.source_lesion_id == kNoLesionId ||
+            node.source_lesion_id >= state.lesions.next_lesion_id ||
+            !known_vessel_sources.contains(node.source_lesion_id)) {
+            throw std::runtime_error(
+                "checkpoint vessel node source is neither current nor historically owned");
+        }
+        const auto [source, inserted] = vessel_sources.try_emplace(
+            node.vessel_id, node.source_lesion_id);
+        if (!inserted && source->second != node.source_lesion_id) {
+            throw std::runtime_error(
+                "checkpoint vessel contains nodes from different source lesions");
+        }
+        if (node.role == VesselBranchRole::root) {
+            checked_add(root_count, 1, "root-node");
+        }
     }
     const std::unordered_set<VesselId> perfused(state.perfused_vessels.begin(),
                                                 state.perfused_vessels.end());
@@ -749,15 +1365,31 @@ void validate_vasculature(VasculatureState3D& state,
         }
     }
     for (const auto& tip : state.tips) {
+        const auto source = vessel_sources.find(tip.vessel_id);
+        if (tip.source_lesion_id == kNoLesionId ||
+            tip.source_lesion_id >= state.lesions.next_lesion_id ||
+            source == vessel_sources.end() ||
+            source->second != tip.source_lesion_id) {
+            throw std::runtime_error(
+                "checkpoint vessel tip source lesion is inconsistent");
+        }
         if (tip.perfused != perfused.contains(tip.vessel_id)) {
             throw std::runtime_error("checkpoint vessel tip perfusion state is inconsistent");
         }
     }
-    if (root_count != state.process.committed_roots) {
+    if (root_count != aggregate.committed_roots) {
         throw std::runtime_error("checkpoint root-node and angiogenesis counts disagree");
     }
     if (!config.angiogenesis.enabled &&
         (!state.nodes.empty() || !state.tips.empty() || !state.perfused_vessels.empty() ||
+         !state.lesions.core_identity.empty() ||
+         !state.lesions.dirty_blocks.empty() ||
+         !state.lesions.processes.empty() ||
+         !state.lesions.source_ownership.empty() ||
+         state.lesions.next_lesion_id != 1 ||
+         state.lesions.last_refresh_time_hours != 0.0 ||
+         state.lesions.next_refresh_time_hours != 0.0 ||
+         state.lesions.refresh_schedule_generation != 0 ||
          state.process.eligible || state.process.event_sequence != 0 ||
          state.process.attempted_events != 0 || state.next_vessel_id != 1 ||
          state.next_node_uid != 1 || state.next_tip_uid != 1)) {
@@ -785,6 +1417,15 @@ void write_hdf5_checkpoint(const std::filesystem::path& path,
         H5::Group lineage_group = file.createGroup("/lineage");
         H5::Group vasculature_group = file.createGroup("/vasculature");
         H5::Group process_group = file.createGroup("/vasculature/process");
+        H5::Group lesions_group = file.createGroup("/vasculature/lesions");
+        H5::Group lesion_core_group =
+            file.createGroup("/vasculature/lesions/core_identity");
+        H5::Group lesion_dirty_group =
+            file.createGroup("/vasculature/lesions/dirty_blocks");
+        H5::Group lesion_processes_group =
+            file.createGroup("/vasculature/lesions/processes");
+        H5::Group lesion_source_ownership_group =
+            file.createGroup("/vasculature/lesions/source_ownership");
         H5::Group nodes_group = file.createGroup("/vasculature/nodes");
         H5::Group tips_group = file.createGroup("/vasculature/tips");
 
@@ -815,6 +1456,24 @@ void write_hdf5_checkpoint(const std::filesystem::path& path,
         write_scalar_attribute(vasculature_group, "next_node_uid", vasculature.next_node_uid);
         write_scalar_attribute(vasculature_group, "next_tip_uid", vasculature.next_tip_uid);
         write_process(process_group, vasculature.process);
+        write_scalar_attribute(lesions_group, "next_lesion_id",
+                               vasculature.lesions.next_lesion_id);
+        write_scalar_attribute(lesions_group, "last_refresh_time_hours",
+                               vasculature.lesions.last_refresh_time_hours);
+        write_scalar_attribute(lesions_group, "next_refresh_time_hours",
+                               vasculature.lesions.next_refresh_time_hours);
+        write_scalar_attribute(
+            lesions_group, "refresh_schedule_generation",
+            vasculature.lesions.refresh_schedule_generation);
+        write_lesion_core_identity(lesion_core_group,
+                                   vasculature.lesions.core_identity);
+        write_lesion_dirty_blocks(lesion_dirty_group,
+                                  vasculature.lesions.dirty_blocks);
+        write_lesion_processes(lesion_processes_group,
+                               vasculature.lesions.processes);
+        write_lesion_source_ownership(
+            lesion_source_ownership_group,
+            vasculature.lesions.source_ownership);
         write_nodes(nodes_group, vasculature.nodes);
         write_tips(tips_group, vasculature.tips);
         write_vector(vasculature_group, "perfused_vessel_ids",
@@ -842,16 +1501,20 @@ CheckpointData3D read_hdf5_checkpoint(const std::filesystem::path& path,
         H5::Group meta = file.openGroup("/meta");
         const std::uint32_t schema =
             read_scalar_attribute<std::uint32_t>(meta, "schema_version");
-        if (schema == 1) {
+        if (schema == 1 || schema == 2) {
             throw std::runtime_error(
-                "checkpoint schema v1 is explicitly unsupported; create a schema-v2 "
-                "checkpoint before resuming (v1 contains no vasculature state)");
+                "checkpoint schema v" + std::to_string(schema) +
+                " is explicitly unsupported by the schema-v3 reader; older "
+                "checkpoints do not contain complete per-lesion angiogenesis state");
         }
         if (schema != kCheckpointSchemaVersion ||
             read_scalar_attribute<std::uint32_t>(meta, "dimension") !=
                 kCheckpointDimension) {
             throw std::runtime_error("unsupported checkpoint schema or dimension");
         }
+        validate_effective_config_provenance(
+            read_string_attribute(meta, "effective_config_json"),
+            expected_config);
         if (read_string_attribute(meta, "dynamics_config_json") !=
             expected_config.dynamics_json()) {
             throw std::runtime_error(
@@ -914,6 +1577,43 @@ CheckpointData3D read_hdf5_checkpoint(const std::filesystem::path& path,
 
         H5::Group process_group = file.openGroup("/vasculature/process");
         result.vasculature.process = read_process(process_group);
+        H5::Group lesions_group = file.openGroup("/vasculature/lesions");
+        result.vasculature.lesions.next_lesion_id =
+            read_scalar_attribute<std::uint64_t>(lesions_group,
+                                                 "next_lesion_id");
+        result.vasculature.lesions.last_refresh_time_hours =
+            read_scalar_attribute<double>(lesions_group,
+                                          "last_refresh_time_hours");
+        result.vasculature.lesions.next_refresh_time_hours =
+            read_scalar_attribute<double>(lesions_group,
+                                          "next_refresh_time_hours");
+        result.vasculature.lesions.refresh_schedule_generation =
+            read_scalar_attribute<std::uint32_t>(
+                lesions_group, "refresh_schedule_generation");
+        H5::Group lesion_core_group =
+            file.openGroup("/vasculature/lesions/core_identity");
+        result.vasculature.lesions.core_identity =
+            read_lesion_core_identity(
+                lesion_core_group,
+                result.vasculature.lesions.next_lesion_id);
+        H5::Group lesion_dirty_group =
+            file.openGroup("/vasculature/lesions/dirty_blocks");
+        result.vasculature.lesions.dirty_blocks =
+            read_lesion_dirty_blocks(lesion_dirty_group,
+                                     expected_config);
+        H5::Group lesion_processes_group =
+            file.openGroup("/vasculature/lesions/processes");
+        result.vasculature.lesions.processes =
+            read_lesion_processes(
+                lesion_processes_group,
+                result.vasculature.lesions.next_lesion_id,
+                result.clock.time_hours);
+        H5::Group lesion_source_ownership_group =
+            file.openGroup("/vasculature/lesions/source_ownership");
+        result.vasculature.lesions.source_ownership =
+            read_lesion_source_ownership(
+                lesion_source_ownership_group,
+                result.vasculature.lesions.next_lesion_id);
         H5::Group nodes_group = file.openGroup("/vasculature/nodes");
         result.vasculature.nodes =
             read_nodes(nodes_group, result.vasculature.next_node_uid,

@@ -1,7 +1,11 @@
 #include <cassert>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <stdexcept>
+#include <vector>
 
+#include "engine/simulation.hpp"
 #include "vasculature/angiogenesis_process.hpp"
 
 int main() {
@@ -11,6 +15,13 @@ int main() {
     const double waiting = AngiogenesisProcess3D::sample_waiting_hours(7, 0, 2.0);
     assert(waiting > 0.0 && std::isfinite(waiting));
     assert(waiting == AngiogenesisProcess3D::sample_waiting_hours(7, 0, 2.0));
+    const double lesion_one_wait =
+        AngiogenesisProcess3D::sample_waiting_hours(7, 101, 0, 2.0);
+    const double lesion_two_wait =
+        AngiogenesisProcess3D::sample_waiting_hours(7, 102, 0, 2.0);
+    assert(lesion_one_wait ==
+           AngiogenesisProcess3D::sample_waiting_hours(7, 101, 0, 2.0));
+    assert(lesion_one_wait != lesion_two_wait);
 
     double accumulated_wait = 0.0;
     constexpr std::uint64_t sample_count = 20000;
@@ -79,4 +90,89 @@ int main() {
         rejected_invalid = true;
     }
     assert(rejected_invalid);
+
+    // The compatibility aggregate is a deterministic snapshot, not a second
+    // scheduler. Input order must not change any bit, and every active
+    // process contributes its elapsed interval through the snapshot time.
+    LesionAngiogenesisState3D lesion_ten;
+    lesion_ten.lesion_id = 10;
+    lesion_ten.process.eligible = true;
+    lesion_ten.process.next_seed_time_hours = 20.0;
+    lesion_ten.process.eligibility_started_hours = 2.0;
+    lesion_ten.process.accumulated_eligible_hours = 4.0;
+    lesion_ten.process.event_sequence = 10;
+    lesion_ten.process.schedule_generation = 3;
+    lesion_ten.process.attempted_events = 3;
+    lesion_ten.process.committed_roots = 1;
+    lesion_ten.process.rejected_events = 2;
+
+    LesionAngiogenesisState3D lesion_twenty;
+    lesion_twenty.lesion_id = 20;
+    lesion_twenty.process.eligible = true;
+    lesion_twenty.process.next_seed_time_hours = 18.0;
+    lesion_twenty.process.eligibility_started_hours = 6.0;
+    lesion_twenty.process.accumulated_eligible_hours = 8.0;
+    lesion_twenty.process.event_sequence = 20;
+    lesion_twenty.process.schedule_generation = 7;
+    lesion_twenty.process.attempted_events = 5;
+    lesion_twenty.process.committed_roots = 4;
+    lesion_twenty.process.rejected_events = 1;
+
+    LesionAngiogenesisState3D lesion_thirty;
+    lesion_thirty.lesion_id = 30;
+    lesion_thirty.process.accumulated_eligible_hours = 1.0e16;
+    lesion_thirty.process.event_sequence = 100;
+    lesion_thirty.process.schedule_generation = 9;
+    lesion_thirty.process.attempted_events = 7;
+    lesion_thirty.process.committed_roots = 2;
+    lesion_thirty.process.rejected_events = 5;
+
+    const std::vector<LesionAngiogenesisState3D> unordered_processes{
+        lesion_thirty, lesion_ten, lesion_twenty};
+    const std::vector<LesionAngiogenesisState3D> differently_ordered_processes{
+        lesion_twenty, lesion_thirty, lesion_ten};
+    const AngiogenesisProcessState3D aggregate =
+        aggregate_angiogenesis_process_states(unordered_processes, 10.0);
+    const AngiogenesisProcessState3D reordered_aggregate =
+        aggregate_angiogenesis_process_states(differently_ordered_processes,
+                                               10.0);
+    assert(aggregate.eligible);
+    assert(aggregate.next_seed_time_hours == 18.0);
+    assert(aggregate.eligibility_started_hours == 10.0);
+    assert(aggregate.accumulated_eligible_hours == 1.0e16 + 24.0);
+    assert(aggregate.event_sequence == 100);
+    assert(aggregate.schedule_generation == 9);
+    assert(aggregate.attempted_events == 15);
+    assert(aggregate.committed_roots == 7);
+    assert(aggregate.rejected_events == 8);
+    assert(aggregate.eligible == reordered_aggregate.eligible);
+    assert(aggregate.next_seed_time_hours ==
+           reordered_aggregate.next_seed_time_hours);
+    assert(aggregate.eligibility_started_hours ==
+           reordered_aggregate.eligibility_started_hours);
+    assert(aggregate.accumulated_eligible_hours ==
+           reordered_aggregate.accumulated_eligible_hours);
+    assert(aggregate.event_sequence == reordered_aggregate.event_sequence);
+    assert(aggregate.schedule_generation ==
+           reordered_aggregate.schedule_generation);
+    assert(aggregate.attempted_events == reordered_aggregate.attempted_events);
+    assert(aggregate.committed_roots == reordered_aggregate.committed_roots);
+    assert(aggregate.rejected_events == reordered_aggregate.rejected_events);
+
+    std::vector<LesionAngiogenesisState3D> overflowing_processes(2);
+    overflowing_processes[0].lesion_id = 1;
+    overflowing_processes[0].process.attempted_events =
+        std::numeric_limits<std::uint64_t>::max();
+    overflowing_processes[0].process.committed_roots =
+        std::numeric_limits<std::uint64_t>::max();
+    overflowing_processes[1].lesion_id = 2;
+    overflowing_processes[1].process.attempted_events = 1;
+    overflowing_processes[1].process.committed_roots = 1;
+    bool rejected_overflow = false;
+    try {
+        (void)aggregate_angiogenesis_process_states(overflowing_processes, 0.0);
+    } catch (const std::overflow_error&) {
+        rejected_overflow = true;
+    }
+    assert(rejected_overflow);
 }

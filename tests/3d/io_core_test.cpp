@@ -109,7 +109,12 @@ int main() {
     assert(manifest.find("\"vessel_frames\": 2") != std::string::npos);
     assert(manifest.find("\"cell_field_arrays\": [\"total_cell_count\"]") !=
            std::string::npos);
-    assert(manifest.find("\"vessel_point_arrays\"") != std::string::npos);
+    assert(manifest.find(
+        "\"cell_point_arrays\": [\"cell_id\",\"lesion_id\",\"clone_id\",\"cell_type\",\"stage\",\"viability\",\"display_radius\"]") !=
+           std::string::npos);
+    assert(manifest.find(
+        "\"vessel_point_arrays\": [\"node_id\",\"vessel_id\",\"source_lesion_id\",\"branch_role\",\"perfused\",\"diameter_voxels\",\"radius_voxels\"]") !=
+           std::string::npos);
     assert(manifest.find("\"dynamics_config_json\"") != std::string::npos);
 
     const ExistingRunOutput3D loaded = load_existing_run_output(directory, config);
@@ -120,6 +125,25 @@ int main() {
     Model3DConfig mismatched = config;
     mismatched.alpha += 0.25;
     assert(rejects([&] { (void)load_existing_run_output(directory, mismatched); }));
+
+    {
+        std::string incompatible_manifest = manifest;
+        const std::string required_array = "\"lesion_id\",";
+        const std::size_t position = incompatible_manifest.find(required_array);
+        assert(position != std::string::npos);
+        incompatible_manifest.erase(position, required_array.size());
+        std::ofstream output(directory / "run.json",
+                             std::ios::binary | std::ios::trunc);
+        output << incompatible_manifest;
+        assert(output.good());
+    }
+    assert(rejects([&] { (void)load_existing_run_output(directory, config); }));
+    {
+        std::ofstream output(directory / "run.json",
+                             std::ios::binary | std::ios::trunc);
+        output << manifest;
+        assert(output.good());
+    }
 
     {
         std::ofstream malformed_series(directory / "preview.vtkhdf.series",

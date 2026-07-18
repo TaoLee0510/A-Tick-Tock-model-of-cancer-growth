@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <charconv>
 #include <cmath>
 #include <fstream>
@@ -32,9 +33,12 @@ std::string frame_name(std::size_t index) {
 }
 
 #ifdef ATCG3D_HAS_HDF5_CHECKPOINT
-std::string checkpoint_name(std::uint64_t completed_events) {
+std::string checkpoint_name(const SimulationClock3D& clock) {
     std::ostringstream value;
-    value << "checkpoint_" << std::setw(16) << std::setfill('0') << completed_events << ".h5";
+    value << "checkpoint_" << std::setw(16) << std::setfill('0')
+          << clock.completed_events << "_time_" << std::hex << std::setw(16)
+          << std::setfill('0') << std::bit_cast<std::uint64_t>(clock.time_hours)
+          << ".h5";
     return value.str();
 }
 #endif
@@ -175,6 +179,66 @@ struct ParsedArtifactName {
     bool temporary{};
 };
 
+struct ParsedCheckpointArtifactName {
+    std::uint64_t completed_events{};
+    std::optional<double> time_hours;
+    bool temporary{};
+};
+
+std::optional<ParsedCheckpointArtifactName> parse_checkpoint_artifact(
+    std::string_view name) {
+    bool temporary = false;
+    constexpr std::string_view temporary_suffix = ".tmp";
+    if (name.size() >= temporary_suffix.size() &&
+        name.substr(name.size() - temporary_suffix.size()) == temporary_suffix) {
+        temporary = true;
+        name.remove_suffix(temporary_suffix.size());
+    }
+
+    constexpr std::string_view prefix = "checkpoint_";
+    constexpr std::string_view separator = "_time_";
+    constexpr std::string_view extension = ".h5";
+    constexpr std::size_t event_digits = 16;
+    constexpr std::size_t time_hex_digits = 16;
+    const auto parse_events = [&](std::string_view number)
+        -> std::optional<std::uint64_t> {
+        std::uint64_t value{};
+        const auto parsed = std::from_chars(
+            number.data(), number.data() + number.size(), value);
+        if (parsed.ec != std::errc{} ||
+            parsed.ptr != number.data() + number.size()) return std::nullopt;
+        return value;
+    };
+
+    const std::size_t legacy_size = prefix.size() + event_digits + extension.size();
+    if (name.size() == legacy_size && name.substr(0, prefix.size()) == prefix &&
+        name.substr(prefix.size() + event_digits) == extension) {
+        const auto events = parse_events(name.substr(prefix.size(), event_digits));
+        if (!events) return std::nullopt;
+        return ParsedCheckpointArtifactName{*events, std::nullopt, temporary};
+    }
+
+    const std::size_t timed_size = prefix.size() + event_digits + separator.size() +
+                                   time_hex_digits + extension.size();
+    if (name.size() != timed_size || name.substr(0, prefix.size()) != prefix ||
+        name.substr(prefix.size() + event_digits, separator.size()) != separator ||
+        name.substr(name.size() - extension.size()) != extension) {
+        return std::nullopt;
+    }
+    const auto events = parse_events(name.substr(prefix.size(), event_digits));
+    if (!events) return std::nullopt;
+    const std::size_t time_begin = prefix.size() + event_digits + separator.size();
+    const std::string_view time_hex = name.substr(time_begin, time_hex_digits);
+    std::uint64_t time_bits{};
+    const auto parsed_time = std::from_chars(
+        time_hex.data(), time_hex.data() + time_hex.size(), time_bits, 16);
+    if (parsed_time.ec != std::errc{} ||
+        parsed_time.ptr != time_hex.data() + time_hex.size()) return std::nullopt;
+    const double time_hours = std::bit_cast<double>(time_bits);
+    if (!std::isfinite(time_hours) || time_hours < 0.0) return std::nullopt;
+    return ParsedCheckpointArtifactName{*events, time_hours, temporary};
+}
+
 std::optional<ParsedArtifactName> parse_indexed_artifact(
     std::string_view name,
     std::string_view prefix,
@@ -235,14 +299,20 @@ void collect_frame_artifacts(std::vector<RecoveryArtifact>& artifacts,
 
 void collect_checkpoint_artifacts(std::vector<RecoveryArtifact>& artifacts,
                                   const std::filesystem::path& run_directory,
-                                  std::uint64_t completed_events) {
+                                  std::uint64_t completed_events,
+                                  double checkpoint_time) {
     const std::filesystem::path directory = run_directory / "checkpoints";
     if (!std::filesystem::is_directory(directory)) return;
     for (const std::filesystem::directory_entry& entry :
          std::filesystem::directory_iterator(directory)) {
-        const auto parsed = parse_indexed_artifact(
-            entry.path().filename().string(), "checkpoint_", 16, ".h5");
-        if (!parsed || (!parsed->temporary && parsed->index <= completed_events)) continue;
+        const auto parsed = parse_checkpoint_artifact(
+            entry.path().filename().string());
+        if (!parsed) continue;
+        const bool within_checkpoint = parsed->time_hours
+            ? (*parsed->time_hours < checkpoint_time ||
+               same_time(*parsed->time_hours, checkpoint_time))
+            : parsed->completed_events <= completed_events;
+        if (!parsed->temporary && within_checkpoint) continue;
         artifacts.push_back({entry.path(), entry.path().lexically_relative(run_directory),
                              parsed->temporary});
     }
@@ -375,7 +445,8 @@ void OutputManager3D::write_preview(const Simulation3D& simulation) {
         simulation.cells(), static_cast<std::size_t>(config_.preview_max_cells),
         config_.preview_seed);
     const SimulationSnapshotView3D snapshot{
-        simulation.cells(), slots, simulation.clock(), config_.display_radius};
+        simulation.cells(), slots, simulation.lesion_index(), simulation.clock(),
+        config_.display_radius};
     const std::string name = frame_name(preview_.size());
     const std::filesystem::path path = run_directory_ / "viz" / "preview" / name;
     require_unused_path(path);
@@ -397,7 +468,8 @@ void OutputManager3D::write_vessels(const Simulation3D& simulation,
 void OutputManager3D::write_full(const Simulation3D& simulation) {
     const std::vector<Slot> slots = simulation.cells().alive_slots();
     const SimulationSnapshotView3D snapshot{
-        simulation.cells(), slots, simulation.clock(), config_.display_radius};
+        simulation.cells(), slots, simulation.lesion_index(), simulation.clock(),
+        config_.display_radius};
     const std::string name = frame_name(full_.size());
     const std::filesystem::path path = run_directory_ / "viz" / "full" / name;
     require_unused_path(path);
@@ -411,7 +483,7 @@ void OutputManager3D::write_full(const Simulation3D& simulation) {
 void OutputManager3D::write_checkpoint(const Simulation3D& simulation) {
 #ifdef ATCG3D_HAS_HDF5_CHECKPOINT
     const std::filesystem::path path = run_directory_ / "checkpoints" /
-                                       checkpoint_name(simulation.clock().completed_events);
+                                       checkpoint_name(simulation.clock());
     require_unused_path(path);
     write_hdf5_checkpoint(path, simulation);
 #else
@@ -458,7 +530,7 @@ void OutputManager3D::validate_resume_state(const Simulation3D& simulation) {
     collect_frame_artifacts(artifacts, run_directory_, "viz/full", full_prefix);
     collect_frame_artifacts(artifacts, run_directory_, "viz/vessels", vessel_prefix);
     collect_checkpoint_artifacts(artifacts, run_directory_,
-                                 simulation.clock().completed_events);
+                                 simulation.clock().completed_events, now);
 
     const bool has_non_temporary_artifact = std::any_of(
         artifacts.begin(), artifacts.end(), [](const RecoveryArtifact& artifact) {
@@ -582,9 +654,19 @@ void OutputManager3D::write_metrics(const Simulation3D& simulation) {
             << "  \"time_hours\": " << simulation.clock().time_hours << ",\n"
             << "  \"completed_events\": " << simulation.clock().completed_events << ",\n"
             << "  \"alive_cells\": " << simulation.cells().alive_count() << ",\n"
+            << "  \"lesion_count\": "
+            << simulation.lesion_index().lesions().size() << ",\n"
             << "  \"vessel_nodes\": " << simulation.vessel_nodes().alive_count() << ",\n"
+            << "  \"angiogenesis_seed_attempts\": "
+            << simulation.stats().angiogenesis_seed_attempts << ",\n"
+            << "  \"angiogenesis_roots\": "
+            << simulation.stats().angiogenesis_roots << ",\n"
+            << "  \"angiogenesis_seed_rejections\": "
+            << simulation.stats().angiogenesis_seed_rejections << ",\n"
             << "  \"cell_store_bytes\": " << simulation.cells().allocated_bytes() << ",\n"
             << "  \"grid_bytes\": " << simulation.grid().allocated_bytes() << ",\n"
+            << "  \"lesion_index_bytes\": "
+            << simulation.lesion_index().allocated_bytes() << ",\n"
             << "  \"state_checksum\": " << simulation.state_checksum() << "\n"
             << "}\n";
     });

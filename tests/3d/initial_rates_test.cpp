@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -34,18 +35,38 @@ int main() {
     using namespace atcg3d;
 
     const Model3DConfig smoke = Model3DConfig::load(
-        std::filesystem::path("configs") / "atcg3d_smoke_test_v2.yaml");
+        std::filesystem::path("configs") / "atcg3d_smoke_test_v3.yaml");
     for (CellUid uid = 1; uid <= 100; ++uid) {
         const InitialCellRates3D r = sample_initial_cell_rates(
             smoke, CellType::r, smoke.seed, uid);
         const InitialCellRates3D K = sample_initial_cell_rates(
             smoke, CellType::K, smoke.seed, uid);
-        assert(r.inherent_growth_rate == 1.0 && r.migration_rate == 0.25);
+        assert(r.inherent_growth_rate == 1.0);
+        assert(r.migration_rate == 0.25 ||
+               (r.migration_rate > 0.5 && r.migration_rate <= 1.0));
         assert(K.inherent_growth_rate == 1.0 && K.migration_rate == 0.25);
     }
 
+    // The activated-r scale is an explicit multiplicative parameter. Disable
+    // post-processing here so two otherwise identical configurations differ
+    // by exactly the requested factor without consuming mutable RNG state.
+    Model3DConfig unit_scale = smoke;
+    unit_scale.activated_r_migration_beta.lower_clamp_enabled = false;
+    unit_scale.activated_r_migration_beta.lower_clamp_threshold = 0.0;
+    unit_scale.activated_r_migration_beta.lower_clamp_value = 0.0;
+    Model3DConfig seven_scale = unit_scale;
+    seven_scale.activated_r_migration_beta.scale = 7.0;
+    for (CellUid uid = 1; uid <= 100; ++uid) {
+        const double unit = sample_initial_migration_rate(
+            unit_scale, CellType::r, unit_scale.seed, uid);
+        const double scaled = sample_initial_migration_rate(
+            seven_scale, CellType::r, seven_scale.seed, uid);
+        assert(std::abs(scaled - 7.0 * unit) <=
+               1.0e-12 * std::max(1.0, std::abs(scaled)));
+    }
+
     const Model3DConfig production = Model3DConfig::load(
-        std::filesystem::path("configs") / "atcg3d_legacy_2d_mapped_v2.yaml");
+        std::filesystem::path("configs") / "atcg3d_legacy_2d_mapped_v3.yaml");
     constexpr std::uint64_t sample_count = 100000;
     double r_growth_sum = 0.0;
     double K_growth_sum = 0.0;
@@ -84,7 +105,7 @@ int main() {
         assert(K.inherent_growth_rate <=
                production.initial_K_growth_truncated_normal.maximum);
         assert(first.migration_rate == 0.25 || first.migration_rate > 0.5);
-        assert(first.migration_rate <= 200.0);
+        assert(first.migration_rate <= 1.0);
         assert(K.migration_rate >= 0.0 && K.migration_rate <= 0.25);
 
         r_clamped_count += first.migration_rate == 0.25 ? 1 : 0;
@@ -115,9 +136,9 @@ int main() {
     assert(std::abs(K_growth_mean - truncated_normal_expected_mean(
         production.initial_K_growth_truncated_normal)) < 0.002);
 
-    // K has E[Beta(5,5)]*0.25 = 0.125. The very low-shape r distribution
-    // converges more slowly and includes the configured <=0.5 replacement.
+    // K has E[Beta(5,5)]*0.25 = 0.125. Activated r uses the schema-v3 default
+    // scale 1; its very low-shape distribution also includes the configured
+    // <=0.5 replacement.
     assert(std::abs(K_migration_sum / sample_count - 0.125) < 0.001);
-    assert(r_migration_sum / sample_count > 28.0);
-    assert(r_migration_sum / sample_count < 32.0);
+    assert(std::abs(r_migration_sum / sample_count - 0.357) < 0.005);
 }

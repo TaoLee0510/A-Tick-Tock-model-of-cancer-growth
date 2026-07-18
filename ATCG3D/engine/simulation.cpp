@@ -25,11 +25,29 @@ namespace {
 constexpr std::uint8_t kSmallMigrationActivationClass = 1U << 0U;
 constexpr std::uint8_t kLargeMigrationActivationClass = 1U << 1U;
 
-constexpr std::uint64_t kSeedActorUid = 0x414e47494f534545ULL;
 constexpr std::uint64_t kVesselConflictEvent = 0x564553434f4e464cULL;
 
 bool same_time(double lhs, double rhs) {
     return std::abs(lhs - rhs) <= 1e-10 * std::max({1.0, std::abs(lhs), std::abs(rhs)});
+}
+
+double next_periodic_output_boundary(const Model3DConfig& config,
+                                     double after_time) noexcept {
+    if (!config.output_enabled) return std::numeric_limits<double>::infinity();
+    double next = std::numeric_limits<double>::infinity();
+    const auto consider = [&](double interval) {
+        if (!(interval > 0.0)) return;
+        const double completed_intervals = std::floor(after_time / interval);
+        double candidate = (completed_intervals + 1.0) * interval;
+        if (candidate < after_time || same_time(candidate, after_time)) {
+            candidate += interval;
+        }
+        next = std::min(next, candidate);
+    };
+    consider(config.preview_every_hours);
+    consider(config.full_every_hours);
+    consider(config.checkpoint_every_hours);
+    return next;
 }
 
 double float_storage_time_tolerance(double lhs, double rhs) noexcept {
@@ -101,6 +119,63 @@ VascularInfluenceProfile3D influence_profile_from_config(
     throw std::invalid_argument("unsupported vascular influence profile: " + profile);
 }
 
+LesionIndexConfig3D lesion_index_config(const Model3DConfig& config) {
+    LesionIndexConfig3D result;
+    result.block_edge = config.angiogenesis.lesion_block_edge;
+    result.connectivity = config.angiogenesis.lesion_connectivity == 6
+        ? LesionConnectivity3D::face_6
+        : LesionConnectivity3D::full_26;
+    result.core_activation_occupied_fraction =
+        config.angiogenesis.lesion_core_activation_occupied_fraction;
+    result.core_deactivation_occupied_fraction =
+        config.angiogenesis.lesion_core_deactivation_occupied_fraction;
+    result.minimum_cells_per_core_block =
+        config.angiogenesis.lesion_minimum_cells_per_core_block;
+    result.minimum_biological_volume_per_core_block =
+        config.angiogenesis.lesion_minimum_biological_volume_per_core_block;
+    result.halo_blocks = config.angiogenesis.lesion_halo_blocks;
+    return result;
+}
+
+LesionBiologicalVolumes3D lesion_biological_volumes(
+    const Model3DConfig& config) noexcept {
+    return {
+        config.angiogenesis.stage0_biological_volume_voxels3,
+        config.angiogenesis.stage1_biological_volume_voxels3,
+        config.angiogenesis.stage2_biological_volume_voxels3,
+    };
+}
+
+void checked_counter_add(std::uint64_t& target,
+                         std::uint64_t value,
+                         const char* name) {
+    if (value > std::numeric_limits<std::uint64_t>::max() - target) {
+        throw std::overflow_error(std::string("angiogenesis ") + name +
+                                  " overflow during lesion aggregation");
+    }
+    target += value;
+}
+
+AngiogenesisProcessState3D merge_angiogenesis_process_states(
+    std::span<const LesionAngiogenesisState3D> states,
+    double now_hours) {
+    AngiogenesisProcessState3D merged =
+        aggregate_angiogenesis_process_states(states, now_hours);
+    if (merged.schedule_generation ==
+        std::numeric_limits<std::uint32_t>::max()) {
+        throw std::overflow_error(
+            "angiogenesis schedule generation overflow during lesion merge");
+    }
+    ++merged.schedule_generation;
+    return merged;
+}
+
+Vec3i rounded_lesion_centroid(const LesionSummary3D& lesion) noexcept {
+    return {static_cast<std::int32_t>(std::llround(lesion.centroid.x)),
+            static_cast<std::int32_t>(std::llround(lesion.centroid.y)),
+            static_cast<std::int32_t>(std::llround(lesion.centroid.z))};
+}
+
 void validate_restored_cell_schedule(const CellInit& cell,
                                      const SimulationClock3D& clock,
                                      const Model3DConfig& config) {
@@ -148,6 +223,83 @@ void validate_restored_cell_schedule(const CellInit& cell,
 
 }  // namespace
 
+AngiogenesisProcessState3D aggregate_angiogenesis_process_states(
+    std::span<const LesionAngiogenesisState3D> processes,
+    double snapshot_time_hours) {
+    if (!std::isfinite(snapshot_time_hours) || snapshot_time_hours < 0.0) {
+        throw std::invalid_argument(
+            "angiogenesis aggregate snapshot time must be finite and nonnegative");
+    }
+
+    std::vector<const LesionAngiogenesisState3D*> ordered;
+    ordered.reserve(processes.size());
+    for (const LesionAngiogenesisState3D& entry : processes) {
+        ordered.push_back(&entry);
+    }
+    std::sort(ordered.begin(), ordered.end(), [](const auto* lhs, const auto* rhs) {
+        return lhs->lesion_id < rhs->lesion_id;
+    });
+
+    AngiogenesisProcessState3D aggregate;
+    double next_time = std::numeric_limits<double>::infinity();
+    LesionId previous = kNoLesionId;
+    bool first = true;
+    for (const LesionAngiogenesisState3D* entry : ordered) {
+        if (entry->lesion_id == kNoLesionId ||
+            (!first && entry->lesion_id == previous)) {
+            throw std::invalid_argument(
+                "angiogenesis aggregate lesion IDs must be nonzero and unique");
+        }
+        first = false;
+        previous = entry->lesion_id;
+
+        const AngiogenesisProcessState3D& state = entry->process;
+        if (!std::isfinite(state.accumulated_eligible_hours) ||
+            state.accumulated_eligible_hours < 0.0 ||
+            !std::isfinite(state.eligibility_started_hours) ||
+            state.eligibility_started_hours < 0.0 ||
+            !std::isfinite(state.next_seed_time_hours) ||
+            state.next_seed_time_hours < 0.0) {
+            throw std::invalid_argument(
+                "angiogenesis aggregate contains an invalid process time");
+        }
+
+        double elapsed = state.accumulated_eligible_hours;
+        if (state.eligible) {
+            if (state.eligibility_started_hours > snapshot_time_hours) {
+                throw std::invalid_argument(
+                    "angiogenesis eligibility starts after aggregate snapshot time");
+            }
+            elapsed += snapshot_time_hours - state.eligibility_started_hours;
+            aggregate.eligible = true;
+            if (state.next_seed_time_hours > 0.0) {
+                next_time = std::min(next_time, state.next_seed_time_hours);
+            }
+        }
+        aggregate.accumulated_eligible_hours += elapsed;
+        if (!std::isfinite(elapsed) ||
+            !std::isfinite(aggregate.accumulated_eligible_hours)) {
+            throw std::overflow_error(
+                "angiogenesis eligible time overflow during lesion aggregation");
+        }
+        aggregate.event_sequence =
+            std::max(aggregate.event_sequence, state.event_sequence);
+        aggregate.schedule_generation =
+            std::max(aggregate.schedule_generation, state.schedule_generation);
+        checked_counter_add(aggregate.attempted_events,
+                            state.attempted_events, "attempt counter");
+        checked_counter_add(aggregate.committed_roots,
+                            state.committed_roots, "root counter");
+        checked_counter_add(aggregate.rejected_events,
+                            state.rejected_events, "rejection counter");
+    }
+    aggregate.next_seed_time_hours =
+        std::isfinite(next_time) ? next_time : 0.0;
+    aggregate.eligibility_started_hours =
+        aggregate.eligible ? snapshot_time_hours : 0.0;
+    return aggregate;
+}
+
 Simulation3D::Simulation3D(Model3DConfig config)
     : config_(std::move(config)),
       domain_(config_),
@@ -161,7 +313,7 @@ Simulation3D::Simulation3D(Model3DConfig config)
                               config_.angiogenesis.influence_profile),
                           static_cast<float>(
                               config_.angiogenesis.influence_decay_length_voxels)),
-      angiogenesis_process_(config_.seed) {
+      lesion_index_(lesion_index_config(config_)) {
     config_.validate();
     grid_.attach_vessel_grid(&vessel_grid_);
 }
@@ -174,10 +326,13 @@ void Simulation3D::initialize() {
     next_uid_ = result.next_uid;
     lineage_ = std::move(result.lineage);
     rebuild_migration_activation_class_cache();
-    if (config_.angiogenesis.enabled) rebuild_tumor_surface();
+    if (config_.angiogenesis.enabled) {
+        rebuild_tumor_surface();
+        rebuild_lesion_index();
+    }
     for (const Slot slot : cells_.alive_slots()) schedule_cell(slot);
     initialized_ = true;
-    sync_angiogenesis_eligibility();
+    sync_angiogenesis_eligibility(true);
     reset_event_queue_rebuild_threshold();
 }
 
@@ -277,9 +432,141 @@ void Simulation3D::restore(const std::vector<CellInit>& restored_cells,
     clock_ = clock;
     stats_ = stats;
     lineage_ = std::move(lineage);
-    angiogenesis_process_.restore(vasculature.process);
     rebuild_migration_activation_class_cache();
-    if (config_.angiogenesis.enabled) rebuild_tumor_surface();
+    if (!config_.angiogenesis.enabled &&
+        !vasculature.lesions.source_ownership.empty()) {
+        throw std::runtime_error(
+            "checkpoint has lesion source ownership while angiogenesis is disabled");
+    }
+    if (config_.angiogenesis.enabled) {
+        rebuild_tumor_surface();
+        rebuild_lesion_index();
+        if (!vasculature.lesions.core_identity.empty() ||
+            !vasculature.lesions.dirty_blocks.empty()) {
+            lesion_index_.restore_checkpoint_state(
+                vasculature.lesions.core_identity,
+                vasculature.lesions.next_lesion_id,
+                vasculature.lesions.dirty_blocks);
+        } else if (vasculature.lesions.next_lesion_id >
+                   lesion_index_.next_lesion_id()) {
+            lesion_index_.set_next_lesion_id(
+                vasculature.lesions.next_lesion_id);
+        }
+        if (!std::isfinite(vasculature.lesions.last_refresh_time_hours) ||
+            vasculature.lesions.last_refresh_time_hours < 0.0 ||
+            vasculature.lesions.last_refresh_time_hours > clock_.time_hours) {
+            throw std::runtime_error(
+                "checkpoint lesion refresh time is invalid");
+        }
+        last_lesion_refresh_time_hours_ =
+            vasculature.lesions.last_refresh_time_hours;
+        if (!std::isfinite(vasculature.lesions.next_refresh_time_hours) ||
+            vasculature.lesions.next_refresh_time_hours < 0.0 ||
+            (vasculature.lesions.next_refresh_time_hours > 0.0 &&
+             vasculature.lesions.next_refresh_time_hours < clock_.time_hours &&
+             !same_time(vasculature.lesions.next_refresh_time_hours,
+                        clock_.time_hours))) {
+            throw std::runtime_error(
+                "checkpoint next lesion refresh time is invalid");
+        }
+        next_lesion_refresh_time_hours_ =
+            vasculature.lesions.next_refresh_time_hours;
+        lesion_refresh_schedule_generation_ =
+            vasculature.lesions.refresh_schedule_generation;
+        if (vasculature.lesions.dirty_blocks.empty() !=
+            (next_lesion_refresh_time_hours_ == 0.0)) {
+            throw std::runtime_error(
+                "checkpoint lesion dirty state and refresh event disagree");
+        }
+        if (next_lesion_refresh_time_hours_ > 0.0) {
+            const double expected = last_lesion_refresh_time_hours_ +
+                config_.angiogenesis.lesion_refresh_interval_hours;
+            if (!same_time(next_lesion_refresh_time_hours_, expected)) {
+                throw std::runtime_error(
+                    "checkpoint lesion refresh time does not match config interval");
+            }
+        }
+
+        std::unordered_set<LesionId> current_lesion_ids;
+        current_lesion_ids.reserve(lesion_index_.lesions().size());
+        for (const LesionSummary3D& lesion : lesion_index_.lesions()) {
+            current_lesion_ids.insert(lesion.id);
+        }
+        LesionId previous_source = kNoLesionId;
+        for (const LesionSourceOwnership3D& ownership :
+             vasculature.lesions.source_ownership) {
+            if (ownership.source_lesion_id == kNoLesionId ||
+                ownership.source_lesion_id >= lesion_index_.next_lesion_id() ||
+                ownership.source_lesion_id <= previous_source ||
+                ownership.current_lesion_id == ownership.source_lesion_id ||
+                ownership.current_lesion_id >= lesion_index_.next_lesion_id() ||
+                current_lesion_ids.contains(ownership.source_lesion_id) ||
+                (ownership.current_lesion_id != kNoLesionId &&
+                 !current_lesion_ids.contains(ownership.current_lesion_id))) {
+                throw std::runtime_error(
+                    "checkpoint lesion source ownership is invalid");
+            }
+            lesion_source_ownership_.emplace(
+                ownership.source_lesion_id,
+                ownership.current_lesion_id);
+            previous_source = ownership.source_lesion_id;
+        }
+        const auto known_source = [this, &current_lesion_ids](LesionId source) {
+            // source==0 remains available only to old in-memory geometry
+            // fixtures that do not claim checkpoint provenance.
+            return source == kNoLesionId ||
+                   current_lesion_ids.contains(source) ||
+                   lesion_source_ownership_.contains(source);
+        };
+        for (const VesselNodeSlot slot : vessel_nodes_.alive_slots()) {
+            if (!known_source(vessel_nodes_.source_lesion_id(slot))) {
+                throw std::runtime_error(
+                    "vessel node historical source has no ownership record");
+            }
+        }
+        for (const VesselTipSlot slot : vessel_tips_.alive_slots()) {
+            if (!known_source(vessel_tips_.source_lesion_id(slot))) {
+                throw std::runtime_error(
+                    "vessel tip historical source has no ownership record");
+            }
+        }
+
+        std::unordered_set<LesionId> restored_process_ids;
+        for (const LesionAngiogenesisState3D& entry :
+             vasculature.lesions.processes) {
+            if (entry.lesion_id == kNoLesionId ||
+                !restored_process_ids.insert(entry.lesion_id).second) {
+                throw std::runtime_error(
+                    "checkpoint lesion process ID is invalid or duplicated");
+            }
+            auto [found, inserted] = lesion_angiogenesis_processes_.try_emplace(
+                entry.lesion_id, config_.seed, entry.lesion_id);
+            if (!inserted) {
+                throw std::runtime_error("duplicate checkpoint lesion process");
+            }
+            found->second.restore(entry.process);
+            if (entry.process.eligible &&
+                lesion_index_.find_lesion(entry.lesion_id) == nullptr) {
+                throw std::runtime_error(
+                    "eligible checkpoint process references a retired lesion");
+            }
+        }
+        // In-memory/manual fixtures from the pre-lesion API may still supply
+        // one aggregate process. Map it only when exactly one lesion exists;
+        // versioned checkpoint v3 always writes explicit lesion processes.
+        if (vasculature.lesions.processes.empty() &&
+            (vasculature.process.eligible ||
+             vasculature.process.event_sequence != 0 ||
+             vasculature.process.attempted_events != 0) &&
+            lesion_index_.lesions().size() == 1U) {
+            const LesionId id = lesion_index_.lesions().front().id;
+            auto [found, inserted] = lesion_angiogenesis_processes_.try_emplace(
+                id, config_.seed, id);
+            (void)inserted;
+            found->second.restore(vasculature.process);
+        }
+        recompute_aggregate_angiogenesis_state();
+    }
     initialized_ = true;
 
     for (const Slot slot : cells_.alive_slots()) {
@@ -287,7 +574,27 @@ void Simulation3D::restore(const std::vector<CellInit>& restored_cells,
         else schedule_cell(slot);
     }
     for (const VesselTipSlot slot : vessel_tips_.alive_slots()) restore_vessel_tip_event(slot);
-    if (angiogenesis_process_.state().eligible) schedule_seed_event();
+    const bool initialize_missing_lesion_processes =
+        config_.angiogenesis.enabled &&
+        lesion_angiogenesis_processes_.empty() &&
+        !lesion_index_.lesions().empty();
+    if (initialize_missing_lesion_processes) {
+        // Direct in-memory restores used by tests and embedding applications
+        // may provide cells without serialized lesion clocks.  Start each
+        // independently eligible lesion at the restored clock.  Versioned
+        // checkpoint files always provide explicit process records and take
+        // the branch below instead.
+        sync_angiogenesis_eligibility(true);
+    } else {
+        for (const auto& [lesion_id, process] : lesion_angiogenesis_processes_) {
+            if (process.state().eligible) schedule_seed_event(lesion_id);
+        }
+    }
+    if (next_lesion_refresh_time_hours_ > 0.0) {
+        schedule(EventKind::lesion_refresh, kEmptySlot, kNoLesionId,
+                 next_lesion_refresh_time_hours_,
+                 lesion_refresh_schedule_generation_);
+    }
     reset_event_queue_rebuild_threshold();
 }
 
@@ -295,7 +602,29 @@ void Simulation3D::run(const std::function<void(const Simulation3D&)>& observer)
     if (!initialized_) initialize();
     if (observer) observer(*this);
     double last_observer_time = clock_.time_hours;
-    while (clock_.completed_events < config_.max_events && step()) {
+    while (clock_.completed_events < config_.max_events) {
+        // Output is part of the event-driven clock, but never of the
+        // biological event queue. If no biological event occurs for several
+        // hours, advance through each requested output boundary and expose the
+        // unchanged lazy state there. This produces exact timeline/checkpoint
+        // times without drawing RNG or changing event ordering.
+        while (!events_.empty() && !current(events_.top())) events_.pop();
+        const double next_event_time = events_.empty()
+            ? std::numeric_limits<double>::infinity()
+            : events_.top().time;
+        const double next_output_time = observer
+            ? next_periodic_output_boundary(config_, clock_.time_hours)
+            : std::numeric_limits<double>::infinity();
+        if (next_output_time <= config_.end_time_hours &&
+            next_event_time > next_output_time &&
+            !same_time(next_event_time, next_output_time)) {
+            clock_.time_hours = next_output_time;
+            observer(*this);
+            last_observer_time = clock_.time_hours;
+            continue;
+        }
+
+        if (!step()) break;
         if (observer && (!same_time(clock_.time_hours, last_observer_time) || events_.empty())) {
             observer(*this);
             last_observer_time = clock_.time_hours;
@@ -336,7 +665,8 @@ bool Simulation3D::step() {
     std::vector<Event> vessel_events;
     std::vector<Event> division_events;
     std::vector<Event> migration_events;
-    for (const EventKind kind : {EventKind::death, EventKind::angiogenesis_seed,
+    for (const EventKind kind : {EventKind::death, EventKind::lesion_refresh,
+                                 EventKind::angiogenesis_seed,
                                  EventKind::vessel_growth,
                                  EventKind::migration_activation_end,
                                  EventKind::division, EventKind::migration}) {
@@ -344,6 +674,8 @@ bool Simulation3D::step() {
             if (event.kind != kind) continue;
             if (kind == EventKind::migration_activation_end) {
                 process_non_migration(event);
+            } else if (kind == EventKind::lesion_refresh) {
+                sync_angiogenesis_eligibility(true);
             } else if (kind == EventKind::death) {
                 death_events.push_back(event);
             } else if (kind == EventKind::angiogenesis_seed) {
@@ -385,9 +717,17 @@ bool Simulation3D::step() {
 }
 
 bool Simulation3D::current(const Event& event) const {
-    if (event.kind == EventKind::angiogenesis_seed) {
+    if (event.kind == EventKind::lesion_refresh) {
         return config_.angiogenesis.enabled &&
-               angiogenesis_process_.event_current(event.time, event.generation);
+               next_lesion_refresh_time_hours_ > 0.0 &&
+               event.generation == lesion_refresh_schedule_generation_ &&
+               same_time(event.time, next_lesion_refresh_time_hours_);
+    }
+    if (event.kind == EventKind::angiogenesis_seed) {
+        if (!config_.angiogenesis.enabled) return false;
+        const auto found = lesion_angiogenesis_processes_.find(event.uid);
+        return found != lesion_angiogenesis_processes_.end() &&
+               found->second.event_current(event.time, event.generation);
     }
     if (event.kind == EventKind::vessel_growth) {
         const VesselTipSlot slot = event.slot;
@@ -475,7 +815,14 @@ void Simulation3D::maybe_compact_event_queue() {
     for (const VesselTipSlot slot : vessel_tips_.alive_slots()) {
         restore_vessel_tip_event(slot);
     }
-    if (angiogenesis_process_.state().eligible) schedule_seed_event();
+    for (const auto& [lesion_id, process] : lesion_angiogenesis_processes_) {
+        if (process.state().eligible) schedule_seed_event(lesion_id);
+    }
+    if (next_lesion_refresh_time_hours_ > 0.0) {
+        schedule(EventKind::lesion_refresh, kEmptySlot, kNoLesionId,
+                 next_lesion_refresh_time_hours_,
+                 lesion_refresh_schedule_generation_);
+    }
     ++event_queue_rebuild_count_;
     reset_event_queue_rebuild_threshold();
 }
@@ -850,6 +1197,158 @@ void Simulation3D::rebuild_tumor_surface() {
         [this](Vec3i site) { return grid_.owner(site) != kEmptySlot; });
 }
 
+void Simulation3D::rebuild_lesion_index() {
+    if (!config_.angiogenesis.enabled) return;
+    lesion_index_.rebuild_from(
+        cells_, grid_, lesion_biological_volumes(config_));
+    last_lesion_refresh_time_hours_ = clock_.time_hours;
+}
+
+void Simulation3D::mark_lesion_dirty(
+    std::span<const Vec3i> changed_sites) {
+    if (!config_.angiogenesis.enabled || changed_sites.empty()) return;
+    std::vector<Vec3i> expanded;
+    expanded.reserve(changed_sites.size() * 8U);
+    for (const Vec3i site : changed_sites) {
+        for (int dx = 0; dx <= 1; ++dx) {
+            for (int dy = 0; dy <= 1; ++dy) {
+                for (int dz = 0; dz <= (config_.thin_layer ? 0 : 1); ++dz) {
+                    expanded.push_back(site + Vec3i{dx, dy, dz});
+                }
+            }
+        }
+    }
+    lesion_index_.mark_dirty_sites(expanded);
+}
+
+bool Simulation3D::refresh_lesion_index(bool force) {
+    if (!config_.angiogenesis.enabled) return false;
+    const double interval = config_.angiogenesis.lesion_refresh_interval_hours;
+    const bool due = force ||
+        clock_.time_hours + 1e-12 >= last_lesion_refresh_time_hours_ + interval;
+    if (!due) return false;
+
+    next_lesion_refresh_time_hours_ = 0.0;
+    ++lesion_refresh_schedule_generation_;
+
+    bool changed = false;
+    if (lesion_index_.observations_dirty()) {
+        changed = lesion_index_.refresh_dirty_blocks_from(
+            cells_, grid_, lesion_biological_volumes(config_)) != 0U;
+    }
+    if (lesion_index_.topology_dirty() || lesion_index_.statistics_dirty()) {
+        std::vector<LesionId> old_lesion_ids;
+        old_lesion_ids.reserve(lesion_index_.lesions().size());
+        for (const LesionSummary3D& lesion : lesion_index_.lesions()) {
+            old_lesion_ids.push_back(lesion.id);
+        }
+        std::sort(old_lesion_ids.begin(), old_lesion_ids.end());
+
+        const LesionTopologyDelta3D delta = lesion_index_.refresh_topology();
+
+        std::unordered_set<LesionId> current_lesions;
+        current_lesions.reserve(lesion_index_.lesions().size());
+        for (const LesionSummary3D& lesion : lesion_index_.lesions()) {
+            current_lesions.insert(lesion.id);
+        }
+
+        // Assign every former lesion to at most one successor.  A retained
+        // child owns its process even when the same predecessor also appears
+        // in a simultaneous merge.  Removed split parents use the smallest
+        // resulting child, and remaining merge-only parents use the smallest
+        // merge result.  This deterministic one-to-one transfer prevents both
+        // lost state and duplicated counters.
+        std::unordered_map<LesionId, LesionId> successors;
+        successors.reserve(old_lesion_ids.size());
+        for (const LesionId old_id : old_lesion_ids) {
+            successors.emplace(
+                old_id, current_lesions.contains(old_id) ? old_id : kNoLesionId);
+        }
+        for (const LesionSplit3D& split : delta.splits) {
+            auto found = successors.find(split.predecessor);
+            if (found == successors.end() || found->second != kNoLesionId) continue;
+            for (const LesionId child : split.children) {
+                if (current_lesions.contains(child) &&
+                    (found->second == kNoLesionId || child < found->second)) {
+                    found->second = child;
+                }
+            }
+        }
+        for (const LesionMerge3D& merge : delta.merges) {
+            if (!current_lesions.contains(merge.result)) continue;
+            for (const LesionId predecessor : merge.predecessors) {
+                auto found = successors.find(predecessor);
+                if (found != successors.end() &&
+                    found->second == kNoLesionId) {
+                    found->second = merge.result;
+                }
+            }
+        }
+
+        std::unordered_map<LesionId,
+                           std::vector<LesionAngiogenesisState3D>> incoming;
+        for (const LesionId old_id : old_lesion_ids) {
+            const auto process = lesion_angiogenesis_processes_.find(old_id);
+            if (process == lesion_angiogenesis_processes_.end()) continue;
+            const LesionId successor = successors.at(old_id);
+            if (successor == old_id) continue;
+            if (successor == kNoLesionId) {
+                if (process->second.state().eligible) {
+                    process->second.stop(clock_.time_hours);
+                }
+                continue;
+            }
+            incoming[successor].push_back({old_id, process->second.state()});
+            lesion_angiogenesis_processes_.erase(process);
+        }
+
+        std::vector<LesionId> destinations;
+        destinations.reserve(incoming.size());
+        for (const auto& [destination, states] : incoming) {
+            (void)states;
+            destinations.push_back(destination);
+        }
+        std::sort(destinations.begin(), destinations.end());
+        for (const LesionId destination : destinations) {
+            std::vector<LesionAngiogenesisState3D>& states = incoming.at(destination);
+            const auto existing = lesion_angiogenesis_processes_.find(destination);
+            if (existing != lesion_angiogenesis_processes_.end()) {
+                states.push_back({destination, existing->second.state()});
+            }
+            const AngiogenesisProcessState3D merged =
+                merge_angiogenesis_process_states(states, clock_.time_hours);
+            auto [found, inserted] =
+                lesion_angiogenesis_processes_.try_emplace(
+                    destination, config_.seed, destination);
+            (void)inserted;
+            found->second.restore(merged);
+            if (merged.eligible && merged.next_seed_time_hours > 0.0) {
+                schedule_seed_event(destination);
+            }
+        }
+
+        update_lesion_source_ownership(successors, current_lesions);
+        changed = true;
+    }
+    last_lesion_refresh_time_hours_ = clock_.time_hours;
+    return changed || force;
+}
+
+void Simulation3D::schedule_lesion_refresh_event() {
+    if (!config_.angiogenesis.enabled ||
+        !lesion_index_.refresh_needed() ||
+        next_lesion_refresh_time_hours_ > 0.0) {
+        return;
+    }
+    const double due = last_lesion_refresh_time_hours_ +
+                       config_.angiogenesis.lesion_refresh_interval_hours;
+    next_lesion_refresh_time_hours_ = std::max(due, clock_.time_hours);
+    ++lesion_refresh_schedule_generation_;
+    schedule(EventKind::lesion_refresh, kEmptySlot, kNoLesionId,
+             next_lesion_refresh_time_hours_,
+             lesion_refresh_schedule_generation_);
+}
+
 void Simulation3D::refresh_tumor_surface(std::span<const Vec3i> changed_sites) {
     if (!config_.angiogenesis.enabled || changed_sites.empty()) return;
     std::vector<Vec3i> expanded;
@@ -867,6 +1366,7 @@ void Simulation3D::refresh_tumor_surface(std::span<const Vec3i> changed_sites) {
     expanded.erase(std::unique(expanded.begin(), expanded.end()), expanded.end());
     tumor_surface_.refresh(expanded,
         [this](Vec3i site) { return grid_.owner(site) != kEmptySlot; });
+    lesion_index_.mark_dirty_sites(expanded);
 }
 
 double Simulation3D::biological_tumor_volume() const noexcept {
@@ -878,39 +1378,155 @@ double Simulation3D::biological_tumor_volume() const noexcept {
                config_.angiogenesis.stage2_biological_volume_voxels3;
 }
 
-void Simulation3D::sync_angiogenesis_eligibility() {
-    if (!initialized_ || !config_.angiogenesis.enabled) return;
-    if (angiogenesis_process_.state().committed_roots >=
-        config_.angiogenesis.max_total_roots) {
-        if (angiogenesis_process_.state().eligible) angiogenesis_process_.stop(clock_.time_hours);
-        return;
+void Simulation3D::recompute_aggregate_angiogenesis_state() {
+    std::vector<LesionAngiogenesisState3D> processes;
+    processes.reserve(lesion_angiogenesis_processes_.size());
+    for (const auto& [lesion_id, process] : lesion_angiogenesis_processes_) {
+        processes.push_back({lesion_id, process.state()});
     }
-    const bool changed = angiogenesis_process_.update_volume(
-        clock_.time_hours, biological_tumor_volume(),
-        config_.angiogenesis.trigger_activation_volume_voxels3,
-        config_.angiogenesis.trigger_deactivation_volume_voxels3,
-        config_.angiogenesis.trigger_delay_hours,
-        config_.angiogenesis.seed_rate_sites_per_30_days);
-    if (changed && angiogenesis_process_.state().eligible) schedule_seed_event();
+    aggregate_angiogenesis_state_ = aggregate_angiogenesis_process_states(
+        processes, clock_.time_hours);
 }
 
-void Simulation3D::schedule_seed_event() {
-    const auto& state = angiogenesis_process_.state();
-    schedule(EventKind::angiogenesis_seed, kEmptySlot, kSeedActorUid,
+LesionId Simulation3D::current_lesion_for_source(
+    LesionId source_lesion_id) const noexcept {
+    const auto alias = lesion_source_ownership_.find(source_lesion_id);
+    if (alias != lesion_source_ownership_.end()) return alias->second;
+    return lesion_index_.find_lesion(source_lesion_id) != nullptr
+        ? source_lesion_id : kNoLesionId;
+}
+
+void Simulation3D::update_lesion_source_ownership(
+    const std::unordered_map<LesionId, LesionId>& successors,
+    const std::unordered_set<LesionId>& current_lesions) {
+    for (auto& [source, owner] : lesion_source_ownership_) {
+        (void)source;
+        if (owner == kNoLesionId) continue;
+        const auto successor = successors.find(owner);
+        if (successor != successors.end()) {
+            owner = successor->second;
+        } else if (!current_lesions.contains(owner)) {
+            owner = kNoLesionId;
+        }
+    }
+    for (const auto& [source, owner] : successors) {
+        if (owner == source && current_lesions.contains(source)) {
+            lesion_source_ownership_.erase(source);
+        } else {
+            lesion_source_ownership_[source] = owner;
+        }
+    }
+    // Current IDs always own themselves.  All other targets must be direct
+    // current owners (or the explicit retired sentinel), never alias chains.
+    for (const LesionId current : current_lesions) {
+        lesion_source_ownership_.erase(current);
+    }
+    for (auto& [source, owner] : lesion_source_ownership_) {
+        (void)source;
+        if (owner != kNoLesionId && !current_lesions.contains(owner)) {
+            owner = kNoLesionId;
+        }
+    }
+}
+
+void Simulation3D::sync_angiogenesis_eligibility(bool force_refresh) {
+    if (!initialized_ || !config_.angiogenesis.enabled) return;
+    const bool refreshed = refresh_lesion_index(force_refresh);
+    if (!refreshed && !force_refresh) {
+        schedule_lesion_refresh_event();
+        return;
+    }
+
+    std::unordered_set<LesionId> current_lesions;
+    current_lesions.reserve(lesion_index_.lesions().size());
+    for (const LesionSummary3D& lesion : lesion_index_.lesions()) {
+        current_lesions.insert(lesion.id);
+    }
+    for (auto& [lesion_id, process] : lesion_angiogenesis_processes_) {
+        if (!current_lesions.contains(lesion_id) && process.state().eligible) {
+            process.stop(clock_.time_hours);
+        }
+    }
+
+    recompute_aggregate_angiogenesis_state();
+    const bool global_limit_reached =
+        aggregate_angiogenesis_state_.committed_roots >=
+        config_.angiogenesis.max_total_roots;
+    for (const LesionSummary3D& lesion : lesion_index_.lesions()) {
+        auto [found, inserted] = lesion_angiogenesis_processes_.try_emplace(
+            lesion.id, config_.seed, lesion.id);
+        (void)inserted;
+        AngiogenesisProcess3D& process = found->second;
+        const bool geometry_eligible =
+            lesion.core_blocks.size() >=
+            config_.angiogenesis.trigger_minimum_core_blocks;
+        if (!geometry_eligible) {
+            if (process.state().eligible) process.stop(clock_.time_hours);
+            continue;
+        }
+        const bool changed = process.update_volume(
+            clock_.time_hours, lesion.biological_volume,
+            config_.angiogenesis.trigger_activation_volume_voxels3,
+            config_.angiogenesis.trigger_deactivation_volume_voxels3,
+            config_.angiogenesis.trigger_delay_hours,
+            config_.angiogenesis.seed_rate_sites_per_30_days);
+        if ((global_limit_reached ||
+             process.state().committed_roots >=
+                 config_.angiogenesis.max_roots_per_lesion) &&
+            process.state().eligible) {
+            process.stop(clock_.time_hours);
+        } else if (changed && process.state().eligible) {
+            schedule_seed_event(lesion.id);
+        }
+    }
+    if (global_limit_reached) {
+        for (auto& [lesion_id, process] : lesion_angiogenesis_processes_) {
+            (void)lesion_id;
+            if (process.state().eligible) process.stop(clock_.time_hours);
+        }
+    }
+    recompute_aggregate_angiogenesis_state();
+}
+
+void Simulation3D::schedule_seed_event(LesionId lesion_id) {
+    const auto found = lesion_angiogenesis_processes_.find(lesion_id);
+    if (found == lesion_angiogenesis_processes_.end()) return;
+    const auto& state = found->second.state();
+    schedule(EventKind::angiogenesis_seed, kEmptySlot, lesion_id,
              state.next_seed_time_hours, state.schedule_generation);
 }
 
 bool Simulation3D::process_seed_event(const Event& event) {
     if (!current(event)) return false;
+    sync_angiogenesis_eligibility(true);
+    if (!current(event)) return false;
+    auto process_found = lesion_angiogenesis_processes_.find(event.uid);
+    const LesionSummary3D* lesion = lesion_index_.find_lesion(event.uid);
+    if (process_found == lesion_angiogenesis_processes_.end() || lesion == nullptr) {
+        return false;
+    }
+    AngiogenesisProcess3D& process = process_found->second;
     ++stats_.angiogenesis_seed_attempts;
     bool committed = false;
     if (active_vessel_tip_count() + 2U <= config_.angiogenesis.max_active_tips &&
-        angiogenesis_process_.state().committed_roots < config_.angiogenesis.max_total_roots &&
+        active_vessel_tip_count(event.uid) + 2U <=
+            config_.angiogenesis.max_active_tips_per_lesion &&
+        aggregate_angiogenesis_state_.committed_roots <
+            config_.angiogenesis.max_total_roots &&
+        process.state().committed_roots <
+            config_.angiogenesis.max_roots_per_lesion &&
         !tumor_surface_.empty()) {
-        const auto candidates = tumor_surface_.sample_external_without_replacement(
+        const auto candidates =
+            tumor_surface_.sample_external_subset_without_replacement(
             std::min<std::size_t>(config_.angiogenesis.surface_max_sampling_attempts,
                                   tumor_surface_.size()),
-            0.0, config_.seed, angiogenesis_process_.state().attempted_events);
+            0.0, splitmix64(config_.seed ^ event.uid),
+            process.state().attempted_events,
+            [this, lesion_id = event.uid](const ExposedFace3D& face) {
+                const auto owner = lesion_index_.lesion_for_face(
+                    face, cells_, grid_);
+                return owner.has_value() && *owner == lesion_id;
+            });
         const std::int64_t minimum_squared =
             static_cast<std::int64_t>(config_.angiogenesis.surface_min_separation_voxels) *
             config_.angiogenesis.surface_min_separation_voxels;
@@ -920,8 +1536,14 @@ bool Simulation3D::process_seed_event(const Event& event) {
                 existing_roots.push_back(vessel_nodes_.position(slot));
             }
         }
+        const Vec3i inward_target = rounded_lesion_centroid(*lesion);
         for (const ExposedFace3D& face : candidates) {
-            const Vec3i root = face.outside();
+            const Vec3i root = face.inside;
+            if (grid_.owner(face.inside) == kEmptySlot ||
+                grid_.owner(face.outside()) != kEmptySlot) continue;
+            const auto face_lesion = lesion_index_.lesion_for_face(
+                face, cells_, grid_);
+            if (!face_lesion || *face_lesion != event.uid) continue;
             if (!vessel_grid_.in_domain(root) || centerline_nodes_.contains(root)) continue;
             bool separated = true;
             for (const Vec3i existing : existing_roots) {
@@ -931,32 +1553,75 @@ bool Simulation3D::process_seed_event(const Event& event) {
                 }
             }
             if (separated && create_vessel_root(
-                    face, angiogenesis_process_.state().attempted_events)) {
+                    event.uid, face, inward_target,
+                    process.state().attempted_events)) {
                 committed = true;
                 break;
             }
         }
     }
-    angiogenesis_process_.consume_event(
+    process.consume_event(
         clock_.time_hours, committed, config_.angiogenesis.seed_rate_sites_per_30_days);
     if (committed) {
         ++stats_.angiogenesis_roots;
     } else {
         ++stats_.angiogenesis_seed_rejections;
     }
-    if (angiogenesis_process_.state().committed_roots >=
-        config_.angiogenesis.max_total_roots) {
-        angiogenesis_process_.stop(clock_.time_hours);
+    recompute_aggregate_angiogenesis_state();
+    if (aggregate_angiogenesis_state_.committed_roots >=
+            config_.angiogenesis.max_total_roots ||
+        process.state().committed_roots >=
+            config_.angiogenesis.max_roots_per_lesion) {
+        process.stop(clock_.time_hours);
     } else {
-        schedule_seed_event();
+        schedule_seed_event(event.uid);
     }
+    recompute_aggregate_angiogenesis_state();
     return committed;
 }
 
-bool Simulation3D::create_vessel_root(const ExposedFace3D& face,
+bool Simulation3D::root_has_local_support(
+    LesionId source_lesion_id,
+    std::span<const Vec3i> root_capsule) const {
+    std::unordered_set<Slot> displaced;
+    bool intersects_source = false;
+    for (const Vec3i site : root_capsule) {
+        for (const Slot slot : grid_.occupants(site)) {
+            if (!cells_.valid(slot)) continue;
+            displaced.insert(slot);
+            const auto owner = lesion_index_.lesion_for_anchor(cells_.anchor(slot));
+            intersects_source = intersects_source ||
+                (owner.has_value() && *owner == source_lesion_id);
+        }
+    }
+    if (!intersects_source) return false;
+
+    std::unordered_set<Slot> support;
+    for (const Vec3i site : root_capsule) {
+        for (const Vec3i normal : kAxisFaceNormals3D) {
+            for (const Slot slot : grid_.occupants(site + normal)) {
+                if (!cells_.valid(slot) || displaced.contains(slot)) continue;
+                const auto owner =
+                    lesion_index_.lesion_for_anchor(cells_.anchor(slot));
+                if (owner.has_value() && *owner == source_lesion_id) {
+                    support.insert(slot);
+                }
+            }
+        }
+    }
+    return support.size() >= config_.angiogenesis.surface_min_local_cells;
+}
+
+bool Simulation3D::create_vessel_root(LesionId source_lesion_id,
+                                      const ExposedFace3D& face,
+                                      Vec3i inward_target,
                                       std::uint64_t seed_event_sequence) {
     (void)seed_event_sequence;
-    const Vec3i root_position = face.outside();
+    const auto lesion = lesion_index_.lesion_for_face(face, cells_, grid_);
+    if (!lesion || *lesion != source_lesion_id ||
+        grid_.owner(face.inside) == kEmptySlot ||
+        grid_.owner(face.outside()) != kEmptySlot) return false;
+    const Vec3i root_position = face.inside;
     const float diameter = static_cast<float>(config_.angiogenesis.diameter_voxels);
     const std::vector<Vec3i> root_capsule =
         rasterize_capsule(root_position, root_position, diameter);
@@ -966,6 +1631,7 @@ bool Simulation3D::create_vessel_root(const ExposedFace3D& face,
     // this preflight before consuming an id or mutating either occupancy
     // layer so rejected Poisson events leave the model state unchanged.
     if (vessel_grid_.any_occupied(root_capsule)) return false;
+    if (!root_has_local_support(source_lesion_id, root_capsule)) return false;
 
     const VesselId vessel_id = next_vessel_id_;
     const bool immediate = config_.angiogenesis.influence_activation == "immediate";
@@ -980,6 +1646,7 @@ bool Simulation3D::create_vessel_root(const ExposedFace3D& face,
     root.position = root_position;
     root.uid = next_vessel_node_uid_++;
     root.vessel_id = vessel_id;
+    root.source_lesion_id = source_lesion_id;
     root.role = VesselBranchRole::root;
     root.perfused = immediate;
     root.diameter_voxels = diameter;
@@ -991,7 +1658,7 @@ bool Simulation3D::create_vessel_root(const ExposedFace3D& face,
         vascular_influence_.add_sources(root_capsule);
     }
 
-    Vec3i inward_axis = tumor_surface_.approximate_centroid() - root_position;
+    Vec3i inward_axis = inward_target - root_position;
     if (squared_length(inward_axis) == 0) {
         inward_axis = {-face.outward_normal.x, -face.outward_normal.y,
                        -face.outward_normal.z};
@@ -999,9 +1666,10 @@ bool Simulation3D::create_vessel_root(const ExposedFace3D& face,
     VesselTipInit3D inward;
     inward.position = root_position;
     inward.bias_axis = inward_axis;
-    inward.target = root_position + inward_axis;
+    inward.target = inward_target;
     inward.uid = next_vessel_tip_uid_++;
     inward.vessel_id = vessel_id;
+    inward.source_lesion_id = source_lesion_id;
     inward.current_node_uid = root.uid;
     inward.current_node_slot = root_slot;
     inward.role = VesselBranchRole::inward;
@@ -1268,6 +1936,7 @@ bool Simulation3D::commit_vessel_growth(const VesselGrowthProposal& proposal) {
     node.parent_uid = vessel_nodes_.uid(parent_slot);
     node.parent_node_slot = parent_slot;
     node.vessel_id = vessel_id;
+    node.source_lesion_id = vessel_tips_.source_lesion_id(tip_slot);
     node.role = role;
     node.perfused = perfused_before;
     node.diameter_voxels = vessel_tips_.diameter_voxels(tip_slot);
@@ -1776,9 +2445,57 @@ std::size_t Simulation3D::active_vessel_tip_count() const {
     return count;
 }
 
+AngiogenesisProcessState3D Simulation3D::angiogenesis_state() const {
+    std::vector<LesionAngiogenesisState3D> processes;
+    processes.reserve(lesion_angiogenesis_processes_.size());
+    for (const auto& [lesion_id, process] : lesion_angiogenesis_processes_) {
+        processes.push_back({lesion_id, process.state()});
+    }
+    return aggregate_angiogenesis_process_states(processes, clock_.time_hours);
+}
+
+std::size_t Simulation3D::active_vessel_tip_count(
+    LesionId source_lesion_id) const {
+    std::size_t count = 0;
+    for (const VesselTipSlot slot : vessel_tips_.alive_slots()) {
+        if (vessel_tips_.status(slot) == VesselTipStatus::active &&
+            current_lesion_for_source(
+                vessel_tips_.source_lesion_id(slot)) == source_lesion_id) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 VasculatureState3D Simulation3D::snapshot_vasculature() const {
     VasculatureState3D state;
-    state.process = angiogenesis_process_.state();
+    state.lesions.next_lesion_id = lesion_index_.next_lesion_id();
+    state.lesions.last_refresh_time_hours = last_lesion_refresh_time_hours_;
+    state.lesions.next_refresh_time_hours = next_lesion_refresh_time_hours_;
+    state.lesions.refresh_schedule_generation =
+        lesion_refresh_schedule_generation_;
+    state.lesions.core_identity = lesion_index_.snapshot_core_identity();
+    state.lesions.dirty_blocks = lesion_index_.snapshot_dirty_block_state();
+    state.lesions.processes.reserve(lesion_angiogenesis_processes_.size());
+    for (const auto& [lesion_id, process] : lesion_angiogenesis_processes_) {
+        state.lesions.processes.push_back({lesion_id, process.state()});
+    }
+    std::sort(state.lesions.processes.begin(), state.lesions.processes.end(),
+              [](const auto& lhs, const auto& rhs) {
+                  return lhs.lesion_id < rhs.lesion_id;
+              });
+    state.process = aggregate_angiogenesis_process_states(
+        state.lesions.processes, clock_.time_hours);
+    state.lesions.source_ownership.reserve(
+        lesion_source_ownership_.size());
+    for (const auto& [source, owner] : lesion_source_ownership_) {
+        state.lesions.source_ownership.push_back({source, owner});
+    }
+    std::sort(state.lesions.source_ownership.begin(),
+              state.lesions.source_ownership.end(),
+              [](const auto& lhs, const auto& rhs) {
+                  return lhs.source_lesion_id < rhs.source_lesion_id;
+              });
     for (const VesselNodeSlot slot : vessel_nodes_.alive_slots()) {
         state.nodes.push_back(vessel_nodes_.snapshot(slot));
     }
@@ -1867,11 +2584,79 @@ std::uint64_t Simulation3D::state_checksum() const {
     checksum = hash_combine(checksum, vascular.process.attempted_events);
     checksum = hash_combine(checksum, vascular.process.committed_roots);
     checksum = hash_combine(checksum, vascular.process.rejected_events);
+    checksum = hash_combine(checksum, vascular.lesions.next_lesion_id);
+    checksum = hash_combine(
+        checksum, double_bits(vascular.lesions.last_refresh_time_hours));
+    checksum = hash_combine(
+        checksum, double_bits(vascular.lesions.next_refresh_time_hours));
+    checksum = hash_combine(
+        checksum, vascular.lesions.refresh_schedule_generation);
+    for (const LesionCoreIdentity3D& core : vascular.lesions.core_identity) {
+        checksum = hash_combine(checksum,
+                                static_cast<std::uint32_t>(core.block.x));
+        checksum = hash_combine(checksum,
+                                static_cast<std::uint32_t>(core.block.y));
+        checksum = hash_combine(checksum,
+                                static_cast<std::uint32_t>(core.block.z));
+        checksum = hash_combine(checksum, core.lesion_id);
+    }
+    for (const LesionDirtyBlockState3D& block :
+         vascular.lesions.dirty_blocks) {
+        checksum = hash_combine(checksum,
+                                static_cast<std::uint32_t>(block.block.x));
+        checksum = hash_combine(checksum,
+                                static_cast<std::uint32_t>(block.block.y));
+        checksum = hash_combine(checksum,
+                                static_cast<std::uint32_t>(block.block.z));
+        checksum = hash_combine(checksum, block.exists);
+        checksum = hash_combine(checksum, block.cell_count);
+        checksum = hash_combine(checksum, block.occupied_voxel_count);
+        checksum = hash_combine(checksum,
+                                double_bits(block.biological_volume));
+        checksum = hash_combine(
+            checksum, static_cast<std::uint64_t>(block.cell_coordinate_sum_x));
+        checksum = hash_combine(
+            checksum, static_cast<std::uint64_t>(block.cell_coordinate_sum_y));
+        checksum = hash_combine(
+            checksum, static_cast<std::uint64_t>(block.cell_coordinate_sum_z));
+        checksum = hash_combine(
+            checksum,
+            static_cast<std::uint64_t>(block.occupied_coordinate_sum_x));
+        checksum = hash_combine(
+            checksum,
+            static_cast<std::uint64_t>(block.occupied_coordinate_sum_y));
+        checksum = hash_combine(
+            checksum,
+            static_cast<std::uint64_t>(block.occupied_coordinate_sum_z));
+    }
+    for (const LesionAngiogenesisState3D& lesion :
+         vascular.lesions.processes) {
+        const AngiogenesisProcessState3D& process = lesion.process;
+        checksum = hash_combine(checksum, lesion.lesion_id);
+        checksum = hash_combine(checksum, process.eligible);
+        checksum = hash_combine(
+            checksum, double_bits(process.next_seed_time_hours));
+        checksum = hash_combine(
+            checksum, double_bits(process.eligibility_started_hours));
+        checksum = hash_combine(
+            checksum, double_bits(process.accumulated_eligible_hours));
+        checksum = hash_combine(checksum, process.event_sequence);
+        checksum = hash_combine(checksum, process.schedule_generation);
+        checksum = hash_combine(checksum, process.attempted_events);
+        checksum = hash_combine(checksum, process.committed_roots);
+        checksum = hash_combine(checksum, process.rejected_events);
+    }
+    for (const LesionSourceOwnership3D& ownership :
+         vascular.lesions.source_ownership) {
+        checksum = hash_combine(checksum, ownership.source_lesion_id);
+        checksum = hash_combine(checksum, ownership.current_lesion_id);
+    }
     for (const VesselNodeInit3D& node : vascular.nodes) {
         checksum = hash_combine(checksum, node.uid);
         checksum = hash_combine(checksum, node.parent_uid);
         checksum = hash_combine(checksum, node.parent_node_slot);
         checksum = hash_combine(checksum, node.vessel_id);
+        checksum = hash_combine(checksum, node.source_lesion_id);
         checksum = hash_combine(checksum, static_cast<std::uint32_t>(node.position.x));
         checksum = hash_combine(checksum, static_cast<std::uint32_t>(node.position.y));
         checksum = hash_combine(checksum, static_cast<std::uint32_t>(node.position.z));
@@ -1883,6 +2668,7 @@ std::uint64_t Simulation3D::state_checksum() const {
     for (const VesselTipInit3D& tip : vascular.tips) {
         checksum = hash_combine(checksum, tip.uid);
         checksum = hash_combine(checksum, tip.vessel_id);
+        checksum = hash_combine(checksum, tip.source_lesion_id);
         checksum = hash_combine(checksum, tip.current_node_uid);
         checksum = hash_combine(checksum, tip.current_node_slot);
         checksum = hash_combine(checksum, static_cast<std::uint32_t>(tip.position.x));

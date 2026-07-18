@@ -35,6 +35,49 @@ int main() {
     assert(second.state_checksum() == checksum);
     assert(second.cells().alive_count() == first.cells().alive_count());
 
+    // Periodic output boundaries are clock observations, not biological
+    // events. A quiet interval must still expose exact whole-hour states while
+    // leaving the final biological checksum unchanged.
+    Model3DConfig hourly_config;
+    hourly_config.output_enabled = true;
+    hourly_config.preview_every_hours = 1.0;
+    hourly_config.full_every_hours = 0.0;
+    hourly_config.checkpoint_every_hours = 0.0;
+    hourly_config.migration_activation_enabled = false;
+    hourly_config.domain_policy = "bounded";
+    hourly_config.bounded_domain = true;
+    hourly_config.domain_min = {0, 0, 0};
+    hourly_config.domain_max = {0, 0, 0};
+    hourly_config.density_block_edge = 1;
+    hourly_config.end_time_hours = 4.0;
+    hourly_config.max_events = 10;
+    CellInit quiet_cell;
+    quiet_cell.uid = 1000;
+    quiet_cell.inherent_growth_rate = 0.0F;
+    quiet_cell.density_growth_rate = 0.0F;
+    quiet_cell.migration_rate = 2.0F / 7.0F;
+    quiet_cell.normal_migration_rate = quiet_cell.migration_rate;
+    quiet_cell.next_migration_time = 3.5;
+    quiet_cell.division_work_remaining = 0.0F;
+    quiet_cell.next_division_time = 0.0;
+    quiet_cell.death_deadline = 10.0;
+
+    Simulation3D hourly(hourly_config);
+    hourly.restore({quiet_cell}, 1001, {}, {}, {});
+    std::vector<double> observation_times;
+    hourly.run([&](const Simulation3D& simulation) {
+        observation_times.push_back(simulation.clock().time_hours);
+    });
+    assert((observation_times ==
+            std::vector<double>{0.0, 1.0, 2.0, 3.0, 3.5, 4.0}));
+
+    Model3DConfig no_output_config = hourly_config;
+    no_output_config.output_enabled = false;
+    Simulation3D no_output(no_output_config);
+    no_output.restore({quiet_cell}, 1001, {}, {}, {});
+    no_output.run();
+    assert(hourly.state_checksum() == no_output.state_checksum());
+
     // Rescheduling a blocked migration invalidates only the migration event;
     // unrelated division and death queue entries retain their generations.
     Model3DConfig isolated_config;
