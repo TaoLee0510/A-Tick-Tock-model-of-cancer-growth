@@ -251,7 +251,7 @@ void write_run_manifest_atomic(const std::filesystem::path& run_directory,
     write_atomic(run_directory / "run.json", [&](std::ostream& out) {
         out << "{\n"
             << "  \"schema\": \"atcg.viz\",\n"
-            << "  \"schema_version\": 3,\n"
+            << "  \"schema_version\": 4,\n"
             << "  \"dimension\": 3,\n"
             << "  \"coordinate_system\": \"cartesian\",\n"
             << "  \"coordinate_units\": \"lattice_voxel\",\n"
@@ -264,8 +264,8 @@ void write_run_manifest_atomic(const std::filesystem::path& run_directory,
             << "  \"vessel_frames\": " << vessels.size() << ",\n"
             << "  \"checkpoint_enabled\": " << (checkpoint_enabled ? "true" : "false") << ",\n"
             << "  \"cell_topology\": \"vtkPolyData.points_only\",\n"
-            << "  \"cell_point_arrays\": [\"cell_id\",\"lesion_id\",\"clone_id\",\"cell_type\",\"stage\",\"viability\",\"display_radius\"],\n"
-            << "  \"cell_field_arrays\": [\"total_cell_count\"],\n"
+            << "  \"cell_point_arrays\": [\"cell_id\",\"cell_slot\",\"lesion_id\",\"clone_id\",\"cell_type\",\"stage\",\"viability\",\"display_radius\"],\n"
+            << "  \"cell_field_arrays\": [\"total_cell_count\",\"total_slot_count\"],\n"
             << "  \"vessel_topology\": \"vtkPolyData.lines\",\n"
             << "  \"vessel_point_arrays\": [\"node_id\",\"vessel_id\",\"source_lesion_id\",\"branch_role\",\"perfused\",\"diameter_voxels\",\"radius_voxels\"],\n"
             << "  \"dynamics_config_json\": \""
@@ -284,10 +284,11 @@ ExistingRunOutput3D load_existing_run_output(
                                  run_directory.string());
     }
     const YAML::Node manifest = load_manifest(manifest_path);
+    const unsigned int manifest_schema = scalar_as<unsigned int>(
+        manifest["schema_version"], manifest_path, "schema_version");
     if (scalar_as<std::string>(manifest["schema"], manifest_path, "schema") !=
             "atcg.viz" ||
-        scalar_as<unsigned int>(manifest["schema_version"], manifest_path,
-                                "schema_version") != 3U ||
+        (manifest_schema != 3U && manifest_schema != 4U) ||
         scalar_as<unsigned int>(manifest["dimension"], manifest_path, "dimension") != 3U) {
         malformed(manifest_path, "unsupported visualization schema");
     }
@@ -311,12 +312,24 @@ ExistingRunOutput3D load_existing_run_output(
                                "vessel_topology") != "vtkPolyData.lines") {
         malformed(manifest_path, "coordinate units or topology do not match schema v3");
     }
-    require_string_sequence(
-        manifest["cell_point_arrays"], manifest_path, "cell_point_arrays",
-        {"cell_id", "lesion_id", "clone_id", "cell_type", "stage",
-         "viability", "display_radius"});
-    require_string_sequence(manifest["cell_field_arrays"], manifest_path,
-                            "cell_field_arrays", {"total_cell_count"});
+    if (manifest_schema == 4U) {
+        require_string_sequence(
+            manifest["cell_point_arrays"], manifest_path,
+            "cell_point_arrays",
+            {"cell_id", "cell_slot", "lesion_id", "clone_id",
+             "cell_type", "stage", "viability", "display_radius"});
+        require_string_sequence(
+            manifest["cell_field_arrays"], manifest_path,
+            "cell_field_arrays", {"total_cell_count", "total_slot_count"});
+    } else {
+        require_string_sequence(
+            manifest["cell_point_arrays"], manifest_path,
+            "cell_point_arrays",
+            {"cell_id", "lesion_id", "clone_id", "cell_type", "stage",
+             "viability", "display_radius"});
+        require_string_sequence(manifest["cell_field_arrays"], manifest_path,
+                                "cell_field_arrays", {"total_cell_count"});
+    }
     require_string_sequence(
         manifest["vessel_point_arrays"], manifest_path, "vessel_point_arrays",
         {"node_id", "vessel_id", "source_lesion_id", "branch_role",

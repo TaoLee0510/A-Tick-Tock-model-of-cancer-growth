@@ -81,6 +81,19 @@ is `Beta(0.01,0.0566666667) * 1`. The historical hard-coded multiplier was
 configured law is used for initial r cells and new division cycles. K
 migration remains independently configured. See
 `docs/3d_initial_rate_sampling.md` for the clamp and deterministic RNG domains.
+The `single_r_stage0_2160h_density_vascular_v5` experiment profile deliberately
+uses a scale of 3 while retaining the same beta law and lower-clamp policy.
+
+When `migration.crowding_exchange.enabled=true`, a stage-1 singleton that has
+no empty feasible neighbor first remains stationary for
+`wait_fraction / effective_migration_rate` hours. At the deadline it uses the
+same random/persistent direction policy over neighboring stage-1 singletons
+and atomically exchanges both anchors. Both participants then receive
+`post_exchange_cooldown_fraction / own_effective_migration_rate` hours before
+their next movement. Both fractions default to 0.20 in the production profile.
+The transaction locks both slots and both sites, revalidates immediately before
+commit, and updates the grid and density index as one operation. Large
+footprints and stage-2 co-location groups are excluded from this policy.
 
 ## Division and death
 
@@ -163,8 +176,10 @@ original slot, and the free-list LIFO order exactly. These are deterministic
 continuation state: compacting live cells during restore would change the slot
 reused by a later birth and could change subsequent conflicts.
 
-The logical column width is 98 bytes per allocated slot after adding persistent
-cell-cycle work plus finite migration-state rate/timing. Older memory
+The logical column width is 99 bytes per allocated slot. Crowding exchange
+adds one persistent direction byte; its waiting flag and ready time are
+canonically derived from that byte and `next_migration_time`, avoiding two
+redundant per-cell columns. Older memory
 measurements predate these fields and must not be
 reported as the current ten-million-cell result; the scale benchmark reports
 the actual current allocation when rerun.
@@ -177,12 +192,14 @@ changes refresh only affected neighborhoods. Dirty lesion blocks are batched
 by an explicit refresh event, so eligibility still advances at the configured
 interval when no cell event occurs at that instant. Elapsed work is deducted with the
 previous density rate; density changes adjust the predicted completion time but
-never redraw the cell cycle. Generation values invalidate stale
-queue entries. When the heap grows by 25% (with a small fixed minimum slack),
-it is deterministically rebuilt from canonical next times and generations;
-this bounds inert entries without consuming RNG, changing generations, or
-performing a full rebuild per event. Stable slots are reused; the cell store is
-not compacted or globally sorted per event.
+never redraw the cell cycle. The scheduler is an indexed mutable min-heap:
+each cell/event-kind pair, vessel tip, lesion seed process, and lesion-refresh
+clock has at most one heap node. Rescheduling replaces that key in `O(log N)`;
+death or displacement cancels its indexed nodes. Generation values still
+validate checkpoint/restored schedules, but normal evolution no longer
+accumulates stale generation records and never performs a stop-the-world heap
+compaction. Stable slots are reused; the cell store is not compacted or
+globally sorted per event.
 
 Simultaneous migrations, divisions, and stage recoveries run as proposal →
 stable conflict ordering → atomic commit. Daughter and recovered large-cell
@@ -199,9 +216,51 @@ deterministic ordering controls every commit. `simulation.threads` is the hard
 maximum. In `parallel.mode: adaptive_cells_and_events_v1`, a configurable
 population threshold selects a fraction of that maximum and
 `min_events_per_thread` independently caps workers for small same-time batches.
-The lower of those limits is used, bounded by the available OpenMP workers.
+Local density/growth refresh work uses the separate
+`min_refresh_items_per_thread` threshold. The lower of those limits is used,
+bounded by the available OpenMP workers.
 Thread selection consumes no simulation RNG. Tests cover threshold boundaries
 and confirm equal final checksums for one and multiple threads.
+
+`scheduler.backend: deterministic_exact_window_v3` speculatively collects
+migration events from the next `proposal_window_hours`, bounded by
+`proposal_window_max_events` (8192 by default). It never rounds or overwrites a
+biological event time. The cache is a rolling window: once retained proposals
+have committed or failed validation, the next exact event refills it; a fully
+dependent empty window retains its horizon to avoid rescanning on every event.
+The legacy `event_queue_v1` backend skips look-ahead. Each event's
+read dependency is represented by the sparse set of
+`proposal_dependency_block_edge` blocks intersecting its configured density
+radius. This block/version index is the scalable equivalent of materializing a
+pairwise conflict graph: an occupancy change increments only touched blocks,
+and a cached proposal is accepted only if its event sequence and every block
+version are still current. Invalid proposals are recomputed against the latest
+state immediately before their exact-time batch. Biological commits remain
+ordered by event time, fixed event-kind precedence, stable seeded priority, and
+UID; whole footprints are rechecked atomically at commit. Proposal-window,
+worker, cache-hit, and invalidation counters are execution diagnostics only and
+do not enter checkpoints, RNG, or biological checksums.
+
+Migration candidate directions and the at-most-seven entering footprint
+voxels use fixed-capacity stack storage in the proposal hot path. Window cache
+misses use a one-byte marker rather than a second optional proposal array.
+Migration rescheduling does not append another copy of an unchanged activation
+end event; activation transitions own that event. These choices bound
+per-window temporary allocation and stale heap growth without changing the
+event sequence.
+
+When `output.async_enabled` is true, preview/full boundaries freeze the
+required sampled or full typed state into a count-and-byte-bounded queue. A
+normal schema-v8 checkpoint boundary instead moves the CellStore stable-slot
+mutation journal, exact free-list operations, global/vascular state, and
+lineage suffix; it does not copy every live cell. Only a configured
+self-contained base or a full VTK-HDF frame requires a complete typed-cell
+freeze. A dedicated writer thread writes directly from immutable jobs and does
+not construct a second `Simulation3D`, sparse voxel grid, density index, or
+event queue. Queued overwrite-only live previews are coalesced to the newest
+one. The simulation waits only when the configured count/byte cap is full;
+finalization drains the queue and propagates writer failures. Snapshot creation
+never consumes simulation RNG.
 
 Same-time divisions also build immutable proposals before any contender
 mutates occupancy. Proposals reserve the complete daughter/shape-reduction
@@ -212,18 +271,25 @@ as a batch, and followed by one stage-recovery proposal batch. Recovery uses
 the same whole-footprint reservations and one-move-per-co-location-group lock.
 
 The legacy 70×70 density-dependent migration trigger maps to a configurable
-70³ unique-anchor query (70² in exact thin-layer mode). Full density blocks
-aggregate directly; boundary
-blocks inspect compact per-anchor entries. Query centers are cached on
-configurable 32³ activation blocks and invalidated locally by anchor changes.
-Simulation keeps a derived two-bit activation-class cache per occupied query
-block (small/ultrasmall and large). Local occupancy changes recompute only the
-bounded set of affected block classes, normally at most 27 for the 70/32
-mapping. Residents of a block are visited in bulk only when the corresponding
-class crosses the threshold; moved and newly born anchors are always refreshed
-directly so cross-block moves cannot retain the source flag. Stage-recovery
-before/after anchors are included in the dirty set. The class cache is rebuilt
-deterministically after initialization/resume and is not checkpoint state.
+70³ unique-anchor query (70² in exact thin-layer mode). A dedicated incremental
+index maintains exact counts for every affected configurable 32³ query block;
+an anchor insertion, removal, or move updates only the bounded set of windows
+that contain that anchor. Simulation keeps a derived two-bit activation class
+per occupied query block (small/ultrasmall and large). Nearby cells are still
+evaluated after every occupancy change to preserve the legacy activation scope,
+but every threshold lookup is O(1) and never scans a 70³ volume. Moved and newly
+born anchors are refreshed directly so cross-block moves cannot retain the
+source flag. Stage-recovery before/after anchors are included in the dirty set.
+The class cache is rebuilt deterministically after initialization/resume and is
+not checkpoint state.
+
+The 6×6×6 growth-density window is also maintained incrementally per stable
+cell slot as exact r/K anchor counts. A local occupancy mutation updates only
+cell windows containing the changed anchor; growth refresh then reads the two
+counts in O(1). Bulk initialization and checkpoint restore first build the
+sparse anchor blocks, then reconstruct all per-slot counts in a parallel,
+read-only pass. These derived counts are rebuilt rather than checkpointed and
+do not change state checksums or biological RNG.
 Migration is not an on/off gate. In normal state every cell has a queued
 migration event: r cells use `Beta(5,5) * 0.5`, while K cells use their own
 normal/base rate, and both choose uniformly among feasible directions. A high
@@ -234,9 +300,12 @@ rule. Its duration is
 configured mean fraction is 0.30. An exact activation-end event returns the
 cell to normal state and resamples the r normal rate; low density never ends an
 active interval early, and later high density may activate the cell again.
-Migration and activation-end events share a generation, so stale events are
-invalid without a scan. The steady path therefore neither scans every cell,
-all residents of unchanged query blocks, nor 70³ voxels per cell.
+The activation-end event is owned by the activation transition and is
+validated by active state plus its exact stored end time; ordinary migration
+rescheduling neither invalidates it nor appends duplicate end events. An old
+end event becomes stale automatically if the stored end changes. The steady
+path therefore neither scans every cell, all residents of unchanged query
+blocks, nor 70³ voxels per cell.
 
 ## Configuration and build
 

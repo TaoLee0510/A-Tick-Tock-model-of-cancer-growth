@@ -13,7 +13,7 @@
 int main() {
     using namespace atcg3d;
     static_assert(CellStore3D::logical_bytes_per_slot() <= 100);
-    static_assert(CellStore3D::logical_bytes_per_slot() == 98);
+    static_assert(CellStore3D::logical_bytes_per_slot() == 99);
 
     CellStore3D cells;
     cells.reserve(10);
@@ -114,6 +114,40 @@ int main() {
         invalid_assignment.restore_layout(1, {0}, {invalid_cell}, {});
     });
     assert(invalid_assignment.slot_count() == 0);
+
+    CellStore3D journal_store;
+    CellInit journal_a;
+    journal_a.uid = 100;
+    const Slot journal_slot_a = journal_store.create(journal_a);
+    CellInit journal_b;
+    journal_b.uid = 101;
+    const Slot journal_slot_b = journal_store.create(journal_b);
+    journal_store.reset_checkpoint_journal();
+    journal_store.set_anchor(journal_slot_a, {2, 3, 4});
+    journal_store.set_density_growth_rate(journal_slot_a, 0.5F);
+    journal_store.erase(journal_slot_b);
+    CheckpointCellJournal3D first_journal =
+        journal_store.take_checkpoint_journal();
+    assert(first_journal.slot_count == 2);
+    assert(first_journal.mutations.size() == 2);
+    assert(first_journal.free_list_mutations.size() == 1);
+    assert(first_journal.free_list_mutations.front().kind ==
+           FreeListMutationKind3D::push);
+    assert(first_journal.free_list_mutations.front().slot ==
+           journal_slot_b);
+    assert(journal_store.take_checkpoint_journal().mutations.empty());
+
+    CellInit journal_reuse;
+    journal_reuse.uid = 102;
+    assert(journal_store.create(journal_reuse) == journal_slot_b);
+    CheckpointCellJournal3D reuse_journal =
+        journal_store.take_checkpoint_journal();
+    assert(reuse_journal.mutations.size() == 1);
+    assert(reuse_journal.mutations.front().alive);
+    assert(reuse_journal.mutations.front().cell.uid == 102);
+    assert(reuse_journal.free_list_mutations.size() == 1);
+    assert(reuse_journal.free_list_mutations.front().kind ==
+           FreeListMutationKind3D::pop);
 
     CellStore3D stable_rejection;
     CellInit valid_cell;

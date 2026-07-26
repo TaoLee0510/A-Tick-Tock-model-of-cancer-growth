@@ -1,16 +1,18 @@
 # ATCG3D validation and scale benchmark
 
-Last complete 10^3-through-10^7 measurement: 2026-07-15. The machine-readable
-report is `benchmarks/results/atcg3d_macos_arm64_2026-07-15.json`.
+Last complete 10^3-through-10^7 output/checkpoint measurement: 2026-07-15.
+The machine-readable report is
+`benchmarks/results/atcg3d_macos_arm64_2026-07-15.json`. Current
+schema-v8 core-memory, evolving-event, output, and application measurements
+from 2026-07-25 are recorded first below and in
+`benchmarks/results/atcg3d_schema_v8_macos_arm64_2026-07-25.json`.
 
-The scale figures below are a historical schema-v2 baseline. They predate the
-schema-v3 per-lesion index, per-lesion angiogenesis schedulers, checkpoint
-tables, and the additional VTK `lesion_id`/`source_lesion_id` arrays. They must
-not be cited as current schema-v3 memory, file-size, throughput, or checksum
-measurements. The current change was validated with the build/test matrix
-below. The complete storage/output/checkpoint suite has not yet been rerun
-after this change, but a current schema-v3 ten-million-cell
-lesion/angiogenesis progression is recorded separately below.
+Sections carrying earlier dates are retained as historical evidence and state
+their own schema and limitations. They must not be cited as current
+schema-v8 throughput, memory, file-size, or checksum measurements. In
+particular, the complete 10^7 VTK/checkpoint round trip remains the 2026-07-15
+measurement; the current 2026-07-25 run separately validates 10^7 core/event
+paths and a 10^6 full I/O round trip.
 
 ## Measured platform
 
@@ -21,6 +23,137 @@ lesion/angiogenesis progression is recorded separately below.
 
 Linux and macOS x86_64 were not run. The implementation has no macOS-only
 simulation path, but this report does not claim either platform as tested.
+
+## 2026-07-25 schema-v8 and Studio acceptance
+
+The full VTK+HDF5 Release build passed 24/24 CTest tests, and a separate
+legacy-only Release build passed 2/2. Coverage includes
+schema-v8 stable-slot journal reconstruction, corrupt/wrong-version failure,
+continuous-versus-resume checksum, indexed event-heap behavior, one/multiple
+thread checksum equality, live overwrite-only VTK-HDF, ParaView series refresh,
+viewer debounce, run-control requests, migration, vascular growth, and the
+legacy shared density-growth function. All five repository YAML profiles
+passed strict `atcg3d --config ... --dry-run`.
+
+The event queue now stores at most one node per actor/event kind and updates
+that node in `O(log N)`. The measured runs below reported zero queue rebuilds.
+The exact-time proposal cache uses rolling, bounded 8192-event windows and
+spatial block versions. On the real ten-million-cell run it used all 18
+workers, accepted 7,959 prefetched proposals, invalidated 183, and computed
+1,858 at commit time.
+
+| Cells | Threads | Events | Build | Event run | Events/s | Pending indexed events | Peak RSS | Checksum |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 10,000,000 | 1 | 10,000 | 16.189 s | 0.987 s | 10,126.84 | 30,000,000 | 6,737,838,080 B | 10612870120539738236 |
+| 10,000,000 | 18 | 10,000 | 8.050 s | 0.907 s | 11,022.60 | 30,000,000 | 6,737,756,160 B | 10612870120539738236 |
+
+These are real typed cells, sparse occupancy/density indexes, indexed
+migration/division/death schedules, and committed migration events. They are
+not metadata-only counts. The equal checksum confirms deterministic output;
+the 1.09x event-phase speedup is the measured result, not a claim of linear
+18-core scaling.
+
+A separate ten-million-cell core run, without VTK/checkpoint I/O, measured:
+
+| Cells | Logical CellStore width | Tracked core | Core B/cell | Peak RSS | Build | 1M preview sample |
+|---:|---:|---:|---:|---:|---:|---:|
+| 10,000,000 | 99 B | 1,284,573,312 B | 128.457 | 3,776,200,704 B | 14.482 s | 0.151 s |
+
+The tracked total is a 1,067,108,864 B CellStore, 44,982,824 B sparse grid,
+and 172,481,624 B density index. The event run's 6.74 GB peak includes the
+30-million-node indexed scheduler and remains below the 16 GB target.
+
+A current one-million-cell compression-level-1 full I/O round trip wrote and
+read a 7,411,635 B full VTK-HDF in 0.191/0.041 s and wrote/read/restored a
+754,304 B self-contained base checkpoint in 0.516/3.570 s. The data are highly
+regular and compress unusually well, so these sizes are software-validation
+results, not production file-size forecasts. Current 10^7 full I/O was not
+rerun; the dated complete 10^7 table below remains historical.
+
+`ATCG3D Studio.app` built successfully with Tauri 2/Rust 1.97.1, is 14 MB,
+contains a native icns, and passed
+`codesign --verify --deep --strict`. It is ad-hoc signed, not notarized. The
+simulator/trame viewer remain external executables selected in its right-side
+panel.
+
+The `10^8` architectural ceiling was not executed. Extrapolating bytes per cell
+is insufficient to claim throughput because event count, density work, vessel
+topology, and allocator overhead change with biology. The fixed-width slot
+space can address the target, but 100-million-cell memory and elapsed time
+remain unverified.
+
+## 2026-07-24 scheduler, migration, and core-memory measurements
+
+The current production profile uses
+`deterministic_exact_window_v3`: proposals inside the configured look-ahead
+window are calculated in parallel, but biological event times are never
+rounded or overwritten. Commits retain exact time, fixed event-kind
+precedence, stable seeded conflict priority, and UID ordering. Migration
+direction/footprint candidates use fixed-capacity storage, local-density moves
+update only the symmetric difference of old/new windows, and an active cell
+has one activation-end heap event rather than appending another copy after
+every migration.
+
+The Release build passed 23/23 CTest tests plus the three-case ParaView
+checkpoint-materializer test. An activated-r density-cone event benchmark
+advanced 100,000 real cells for 10,000 migration events:
+
+| Threads | Events/s | Run time | Workers observed | Pending events | Peak RSS | Checksum |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 9,007.76 | 1.1102 s | 1 | 300,000 | 125,812,736 B | 501615978897874597 |
+| 18 | 13,223.42 | 0.7562 s | 18 | 300,000 | 127,205,376 B | 501615978897874597 |
+
+This is a 1.47x measured speedup for the expensive activated-r proposal path,
+with an identical biological checksum. Cheap sparse migration does not benefit
+from forcing all 18 workers: the 100,000-cell/100,000-event comparison measured
+25,296.61 events/s with one thread and 18,579.11 events/s with 18. The adaptive
+policy therefore keeps a separate event-granularity limit; thread use is not
+itself treated as a performance success. Raising the local refresh threshold
+from 8 to 128 after the incremental-density change improved the activated
+18-thread comparison from 8,384.45 to 13,223.42 events/s.
+
+A fresh synthetic core run created 10,000,000 real typed cells, populated the
+sparse occupancy and density indexes, and selected a stable one-million-cell
+preview:
+
+| Build | Core tracked | CellStore | Grid | Density | Core bytes/cell | Peak RSS | Build | Preview sample |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| current | 1,207,464,448 B | 990,000,000 B | 44,982,824 B | 172,481,624 B | 120.746 | 3,729,670,144 B | 13.659 s | 0.133 s |
+
+The current logical CellStore width is 99 bytes/slot. This run deliberately
+skipped VTK-HDF and checkpoint I/O because those full ten-million-cell
+measurements remain the older dated evidence below. A one-million-cell
+evolving benchmark also advanced 100,000 real migration events, but a complete
+ten-million-cell biological trajectory has not been timed.
+
+`10^8` had not been executed. Fixed-width slot/UID types and sparse indexes did
+not impose a ten-million-cell addressing limit, but the binary heap used by
+that dated build and serial deterministic commit were scale bottlenecks. The
+current indexed-heap result is in the 2026-07-25 section; the 100-million
+figure remains an architectural capacity target, not a verified throughput or
+memory claim.
+
+## 2026-07-20 historical incremental-storage measurements
+
+At that date the writer supported level-1 VTK-HDF/HDF5 compression and hourly
+schema-v5 row deltas between schema-v4 bases. Those formats are retained for
+reading; new files use v6 bases and v7 field deltas. A 100,000-cell synthetic
+comparison on the measured platform gave:
+
+| Level | Full VTK-HDF | Full write | Checkpoint | Checkpoint write |
+|---:|---:|---:|---:|---:|
+| 0 | 5,563,069 B | 0.00576 s | 11,816,760 B | 0.19715 s |
+| 1 | 1,513,532 B | 0.02132 s | 178,992 B | 0.20719 s |
+
+This synthetic state is highly regular, so its checkpoint ratio is not a
+production estimate. On the stopped 11,131,595-cell production run, repacking
+one real uncompressed full frame with shuffle+gzip-1 reduced 416 MB to 57 MB in
+2.26 s; a real one-million-point preview reduced 38 MB to 6.0 MB in 0.21 s.
+The new checkpoint writer's v4-base/v5-delta restore was tested over a two-delta
+chain against continuous-run checksums, including birth/death, slot reuse,
+lineage suffix, missing/corrupt parent rejection, and a production OutputManager
+base-then-delta integration path. These measurements do not yet constitute a
+new 10^7 evolving-run completion benchmark.
 
 ## Build and test matrix
 
@@ -226,7 +359,9 @@ file; it programmatically constructed the then-current default configuration
 and advanced ten million cells for 720 model hours: 10 sites per 30 days;
 activation/deactivation
 volumes 100,000/80,000 voxel^3; at most 64 roots and 128 active tips; diameter
-3; inward/outward speeds 0.5/0.25 voxel/h; inward/outward maximum lengths 128;
+3; inward/outward speeds 0.5/2.0 voxel/h; inward minimum path budget 128
+voxels with lesion-scale expansion (tortuosity 1.5, exit margin 16, hard cap
+4096); outward maximum length 128;
 external-connection distance 64; influence cutoff 12; and maximum density
 relief 0.5.
 
@@ -246,6 +381,34 @@ grid, 4,005,336 B influence field, and 114,336 B combined vessel node/tip
 stores. The equal checksum confirms deterministic one- and four-thread results.
 
 ## Historical checkpoint, output, and visualization measurements
+
+### July 2026 production-checkpoint hot-path measurement
+
+A real 631 h checkpoint containing 2,771,229 live cells was resumed with
+output disabled and advanced to 631.2 h on the local 18-worker macOS build.
+The comparison used identical YAML dynamics and ended with the same
+`completed_events=72628146`, population counters, and checksum
+`8641331037086676441`.
+
+| Implementation | Restore + 0.2 h wall time | User CPU time |
+|---|---:|---:|
+| block-estimated 6³ growth density | 46.67 s | 181.09 s |
+| exact incremental per-slot 6³ counts | 36.50 s | 55.60 s |
+
+The incremental build's restore-only measurement was 14.52 s, so its measured
+continuous 0.2 h portion was about 21.98 s. The result is checkpoint- and
+population-specific; it is not a completion-time promise for the remaining
+2160 h run. A 0.005 h speculative proposal window and a disabled proposal
+window both took about 46.5 s before the 6³ optimization, so proposal-window
+tuning was not credited as a speedup. Raising
+`min_refresh_items_per_thread` from 8 to 128 increased the same pre-optimization
+measurement from 46.67 s to 49.11 s and was rejected.
+
+The asynchronous output path was also changed to write directly from its
+immutable cell/lineage/vascular snapshot. It no longer rebuilds a second cell
+grid, density index, lesion index, and event queue in the writer thread. The
+default async VTK-HDF/checkpoint tests cover round-trip behavior; production
+frame sizes and I/O time still depend on the live cell count and filesystem.
 
 An output-enabled run was checkpointed at 2 h, resumed to 4 h, and compared
 with an uninterrupted 4 h run. Both final biological checksums were

@@ -38,6 +38,12 @@ struct CellInit {
     double next_division_time{24.0};
     double death_deadline{};
     double last_update_time{};
+    // Crowding migration state. A blocked singleton waits until
+    // swap_ready_time before it may atomically exchange anchors with the
+    // singleton occupying pending_swap_direction.
+    double swap_ready_time{};
+    std::uint8_t swap_wait_state{};
+    DirectionId pending_swap_direction{kStayDirection};
     std::uint64_t event_sequence{};
     // Kept as a checkpoint-v1 compatibility value. New in-memory scheduling
     // uses the three event-specific generations below.
@@ -45,6 +51,28 @@ struct CellInit {
     std::uint32_t migration_schedule_generation{};
     std::uint32_t division_schedule_generation{};
     std::uint32_t death_schedule_generation{};
+};
+
+enum class FreeListMutationKind3D : std::uint8_t {
+    push = 0,
+    pop = 1,
+};
+
+struct FreeListMutation3D {
+    FreeListMutationKind3D kind{FreeListMutationKind3D::push};
+    Slot slot{kEmptySlot};
+};
+
+struct CheckpointCellMutation3D {
+    Slot slot{kEmptySlot};
+    bool alive{};
+    CellInit cell{};
+};
+
+struct CheckpointCellJournal3D {
+    std::vector<CheckpointCellMutation3D> mutations;
+    std::vector<FreeListMutation3D> free_list_mutations;
+    std::size_t slot_count{};
 };
 
 class CellStore3D {
@@ -61,6 +89,11 @@ public:
     const std::vector<Slot>& free_slots() const noexcept { return free_slots_; }
     std::vector<Slot> alive_slots() const;
     CellInit snapshot(Slot slot) const;
+    // Checkpoint bookkeeping is deliberately separate from biological state.
+    // Taking a journal acknowledges exactly the mutations included in that
+    // output boundary; later writes to the same slot start the next epoch.
+    CheckpointCellJournal3D take_checkpoint_journal() const;
+    void reset_checkpoint_journal() const;
     void restore_layout(std::size_t allocated_slot_count,
                         const std::vector<Slot>& alive_slots,
                         const std::vector<CellInit>& alive_cells,
@@ -99,6 +132,17 @@ public:
     double last_update_time(Slot slot) const {
         return static_cast<double>(last_update_time_.at(slot));
     }
+    double swap_ready_time(Slot slot) const {
+        return pending_swap_direction_.at(slot) == kStayDirection
+            ? 0.0
+            : static_cast<double>(next_migration_time_.at(slot));
+    }
+    std::uint8_t swap_wait_state(Slot slot) const {
+        return pending_swap_direction_.at(slot) == kStayDirection ? 0 : 1;
+    }
+    DirectionId pending_swap_direction(Slot slot) const {
+        return pending_swap_direction_.at(slot);
+    }
     std::uint64_t event_sequence(Slot slot) const { return event_sequence_.at(slot); }
     std::uint32_t migration_schedule_generation(Slot slot) const {
         return migration_schedule_generation_.at(slot);
@@ -110,58 +154,118 @@ public:
         return death_schedule_generation_.at(slot);
     }
 
-    void set_parent_uid(Slot slot, CellUid value) { parent_uid_.at(slot) = value; }
-    void set_clone_id(Slot slot, std::uint32_t value) { clone_id_.at(slot) = value; }
-    void set_type(Slot slot, CellType value) { type_.at(slot) = static_cast<std::uint8_t>(value); }
+    void set_parent_uid(Slot slot, CellUid value) {
+        mark_checkpoint_dirty(slot);
+        parent_uid_.at(slot) = value;
+    }
+    void set_clone_id(Slot slot, std::uint32_t value) {
+        mark_checkpoint_dirty(slot);
+        clone_id_.at(slot) = value;
+    }
+    void set_type(Slot slot, CellType value) {
+        mark_checkpoint_dirty(slot);
+        type_.at(slot) = static_cast<std::uint8_t>(value);
+    }
     void set_stage(Slot slot, CellStage value);
-    void set_viability(Slot slot, std::uint8_t value) { viability_.at(slot) = value; }
-    void set_flags(Slot slot, std::uint8_t value) { flags_.at(slot) = value; }
-    void set_last_direction(Slot slot, DirectionId value) { last_direction_.at(slot) = value; }
-    void set_inherent_growth_rate(Slot slot, float value) { inherent_growth_rate_.at(slot) = value; }
-    void set_density_growth_rate(Slot slot, float value) { density_growth_rate_.at(slot) = value; }
-    void set_migration_rate(Slot slot, float value) { migration_rate_.at(slot) = value; }
+    void set_viability(Slot slot, std::uint8_t value) {
+        mark_checkpoint_dirty(slot);
+        viability_.at(slot) = value;
+    }
+    void set_flags(Slot slot, std::uint8_t value) {
+        mark_checkpoint_dirty(slot);
+        flags_.at(slot) = value;
+    }
+    void set_last_direction(Slot slot, DirectionId value) {
+        mark_checkpoint_dirty(slot);
+        last_direction_.at(slot) = value;
+    }
+    void set_inherent_growth_rate(Slot slot, float value) {
+        mark_checkpoint_dirty(slot);
+        inherent_growth_rate_.at(slot) = value;
+    }
+    void set_density_growth_rate(Slot slot, float value) {
+        mark_checkpoint_dirty(slot);
+        density_growth_rate_.at(slot) = value;
+    }
+    void set_migration_rate(Slot slot, float value) {
+        mark_checkpoint_dirty(slot);
+        migration_rate_.at(slot) = value;
+    }
     void set_normal_migration_rate(Slot slot, float value) {
+        mark_checkpoint_dirty(slot);
         normal_migration_rate_.at(slot) = value;
     }
     double set_migration_activation_end_time(Slot slot, double value);
     void set_division_work_remaining(Slot slot, float value) {
+        mark_checkpoint_dirty(slot);
         division_work_remaining_.at(slot) = value;
     }
     double set_next_migration_time(Slot slot, double value);
     double set_next_division_time(Slot slot, double value);
     double set_death_deadline(Slot slot, double value);
     double set_last_update_time(Slot slot, double value);
-    void set_event_sequence(Slot slot, std::uint64_t value) { event_sequence_.at(slot) = value; }
-    std::uint64_t consume_event_sequence(Slot slot) { return event_sequence_.at(slot)++; }
+    double set_swap_ready_time(Slot slot, double value);
+    void set_swap_wait_state(Slot slot, std::uint8_t value) {
+        if (value > 1) {
+            throw std::invalid_argument("crowding-swap state must be 0 or 1");
+        }
+        mark_checkpoint_dirty(slot);
+        if (value == 0) {
+            pending_swap_direction_.at(slot) = kStayDirection;
+        }
+    }
+    void set_pending_swap_direction(Slot slot, DirectionId value) {
+        mark_checkpoint_dirty(slot);
+        pending_swap_direction_.at(slot) = value;
+    }
+    void clear_swap_wait(Slot slot) {
+        mark_checkpoint_dirty(slot);
+        pending_swap_direction_.at(slot) = kStayDirection;
+    }
+    void set_event_sequence(Slot slot, std::uint64_t value) {
+        mark_checkpoint_dirty(slot);
+        event_sequence_.at(slot) = value;
+    }
+    std::uint64_t consume_event_sequence(Slot slot) {
+        mark_checkpoint_dirty(slot);
+        return event_sequence_.at(slot)++;
+    }
     void set_migration_schedule_generation(Slot slot, std::uint32_t value) {
+        mark_checkpoint_dirty(slot);
         migration_schedule_generation_.at(slot) = value;
     }
     void set_division_schedule_generation(Slot slot, std::uint32_t value) {
+        mark_checkpoint_dirty(slot);
         division_schedule_generation_.at(slot) = value;
     }
     void set_death_schedule_generation(Slot slot, std::uint32_t value) {
+        mark_checkpoint_dirty(slot);
         death_schedule_generation_.at(slot) = value;
     }
     std::uint32_t bump_migration_schedule_generation(Slot slot) {
+        mark_checkpoint_dirty(slot);
         return ++migration_schedule_generation_.at(slot);
     }
     std::uint32_t bump_division_schedule_generation(Slot slot) {
+        mark_checkpoint_dirty(slot);
         return ++division_schedule_generation_.at(slot);
     }
     std::uint32_t bump_death_schedule_generation(Slot slot) {
+        mark_checkpoint_dirty(slot);
         return ++death_schedule_generation_.at(slot);
     }
 
     std::size_t allocated_bytes() const noexcept;
     static constexpr std::size_t logical_bytes_per_slot() noexcept {
         return sizeof(std::int32_t) * 3 + sizeof(CellUid) * 2 + sizeof(std::uint32_t) * 4 +
-               sizeof(std::uint8_t) * 6 + sizeof(float) * 10 +
+               sizeof(std::uint8_t) * 7 + sizeof(float) * 10 +
                sizeof(std::uint64_t);
     }
 
 private:
     void append(const CellInit& cell);
     void assign(Slot slot, const CellInit& cell);
+    void mark_checkpoint_dirty(Slot slot) const;
 
     std::vector<std::int32_t> x_;
     std::vector<std::int32_t> y_;
@@ -185,11 +289,15 @@ private:
     std::vector<float> next_division_time_;
     std::vector<float> death_deadline_;
     std::vector<float> last_update_time_;
+    std::vector<DirectionId> pending_swap_direction_;
     std::vector<std::uint64_t> event_sequence_;
     std::vector<std::uint32_t> migration_schedule_generation_;
     std::vector<std::uint32_t> division_schedule_generation_;
     std::vector<std::uint32_t> death_schedule_generation_;
     std::vector<Slot> free_slots_;
+    mutable std::vector<std::uint8_t> checkpoint_dirty_;
+    mutable std::vector<Slot> checkpoint_dirty_slots_;
+    mutable std::vector<FreeListMutation3D> checkpoint_free_list_mutations_;
     std::array<std::size_t, 3> stage_counts_{};
     std::size_t alive_count_{};
 };

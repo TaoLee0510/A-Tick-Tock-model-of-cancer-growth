@@ -38,6 +38,12 @@ all active tips, while a per-lesion limit resolves historical tip sources
 through this ownership table. A lesion therefore cannot evade its active-tip
 cap merely by merging after vessel birth.
 
+Lesions below both geometric and biological activation thresholds do not
+allocate empty Poisson scheduler objects. A disappeared process with no
+eligibility or event history is also removed. Processes carrying attempted
+arrivals, roots, or accumulated eligibility remain checkpointed so pruning
+cannot alter counters or RNG history.
+
 Biological lesion volume is the sum of its uniquely counted cells' configured
 stage volumes. Vessel voxels are excluded and co-located stage-2 cells count
 separately. A lesion must have the configured minimum number of core blocks and
@@ -45,15 +51,36 @@ reach its activation volume before its process becomes eligible; it becomes
 ineligible below the lower deactivation volume. Existing vessels continue to
 grow after their source lesion loses seed eligibility.
 
-Each eligible lesion has its own homogeneous Poisson process. The configured
-`rate_sites_per_30_days` is the expected number of attempted roots per eligible
-lesion per 30 days; it is not multiplied by cell count, lesion surface area, or
-`roots_per_event`. With 30 days equal to 720 hours,
+Each eligible lesion has its own density-modulated Poisson process. The base
+`rate_sites_per_30_days` is measured per eligible lesion per 30 days; it is not
+multiplied directly by cell count, lesion surface area, or `roots_per_event`.
+At each sparse lesion refresh, the model computes the relief-adjusted occupied
+fraction across that lesion's core blocks and maps it to a density stress:
 
 ```
-rate_per_hour = rate_sites_per_30_days / 720
-waiting_hours = -log(U) / rate_per_hour
+stress = clamp((effective_occupied_fraction - stress_on) /
+               (stress_full - stress_on), 0, 1)
+multiplier = clamp(stress^density_exponent *
+                   (biological_volume / volume_reference)^volume_exponent,
+                   minimum_multiplier, maximum_multiplier)
+rate_per_hour = base_rate_sites_per_30_days * multiplier / 720
 ```
+
+The reusable defaults use exponent 1, zero volume exponent, and multiplier
+range 0–4. The long single-cell production profile uses volume exponent 2/3,
+which is the initial surface-area scaling for an approximately similar-shape
+lesion, and a minimum multiplier of 0.25. The base parameter remains in
+sites/30 days; the multiplier only changes its instantaneous Poisson
+intensity. All exponents and clamps remain subject to scientific calibration.
+`homogeneous_poisson` remains available as a test/backward-comparison strategy.
+
+One unit-exponential hazard `H=-log(U)` is sampled per arrival from
+`(seed, lesion_id, event_sequence)`. Rate changes consume
+`elapsed_hours * old_rate_per_hour` from the remaining hazard and recompute the
+deadline with the new rate. A zero rate pauses the clock without resampling;
+later density recovery resumes the same pending hazard. This makes root
+formation a continuous dynamic process instead of a one-time trigger or a new
+random draw at every hourly refresh.
 
 The uniform `U` is keyed by `(seed, lesion_id, event_sequence)`, so different
 lesions have independent, reproducible waiting times. Each arrival is exactly
@@ -70,8 +97,8 @@ A rate of one site per 30 days means an expected attempted-site count of one
 and a probability `1-exp(-1)` of at least one arrival; it does not guarantee a
 root because the sampled arrival may be rejected.
 
-If eligibility is lost, its pending seed event is invalidated and a new waiting
-time is sampled on re-entry. Occupancy changes mark only affected coarse blocks
+If eligibility is lost, its pending seed event is invalidated and a new hazard
+is sampled on re-entry. Occupancy changes mark only affected coarse blocks
 dirty. A deterministic lesion-refresh event at the configured interval batches
 those local scans; a seed event also forces current geometry validation before
 committing. Checkpoints preserve the pre-refresh dirty observations, refresh
@@ -117,16 +144,33 @@ A centreline segment is rasterized as a capsule.  A voxel belongs to the vessel
 when its centre is no farther than `diameter_voxels/2` from the segment.  The
 complete capsule is proposed and committed atomically.
 
-Outward growth is empty-space only.  Inward growth may intersect cells and
+Outward growth remains empty-space while leaving its source lesion. If it
+touches another independently indexed solid lesion, the arriving tip changes
+to an inward branch, retargets that lesion's current centroid, adopts the
+configured inward speed/length budget, and begins whole-cell displacement.
+Inward growth may intersect cells and
 removes every intersected biological cell as a whole: all eight voxels of a
 large cell, a complete small cell, and all intersected co-located stage-2
 cells.  Removal reason is `vascular_displacement`.  Every committed vessel
 voxel permanently blocks later cell placement, movement, division, and stage
 recovery.
 
-Tips stop at configured length/node/voxel limits, domain boundaries, targets,
-or when no direction is feasible.  Vessel collision defaults to anastomosis
-and termination of the arriving tip.  Branching and regression are disabled in
+An inward tip reaching its first centroid target enters `transiting` state and
+keeps its established direction through the far half of the lesion. Its path
+budget is not the old fixed 128-voxel constant. At root creation it is computed
+from the greater of the centre-through distance and the farthest conservative
+lesion-bound distance, multiplied by `length_tortuosity_factor`, then extended
+by `exit_margin_voxels`. `max_length_voxels` is the minimum and
+`hard_max_length_voxels` is the safety cap.
+
+The production `continue_to_budget` far-surface policy keeps growing after the
+tip first encounters an empty capsule. This both permits emergence outside the
+far tumour surface and prevents an internal void from being mistaken for that
+surface. The legacy `stop_complete` policy remains available for controlled
+comparisons. A temporarily blocked tip stays event-driven and retries after the
+configured interval. Tips still stop at their computed budget, domain
+boundaries, or true vessel collision. Vessel collision defaults to anastomosis
+and termination of the arriving tip. Branching and regression are disabled in
 v1 but parent-network fields are retained.
 
 ## Vascular relief
@@ -136,12 +180,17 @@ density index.  A separate sparse relief field lowers effective crowding for
 growth and density-mediated death:
 
 ```
-d = max(0, distance_to_centerline - vessel_radius)
-relief = maximum_relief * max(0, 1 - d / influence_radius)
+s = distance_to_nearest_rasterized_perfused_vessel_voxel_center
+relief = maximum_relief * max(0, 1 - s / cutoff_radius)
 effective_density = raw_density * (1 - relief)
 ```
 
-Overlapping vessels combine by maximum relief. The default scope excludes
+The cutoff comparison is strict (`s < cutoff_radius`). Because the vessel is a
+rasterized capsule, the approximate maximum centerline reach is
+`diameter/2 + cutoff_radius`: with the defaults this is `1.5 + 12 = 13.5`
+voxels. At a source voxel the maximum relief is 0.50, so local effective density
+is halved; it falls linearly to zero relief at the cutoff. Overlapping vessels
+combine by maximum relief. The default scope excludes
 occupancy and migration rules. Every generated vessel is perfused immediately,
 so relief begins at root creation and extends as each inward/outward segment is
 committed. The stored `perfused` compatibility field is therefore always one
@@ -163,33 +212,45 @@ and at least four core blocks. These are configurable numerical starting values
 and require scientific/sensitivity calibration.
 
 Each lesion enables seeding at 100,000 biological voxel³ and disables it below
-80,000 voxel³. Its homogeneous Poisson rate is 10 attempted sites per eligible
-lesion per 30 days. One arrival attempts one root. Defaults include an 8-voxel
+80,000 voxel³. Its density-modulated base rate is 10 attempted sites per
+eligible lesion per 30 days, with stress onset/full occupied fractions 0.15 and
+0.60. One arrival attempts one root. Defaults include an 8-voxel
 minimum root separation, 64 global/per-lesion roots, 128 global/per-lesion
 active tips, inside-surface roots, and at least one surviving local support
 cell.
 
-Vessel diameter is 3 voxels. Inward tips grow at 0.50 voxel/hour toward the
-root-time source-lesion centroid and outward tips at 2.0 voxel/hour toward the
-exposed-face normal; each is limited to 128 voxels. An activated-r migration
+Vessel diameter is 3 voxels. Inward tips grow at 0.50 voxel/hour through the
+source lesion and outward tips at 2.0 voxel/hour toward the exposed-face
+normal. The inward minimum budget is 128 voxels, with tortuosity factor 1.5,
+16-voxel exterior margin, and hard cap 4096; the actual root budget is scaled
+from its lesion. Blocked tips retry every hour, and an outward tip touching
+another lesion converts to inward growth with a newly computed budget for that
+lesion. An activated-r migration
 rate is measured in moves/hour, while a fixed-26 move spans at most `sqrt(3)`
-voxels. Configuration validation therefore requires
-`outward_speed_voxels_per_hour > sqrt(3) * activated_r_rate_upper_bound`; the
-default `2.0` is strictly above the current bound `sqrt(3) * 1.0`. Direction
+voxels. Configuration validation therefore requires outward speed to exceed
+both inward speed and
+`sqrt(3) * activated_r_rate_upper_bound`; the default `2.0` is strictly above
+the current bound `sqrt(3) * 1.0`. Direction
 and turn cones are both 45°, persistence
 is 0.90, forward-direction weight is `exp(cos(angle))` at the default bias 1.0,
 and no extra Euclidean step-length weighting is applied. The immediately active
 linear influence has maximum density relief 0.50, decay length 4 voxels,
 and cutoff radius 12 voxels. These new vascular numbers are parameterized
 starting values rather than values inherited from the 2D model.
+The `single_r_stage0_2160h_density_vascular_v5` experiment raises the activated-r
+rate upper bound to 3 moves/hour and therefore uses an outward vessel speed of
+6 voxels/hour, which remains strictly above `sqrt(3) * 3`.
 
 ## Determinism and persistence
 
-Seed times, surface selection, tip directions, and conflicts use independent
+Seed hazards, surface selection, tip directions, and conflicts use independent
 stateless RNG event kinds keyed by seed, actor UID/lesion ID, event sequence,
-and draw index. Output never consumes this RNG. Checkpoint schema v3 stores
+and draw index. Output never consumes this RNG. Checkpoint base schema v6 and
+the default stable-slot journal schema v8 store
 stable lesion identity, exact dirty-block observations, every lesion process,
 historical-source ownership aliases, the lesion-refresh scheduler, centreline
 nodes and tips with their immutable source lesion, pending vessel steps, event
-times, sequences, and generations. Sparse cell and vessel occupancy and relief
-layers are rebuilt and validated on restore.
+times, sequences, generations, remaining Poisson hazard, current rate, density
+stress, and hazard integration time. Sparse cell and vessel occupancy and
+relief layers are rebuilt and validated on restore. Schema-v7 field deltas
+remain readable for older runs.

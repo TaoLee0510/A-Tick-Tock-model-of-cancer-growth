@@ -7,14 +7,21 @@ An output-enabled run uses:
 ```text
 run.json
 metrics/final.json
+metrics/vascular_latest.json
 checkpoints/checkpoint_*.h5
 lineage/edges.csv
 viz/preview/frame_*.vtkhdf
 viz/full/frame_*.vtkhdf
 viz/vessels/frame_*.vtkhdf
+viz/live/current.vtkhdf
+viz/live/vessels.vtkhdf
 preview.vtkhdf.series
 full.vtkhdf.series
 vessels.vtkhdf.series
+live.vtkhdf.series
+live-vessels.vtkhdf.series
+control/status.json
+control/simulator.pid
 ```
 
 The 3D executable never invokes legacy PNG code and never creates PNG frames.
@@ -30,6 +37,7 @@ a points-only `vtkPolyData`:
 |---|---|---|
 | `Points` | Float32 `[N,3]` | one center per biological cell |
 | `cell_id` | UInt64 | stable UID |
+| `cell_slot` | UInt32 | stable runtime slot used for incremental reconstruction |
 | `lesion_id` | UInt64 | stable owning lesion ID; `0` for an unassigned/free cell |
 | `clone_id` | UInt32 | clone identity |
 | `cell_type` | UInt8 | r=1, K=2 (legacy-compatible labels) |
@@ -42,11 +50,14 @@ Each cell frame also has one dataset-level FieldData value:
 | Field array | Type | Meaning |
 |---|---|---|
 | `total_cell_count` | UInt64 scalar | all live biological cells at this time, including cells omitted by preview sampling |
+| `total_slot_count` | UInt64 scalar | allocated stable-slot extent |
 
-No Verts, Lines, Polys, sphere meshes, or footprint voxels are stored. The seven
-required arrays plus float coordinates use 39 uncompressed bytes per biological
-cell before HDF5 metadata/alignment. Optional growth or migration arrays are not
+No Verts, Lines, Polys, sphere meshes, or footprint voxels are stored. Optional growth or migration arrays are not
 enabled by the `vtkhdf_points_v1` format strategy.
+
+`vtkHDFWriter` uses `output.storage.vtkhdf_compression_level` (default 1).
+Level 0 disables compression; 1–9 select the official writer's HDF5 deflate
+level. Compression changes neither simulation state nor sampling RNG.
 
 `lesion_id` is read from the simulation's current sparse lesion index and does
 not trigger a cell-wide topology rebuild during output. Preview and full frames
@@ -77,7 +88,7 @@ creates the display tube at render time.
 | `diameter_voxels` | Float32 | configured biological diameter in lattice voxels |
 | `radius_voxels` | Float32 | `diameter_voxels / 2`; ParaView Tube absolute-radius scalar |
 
-`run.json` schema version 3 declares the cell and vessel topology, both array
+`run.json` schema version 4 declares the cell and vessel topology, both array
 catalogs (including `lesion_id`, `source_lesion_id`, and the cell FieldData
 catalog), and `vessel_series`. The cell
 dataset remains strictly points-only:
@@ -89,7 +100,23 @@ contains eight voxels.
 Preview selects at most `output.preview_max_cells` UIDs with the smallest
 stable 64-bit hashes, breaking ties by UID. If N≤K every cell is included.
 Sampling is deterministic for the same seed/UID set and never calls simulation
-RNG. Full contains every live biological cell and all required fields.
+RNG. Preview remains a compressed, self-contained frame at
+`output.preview_every_hours` (1 h in `phase3_default_v1`). This permits
+low-latency random time-slider access without replaying a large delta chain.
+
+With `output.storage.mode: journal_delta_hdf5_v2`, full VTK-HDF contains every
+live cell at `output.full_every_hours` (24 h by default). Exact restart state
+at `output.checkpoint_every_hours` (1 h by default) is a separately versioned
+v6-base/v8 stable-slot journal chain. The hourly path does not freeze all live
+cells. The trame backend reconstructs a requested checkpoint only after the
+idle debounce. `full.vtkhdf.series` remains a standard ParaView series of
+self-contained frames; native ParaView never sees a checkpoint delta as a
+visualization frame.
+
+All three intervals are independent strict YAML values. Setting preview,
+full, or checkpoint below one hour is supported; choosing a dense full-frame
+interval intentionally trades disk and freeze-copy cost for temporal
+resolution.
 
 A due full frame always causes a preview frame at the exact same simulation
 step/time before the full frame. Preview may contain additional times.
@@ -145,8 +172,16 @@ that already has a `run.json`.
 
 ## Visualization clients
 
-Native ParaView can open either series directly. From a ParaView Python shell
-or `pvpython`:
+Native ParaView can open either series directly. In incremental mode the full
+series contains keyframes. To export any exact checkpoint time as a standalone
+official VTK-HDF file, run:
+
+```sh
+pvpython visualization/viewer/checkpoint_materializer.py \
+  RUN_DIRECTORY CHECKPOINT.h5 materialized.vtkhdf --compression-level 1
+```
+
+From a ParaView Python shell or `pvpython`:
 
 ```sh
 pvpython visualization/paraview_load.py RUN_DIRECTORY --quality preview \
@@ -161,22 +196,40 @@ pvpython visualization/viewer/app.py RUN_DIRECTORY --port 8080
 
 It renders cells and Tube-filtered vascular Lines in the ParaView backend;
 10-million-point full data is not sent to the browser. r cells use a fixed
-green categorical color, K cells fixed red, and vessels fixed blue. Vessel
-radius can be scaled without changing stored geometry. Whole, one-sided cut,
-and adjustable X/Y/Z slab modes clip both cells and vessel tubes in the backend
-while the camera remains freely rotatable. Drag/play loads preview cells plus the matching
+green categorical color, K cells fixed red, and vessels fixed blue; each class
+has an independent visibility switch. Vessel radius can be scaled without
+changing stored geometry. Whole, one-sided cut, and adjustable X/Y/Z slab modes
+clip both cells and vessel tubes in the backend. `Capture current view` records
+the camera direction as a fixed plane normal. Later camera rotation does not
+rotate that plane, and the position slider moves it along its saved normal. A
+disabled-by-default translucent blue overlay reads the influence cutoff from
+`run.json` and shows `radius_voxels + cutoff_radius_voxels`; it is a diagnostic
+envelope, not extra simulation geometry. Drag/play loads preview cells plus the matching
 vessel frame. The toolbar reports both the true live-cell count from
 `total_cell_count` and the number of sampled points currently displayed. A
-250 ms idle debounce then loads a full cell frame only when its
-time exactly matches. Every slider input invalidates the prior full token, so
+250 ms idle debounce then loads an exact full keyframe or reconstructs the
+matching checkpoint in the ParaView backend. Every slider input invalidates the prior full token, so
 100 rapid inputs do not queue 100 full reads. Camera position, focal point, up
 vector, and parallel scale are retained across cell/vessel frame switches. A
 new slider event invalidates the preceding token both before and after a full
 read, so a stale completion is never published and no further stale vessel/full
 work is queued. ParaView's individual `UpdatePipeline()` call is synchronous
 and cannot be interrupted safely once inside VTK; on the measured 10-million
-frame that non-preemptible interval was 0.10 s. The viewer polls all three
-atomic series files to discover frames from a live simulation.
+frame that non-preemptible interval was 0.10 s. The viewer polls the three
+archived series files, two overwrite-only live series files, and the
+atomically renamed checkpoint directory to discover frames from a live
+simulation.
+
+When `output.live_preview.enabled_when_viewer_attached` is true, a Studio
+viewer heartbeat enables a separate wall-clock preview path. At
+`wall_interval_seconds` the simulator samples at most `preview_max_cells` and
+atomically overwrites exactly two data files and two one-entry series files:
+`viz/live/current.vtkhdf`, `viz/live/vessels.vtkhdf`,
+`live.vtkhdf.series`, and `live-vessels.vtkhdf.series`. The old live instant
+is replaced rather than appended. It is merged into the viewer timeline tail
+but never enters archived preview/full catalogs, does not consume simulation
+RNG, and does not change simulation-clock sampling. `persist` must be false in
+the current schema. A stale or missing heartbeat disables this work.
 
 Cell splats use a server-side Calculator array
 `display_radius * point_size_scale`, with Point Gaussian `ScaleByArray`
@@ -189,3 +242,9 @@ The viewer requires ParaView Python plus the packages pinned in
 not simulation dependencies. Install them into a Python environment with the
 same major/minor version as `pvpython`, then expose that environment's
 `site-packages` to `pvpython` if ParaView does not bundle them.
+
+`metrics/vascular_latest.json` is atomically refreshed with preview output and
+at finalization. It records per-lesion density stress, current attempted-sites
+rate, next seed time and counters, tip role/status counts, and the exact relief
+profile/cutoff. This distinguishes low-density rate suppression, stochastic
+waiting, blocked retry, and terminal growth without guessing from a frame.

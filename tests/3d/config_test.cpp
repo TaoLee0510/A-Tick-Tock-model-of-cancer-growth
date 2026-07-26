@@ -55,6 +55,12 @@ int main() {
         std::filesystem::path("configs") / "atcg3d_smoke_test_v3.yaml";
     const std::filesystem::path production_path =
         std::filesystem::path("configs") / "atcg3d_legacy_2d_mapped_v3.yaml";
+    const std::filesystem::path single_cell_v5_path =
+        std::filesystem::path("configs") /
+        "single_r_stage0_2160h_density_vascular_v5.yaml";
+    const std::filesystem::path requested_single_cell_path =
+        std::filesystem::path("configs") /
+        "single_r_stage0_2160h_seed1.yaml";
     const std::string smoke_yaml = read_text(smoke_path);
     const std::string production_yaml = read_text(production_path);
 
@@ -82,6 +88,11 @@ int main() {
     assert(smoke.migration_activation_duration_mean_fraction == 0.30);
     assert(std::abs(smoke.migration_activation_duration_beta -
                     0.011666666666666667) < 1e-16);
+    assert(smoke.migration_swap_enabled);
+    assert(smoke.migration_swap_stage_policy == "stage1_singleton_v1");
+    assert(smoke.migration_swap_wait_fraction == 0.20);
+    assert(smoke.migration_swap_post_cooldown_fraction == 0.20);
+    assert(smoke.scheduler_backend == "event_queue_v1");
     assert(smoke.r_limit == 93.0);
     assert(smoke.K_limit == 108.0);
     assert(smoke.carrying_capacity_r == 186.0);
@@ -122,6 +133,12 @@ int main() {
     assert(smoke.angiogenesis.influence_profile == "linear_cutoff");
     assert(smoke.angiogenesis.influence_activation == "immediate");
     assert(smoke.angiogenesis.outward_speed_voxels_per_hour == 2.0);
+    assert(smoke.angiogenesis.inward_max_length_voxels == 128);
+    assert(smoke.angiogenesis.inward_length_tortuosity_factor == 1.5);
+    assert(smoke.angiogenesis.inward_exit_margin_voxels == 16.0);
+    assert(smoke.angiogenesis.inward_hard_max_length_voxels == 4096);
+    assert(smoke.angiogenesis.inward_far_surface_policy ==
+           "continue_to_budget");
     assert(smoke.threads == 4);
     assert(smoke.parallel_mode == "adaptive_cells_and_events_v1");
     assert(smoke.parallel_min_threads == 1);
@@ -130,7 +147,16 @@ int main() {
     assert(smoke.parallel_thread_thresholds.front().minimum_cells == 0);
     assert(smoke.parallel_thread_thresholds.back().minimum_cells == 25000);
     assert(smoke.parallel_thread_thresholds.back().max_thread_fraction == 1.0);
-    assert(smoke.checkpoint_format == "hdf5_v3");
+    assert(smoke.checkpoint_format == "hdf5_base_v6_slot_journal_v8");
+    assert(smoke.storage_mode == "journal_delta_hdf5_v2");
+    assert(smoke.vtkhdf_compression_level == 1);
+    assert(smoke.hdf5_compression_level == 1);
+    assert(smoke.hdf5_chunk_elements == 262144);
+    assert(smoke.preview_keyframe_every_hours == 1.0);
+    assert(smoke.full_keyframe_every_hours == 24.0);
+    assert(smoke.checkpoint_base_every_hours == 168.0);
+    assert(smoke.checkpoint_max_delta_chain == 168);
+    assert(smoke.delta_full_ratio == 0.70);
     assert(smoke.to_json().find("\"schema_version\":3") != std::string::npos);
     assert(smoke.to_json().find(
         "\"activated_r_migration_beta_scale\":1") != std::string::npos);
@@ -175,6 +201,7 @@ int main() {
     assert(production.initial_K_migration_beta.scale == 0.25);
     assert(!production.initial_K_migration_beta.lower_clamp_enabled);
     assert(production.r_to_K_conversion.enabled);
+    assert(!production.migration_swap_enabled);
     assert(production.angiogenesis.enabled);
     assert(production.angiogenesis.outward_speed_voxels_per_hour == 2.0);
     Model3DConfig slow_outward_vessel = production;
@@ -187,6 +214,17 @@ int main() {
         rejected_slow_outward_vessel = true;
     }
     assert(rejected_slow_outward_vessel);
+    Model3DConfig slower_than_inward_vessel = production;
+    slower_than_inward_vessel.activated_r_migration_beta.scale = 0.01;
+    slower_than_inward_vessel.angiogenesis.outward_speed_voxels_per_hour =
+        slower_than_inward_vessel.angiogenesis.inward_speed_voxels_per_hour;
+    bool rejected_slower_than_inward_vessel = false;
+    try {
+        slower_than_inward_vessel.validate();
+    } catch (const std::invalid_argument&) {
+        rejected_slower_than_inward_vessel = true;
+    }
+    assert(rejected_slower_than_inward_vessel);
     Model3DConfig faster_outward_vessel = production;
     faster_outward_vessel.angiogenesis.outward_speed_voxels_per_hour = 2.0;
     faster_outward_vessel.validate();
@@ -200,6 +238,63 @@ int main() {
     Model3DConfig changed_rate = production;
     changed_rate.activated_r_migration_beta.scale = 2.0;
     assert(changed_rate.dynamics_json() != production.dynamics_json());
+    Model3DConfig changed_storage = production;
+    changed_storage.vtkhdf_compression_level = 9;
+    changed_storage.hdf5_compression_level = 0;
+    changed_storage.full_keyframe_every_hours = 48.0;
+    changed_storage.checkpoint_base_every_hours = 336.0;
+    changed_storage.checkpoint_max_delta_chain = 336;
+    changed_storage.delta_full_ratio = 0.5;
+    assert(changed_storage.dynamics_json() == production.dynamics_json());
+
+    const Model3DConfig single_cell_v5 =
+        Model3DConfig::load(single_cell_v5_path);
+    assert(single_cell_v5.profile ==
+           "single_r_stage0_2160h_density_vascular_v5");
+    assert(single_cell_v5.activated_r_migration_beta.scale == 3.0);
+    assert(single_cell_v5.angiogenesis.outward_speed_voxels_per_hour == 6.0);
+    assert(single_cell_v5.angiogenesis.outward_speed_voxels_per_hour >
+           std::sqrt(3.0) *
+               single_cell_v5.activated_r_migration_beta.scale);
+    assert(single_cell_v5.threads == 18);
+    assert(single_cell_v5.output_directory ==
+           "/Volumes/Work_Active/simulation/ver7/"
+           "run_single_r_stage0_2160h_seed1_density_vascular_v5");
+
+    const Model3DConfig requested_single_cell =
+        Model3DConfig::load(requested_single_cell_path);
+    assert(requested_single_cell.profile == "single_r_stage0_2160h_seed1");
+    assert(requested_single_cell.activated_r_migration_beta.scale == 3.0);
+    assert(requested_single_cell.angiogenesis.outward_speed_voxels_per_hour ==
+           6.0);
+    assert(std::abs(
+               requested_single_cell.angiogenesis.seed_volume_exponent -
+               2.0 / 3.0) < 1e-9);
+    assert(requested_single_cell.angiogenesis.seed_minimum_rate_multiplier ==
+           0.25);
+    assert(requested_single_cell.angiogenesis.inward_far_surface_policy ==
+           "continue_to_budget");
+    Model3DConfig invalid_inward_budget = requested_single_cell;
+    invalid_inward_budget.angiogenesis.inward_hard_max_length_voxels =
+        invalid_inward_budget.angiogenesis.inward_max_length_voxels - 1;
+    bool rejected_invalid_inward_budget = false;
+    try {
+        invalid_inward_budget.validate();
+    } catch (const std::invalid_argument&) {
+        rejected_invalid_inward_budget = true;
+    }
+    assert(rejected_invalid_inward_budget);
+    assert(requested_single_cell.threads == 18);
+    assert(requested_single_cell.migration_swap_enabled);
+    assert(requested_single_cell.migration_swap_wait_fraction == 0.20);
+    assert(requested_single_cell.migration_swap_post_cooldown_fraction ==
+           0.20);
+    assert(requested_single_cell.scheduler_backend ==
+           "deterministic_exact_window_v3");
+    assert(requested_single_cell.output_directory ==
+           "/Volumes/Work_Active/simulation/ver7/"
+           "run_single_r_stage0_2160h_seed1");
+
     Model3DConfig changed_conversion = production;
     changed_conversion.r_to_K_conversion.probability_per_division += 0.01;
     assert(changed_conversion.dynamics_json() != production.dynamics_json());
@@ -252,6 +347,15 @@ int main() {
     expect_rejected("parallel_zero_events",
                     replace_once(smoke_yaml, "  min_events_per_thread: 1024\n",
                                  "  min_events_per_thread: 0\n"));
+    expect_rejected(
+        "zero_swap_wait",
+        replace_once(smoke_yaml, "    wait_fraction: 0.20\n",
+                     "    wait_fraction: 0.0\n"));
+    expect_rejected(
+        "unsupported_swap_stage",
+        replace_once(smoke_yaml,
+                     "    stage_policy: stage1_singleton_v1\n",
+                     "    stage_policy: all_stages\n"));
     expect_rejected("parallel_unsorted_thresholds",
                     replace_once(smoke_yaml, "    - minimum_cells: 5000\n",
                                  "    - minimum_cells: 0\n"));
@@ -292,8 +396,26 @@ int main() {
                                  "    root_position_policy: inside_surface_voxel\n",
                                  "    root_position_policy: outside_surface_voxel\n"));
     expect_rejected("checkpoint_v1",
-                    replace_once(smoke_yaml, "  checkpoint_format: hdf5_v3\n",
+                    replace_once(smoke_yaml,
+                                 "  checkpoint_format: hdf5_base_v6_slot_journal_v8\n",
                                  "  checkpoint_format: hdf5_v1\n"));
+    expect_rejected(
+        "invalid_hdf5_compression",
+        replace_once(smoke_yaml, "    hdf5_compression_level: 1\n",
+                     "    hdf5_compression_level: 10\n"));
+    expect_rejected(
+        "invalid_delta_ratio",
+        replace_once(smoke_yaml, "    delta_full_ratio: 0.70\n",
+                     "    delta_full_ratio: 0.0\n"));
+    expect_rejected(
+        "keyframe_before_frame",
+        replace_once(smoke_yaml,
+                     "    preview_keyframe_every_hours: 1.0\n",
+                     "    preview_keyframe_every_hours: 0.5\n"));
+    expect_rejected(
+        "unknown_storage_key",
+        replace_once(smoke_yaml, "    delta_full_ratio: 0.70\n",
+                     "    delta_full_ratio: 0.70\n    typo: 1\n"));
     expect_rejected("complete_density_relief",
                     replace_once(smoke_yaml, "    max_relief_fraction: 0.50\n",
                                  "    max_relief_fraction: 1.0\n"));

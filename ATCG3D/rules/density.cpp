@@ -67,6 +67,19 @@ DensityGrowthCounts growth_counts(const BlockDensityIndex3D& density,
             static_cast<long>(counts.total())};
 }
 
+DensityGrowthCounts growth_counts(const BlockDensityIndex3D& density,
+                                  Slot slot,
+                                  Vec3i anchor,
+                                  int window_edge,
+                                  bool thin_layer) {
+    if (!density.has_local_window_counts(window_edge, thin_layer)) {
+        return growth_counts(density, anchor, window_edge, thin_layer);
+    }
+    const DensityCounts3D counts = density.local_window_counts(slot);
+    return {static_cast<long>(counts.r), static_cast<long>(counts.K),
+            static_cast<long>(counts.total())};
+}
+
 double migration_activation_density(const BlockDensityIndex3D& density,
                                     Vec3i anchor,
                                     CellStage stage,
@@ -87,7 +100,7 @@ double density_growth_rate_for_cell(const CellStore3D& cells,
                                     const Model3DConfig& config,
                                     const VascularInfluenceField3D* vascular_influence) {
     const DensityGrowthCounts counts = growth_counts(
-        density, cells.anchor(slot), config.growth_density_window_edge,
+        density, slot, cells.anchor(slot), config.growth_density_window_edge,
         config.thin_layer);
     const double retained_density = vascular_influence == nullptr
         ? 1.0

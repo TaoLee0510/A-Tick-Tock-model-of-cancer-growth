@@ -59,6 +59,7 @@ atcg3d::Model3DConfig vascular_config(double end_time) {
 
     auto& vessels = config.angiogenesis;
     vessels.enabled = true;
+    vessels.seed_process_model = "homogeneous_poisson";
     vessels.trigger_activation_volume_voxels3 = 1.0;
     vessels.trigger_deactivation_volume_voxels3 = 0.0;
     vessels.seed_rate_sites_per_30_days = 720000.0;
@@ -68,7 +69,7 @@ atcg3d::Model3DConfig vascular_config(double end_time) {
     vessels.surface_min_separation_voxels = 0;
     vessels.diameter_voxels = 1.0;
     vessels.inward_speed_voxels_per_hour = 10.0;
-    vessels.outward_speed_voxels_per_hour = 10.0;
+    vessels.outward_speed_voxels_per_hour = 20.0;
     vessels.inward_max_length_voxels = 12;
     vessels.outward_max_length_voxels = 12;
     vessels.outward_external_connection_distance_voxels = 1.0;
@@ -387,10 +388,26 @@ int main() {
         directory / "non_float_clock.h5";
     const std::filesystem::path holes_path = directory / "holes.h5";
     const std::filesystem::path vascular_path = directory / "vascular.h5";
+    const std::filesystem::path pending_hazard_path =
+        directory / "pending_density_hazard.h5";
+    const std::filesystem::path retry_tip_path =
+        directory / "retry_waiting_tip.h5";
     const std::filesystem::path two_lesion_path =
         directory / "two_lesions.h5";
     const std::filesystem::path historical_source_path =
         directory / "historical_lesion_source.h5";
+    const std::filesystem::path delta_path = directory / "cells_delta_1.h5";
+    const std::filesystem::path delta2_path = directory / "cells_delta_2.h5";
+    const std::filesystem::path corrupt_delta_parent_path =
+        directory / "wrong_delta_parent.h5";
+    const std::filesystem::path high_churn_base_path =
+        directory / "high_churn_base.h5";
+    const std::filesystem::path high_churn_delta_path =
+        directory / "high_churn_delta.h5";
+    const std::filesystem::path slot_reuse_base_path =
+        directory / "slot_reuse_base.h5";
+    const std::filesystem::path slot_reuse_delta_path =
+        directory / "slot_reuse_delta.h5";
     const std::filesystem::path corrupt_path = directory / "corrupt.h5";
     const std::filesystem::path version_path = directory / "wrong_version.h5";
     const std::filesystem::path columns_path = directory / "wrong_columns.h5";
@@ -420,8 +437,17 @@ int main() {
     std::filesystem::remove(non_float_clock_path);
     std::filesystem::remove(holes_path);
     std::filesystem::remove(vascular_path);
+    std::filesystem::remove(pending_hazard_path);
+    std::filesystem::remove(retry_tip_path);
     std::filesystem::remove(two_lesion_path);
     std::filesystem::remove(historical_source_path);
+    std::filesystem::remove(delta_path);
+    std::filesystem::remove(delta2_path);
+    std::filesystem::remove(corrupt_delta_parent_path);
+    std::filesystem::remove(high_churn_base_path);
+    std::filesystem::remove(high_churn_delta_path);
+    std::filesystem::remove(slot_reuse_base_path);
+    std::filesystem::remove(slot_reuse_delta_path);
     std::filesystem::remove(corrupt_path);
     std::filesystem::remove(version_path);
     std::filesystem::remove(columns_path);
@@ -437,7 +463,7 @@ int main() {
     std::filesystem::remove(missing_source_ownership_path);
     std::filesystem::remove(corrupt_source_ownership_path);
 
-    // Schema v3 stores the three event-kind generations independently, even
+    // Schema v6 stores the three event-kind generations independently, even
     // when angiogenesis is disabled and the vascular tables are empty.
     Model3DConfig short_config = cell_only_config(5.0);
     Simulation3D original(short_config);
@@ -465,13 +491,19 @@ int main() {
         std::uint32_t schema{};
         meta.openAttribute("schema_version")
             .read(H5::PredType::NATIVE_UINT32, &schema);
-        assert(schema == 3);
+        assert(schema == kCheckpointBaseSchemaVersion3D);
         assert(static_cast<std::size_t>(
                    file.openDataSet("/cells/normal_migration_rate")
                        .getSpace().getSimpleExtentNpoints()) == data.cells.size());
         assert(static_cast<std::size_t>(
                    file.openDataSet("/cells/migration_activation_end_time")
                        .getSpace().getSimpleExtentNpoints()) == data.cells.size());
+        H5::DataSet uid_data = file.openDataSet("/cells/uid");
+        const hid_t creation = H5Dget_create_plist(uid_data.getId());
+        assert(creation >= 0);
+        assert(H5Pget_layout(creation) == H5D_CHUNKED);
+        assert(H5Pget_nfilters(creation) >= 2);
+        assert(H5Pclose(creation) >= 0);
     }
 
     Simulation3D restored(short_config);
@@ -587,9 +619,13 @@ int main() {
         return candidate.state_checksum();
     };
     using StatCounter = std::uint64_t SimulationStats3D::*;
-    constexpr std::array<StatCounter, 12> stat_counters{
+    constexpr std::array<StatCounter, 16> stat_counters{
         &SimulationStats3D::migration_attempts,
         &SimulationStats3D::migration_commits,
+        &SimulationStats3D::migration_swap_waits,
+        &SimulationStats3D::migration_swap_attempts,
+        &SimulationStats3D::migration_swap_commits,
+        &SimulationStats3D::migration_swap_rejections,
         &SimulationStats3D::divisions,
         &SimulationStats3D::deaths,
         &SimulationStats3D::conflict_rejections,
@@ -624,6 +660,376 @@ int main() {
     resumed.run();
     assert(resumed.state_checksum() == continuous.state_checksum());
     assert(resumed.clock().completed_events == continuous.clock().completed_events);
+
+    // Schema-v7 deltas store births, deaths, and sparse per-field updates plus
+    // the current global state. A base+delta chain must reconstruct the exact
+    // stable-slot state and remain bit-for-bit continuable.
+    const std::vector<Slot> resumed_slots = resumed.snapshot_cell_slots();
+    const std::vector<CellInit> resumed_cells = resumed.snapshot_cells();
+    const VasculatureState3D resumed_vasculature =
+        resumed.snapshot_vasculature();
+    const CheckpointSnapshotView3D base_view{
+        data.cells, data.cell_slots, data.cell_slot_count,
+        data.cell_free_slots, data.next_uid, data.clock, data.stats,
+        data.lineage, data.vasculature, data.state_checksum};
+    const CheckpointSnapshotView3D resumed_view{
+        resumed_cells, resumed_slots, resumed.cells().slot_count(),
+        resumed.cells().free_slots(), resumed.next_uid(), resumed.clock(),
+        resumed.stats(), resumed.lineage(), resumed_vasculature,
+        resumed.state_checksum()};
+    const CheckpointDeltaSummary3D first_delta_summary =
+        summarize_checkpoint_delta(resumed_view, base_view);
+    assert(first_delta_summary.changed_cells +
+               first_delta_summary.removed_cells > 0);
+    write_hdf5_delta_checkpoint(delta_path, resumed_view, base_view,
+                                cell_path, 1, long_config);
+    const CheckpointData3D delta_data =
+        read_hdf5_checkpoint(delta_path, long_config);
+    assert(delta_data.state_checksum == resumed.state_checksum());
+    assert(delta_data.cell_slots == resumed_slots);
+    {
+        H5::H5File file(delta_path.string(), H5F_ACC_RDONLY);
+        H5::Group meta = file.openGroup("/meta");
+        std::uint32_t schema{};
+        meta.openAttribute("schema_version")
+            .read(H5::PredType::NATIVE_UINT32, &schema);
+        assert(schema == kCheckpointFieldDeltaSchemaVersion3D);
+        const std::size_t births = static_cast<std::size_t>(
+            file.openDataSet("/cells/births/uid")
+                .getSpace().getSimpleExtentNpoints());
+        const std::size_t updates = static_cast<std::size_t>(
+            file.openDataSet("/cells/updates/uid")
+                .getSpace().getSimpleExtentNpoints());
+        assert(births + updates == first_delta_summary.changed_cells);
+        assert(static_cast<std::size_t>(
+                   file.openDataSet("/cells/removed_uid")
+                       .getSpace().getSimpleExtentNpoints()) ==
+               first_delta_summary.removed_cells);
+    }
+
+    Model3DConfig chain_config = cell_only_config(12.0);
+    chain_config.threads = 2;
+    Simulation3D chain_resumed(chain_config);
+    chain_resumed.restore(
+        delta_data.cells, delta_data.next_uid, delta_data.clock,
+        delta_data.stats, delta_data.lineage, delta_data.vasculature,
+        delta_data.cell_slot_count, delta_data.cell_slots,
+        delta_data.cell_free_slots);
+    chain_resumed.run();
+    Simulation3D chain_continuous(chain_config);
+    chain_continuous.run();
+    assert(chain_resumed.state_checksum() == chain_continuous.state_checksum());
+    const std::vector<Slot> chain_slots = chain_resumed.snapshot_cell_slots();
+    const std::vector<CellInit> chain_cells = chain_resumed.snapshot_cells();
+    const VasculatureState3D chain_vasculature =
+        chain_resumed.snapshot_vasculature();
+    const CheckpointSnapshotView3D delta_parent_view{
+        delta_data.cells, delta_data.cell_slots, delta_data.cell_slot_count,
+        delta_data.cell_free_slots, delta_data.next_uid, delta_data.clock,
+        delta_data.stats, delta_data.lineage, delta_data.vasculature,
+        delta_data.state_checksum};
+    const CheckpointSnapshotView3D chain_view{
+        chain_cells, chain_slots, chain_resumed.cells().slot_count(),
+        chain_resumed.cells().free_slots(), chain_resumed.next_uid(),
+        chain_resumed.clock(), chain_resumed.stats(),
+        chain_resumed.lineage(), chain_vasculature,
+        chain_resumed.state_checksum()};
+    write_hdf5_delta_checkpoint(delta2_path, chain_view, delta_parent_view,
+                                delta_path, 2, chain_config);
+    const CheckpointData3D delta2_data =
+        read_hdf5_checkpoint(delta2_path, chain_config);
+    assert(delta2_data.state_checksum == chain_resumed.state_checksum());
+
+    std::filesystem::copy_file(
+        delta2_path, corrupt_delta_parent_path,
+        std::filesystem::copy_options::overwrite_existing);
+    {
+        H5::H5File file(corrupt_delta_parent_path.string(), H5F_ACC_RDWR);
+        H5::Group meta = file.openGroup("/meta");
+        std::uint64_t wrong_parent = 0;
+        meta.openAttribute("parent_state_checksum")
+            .write(H5::PredType::NATIVE_UINT64, &wrong_parent);
+        file.flush(H5F_SCOPE_GLOBAL);
+    }
+    expect_rejected([&] {
+        (void)read_hdf5_checkpoint(corrupt_delta_parent_path, chain_config);
+    });
+
+    // High-churn state remains a schema-v7 field delta. Every surviving cell
+    // changes geometry and swap state, while unchanged columns remain empty.
+    {
+        constexpr std::size_t count = 1024;
+        Model3DConfig churn_config = cell_only_config(10.0);
+        churn_config.initial_r_cells = 0;
+        churn_config.initial_K_cells = 0;
+        churn_config.migration_swap_enabled = true;
+        std::vector<CellInit> before_cells;
+        std::vector<CellInit> after_cells;
+        before_cells.reserve(count);
+        after_cells.reserve(count);
+        for (std::size_t index = 0; index < count; ++index) {
+            CellInit cell = lesion_cell(
+                {static_cast<std::int32_t>(3 * index), 0, 0},
+                static_cast<CellUid>(index + 1));
+            cell.migration_schedule_generation = 1;
+            cell.division_schedule_generation = 1;
+            cell.death_schedule_generation = 1;
+            before_cells.push_back(cell);
+            cell.anchor.x += 1;
+            cell.next_migration_time = 20.0;
+            cell.swap_ready_time = 20.0;
+            cell.swap_wait_state = 1;
+            cell.pending_swap_direction = 6;
+            after_cells.push_back(cell);
+        }
+        Simulation3D before(churn_config);
+        before.restore(before_cells, count + 1, {}, {}, {});
+        SimulationClock3D after_clock;
+        after_clock.time_hours = 1.0;
+        after_clock.completed_events = count;
+        SimulationStats3D after_stats;
+        after_stats.migration_swap_waits = count;
+        Simulation3D after(churn_config);
+        after.restore(after_cells, count + 1, after_clock,
+                      after_stats, {});
+        write_hdf5_checkpoint(high_churn_base_path, before);
+
+        const std::vector<CellInit> before_snapshot =
+            before.snapshot_cells();
+        const std::vector<Slot> before_slots =
+            before.snapshot_cell_slots();
+        const std::vector<CellInit> after_snapshot =
+            after.snapshot_cells();
+        const std::vector<Slot> after_slots =
+            after.snapshot_cell_slots();
+        const VasculatureState3D before_vessels =
+            before.snapshot_vasculature();
+        const VasculatureState3D after_vessels =
+            after.snapshot_vasculature();
+        const CheckpointSnapshotView3D before_view{
+            before_snapshot, before_slots, before.cells().slot_count(),
+            before.cells().free_slots(), before.next_uid(), before.clock(),
+            before.stats(), before.lineage(), before_vessels,
+            before.state_checksum()};
+        const CheckpointSnapshotView3D after_view{
+            after_snapshot, after_slots, after.cells().slot_count(),
+            after.cells().free_slots(), after.next_uid(), after.clock(),
+            after.stats(), after.lineage(), after_vessels,
+            after.state_checksum()};
+        write_hdf5_delta_checkpoint(
+            high_churn_delta_path, after_view, before_view,
+            high_churn_base_path, 1, churn_config);
+        {
+            H5::H5File file(
+                high_churn_delta_path.string(), H5F_ACC_RDONLY);
+            std::uint32_t schema{};
+            file.openGroup("/meta")
+                .openAttribute("schema_version")
+                .read(H5::PredType::NATIVE_UINT32, &schema);
+            assert(schema == kCheckpointFieldDeltaSchemaVersion3D);
+            assert(file.openDataSet("/cells/updates/uid")
+                       .getSpace().getSimpleExtentNpoints() == count);
+            assert(file.openDataSet("/cells/updates/x")
+                       .getSpace().getSimpleExtentNpoints() == count);
+            assert(file.openDataSet("/cells/updates/swap_ready_time")
+                       .getSpace().getSimpleExtentNpoints() == count);
+            assert(file.openDataSet("/cells/updates/swap_wait_state")
+                       .getSpace().getSimpleExtentNpoints() == count);
+            assert(file.openDataSet(
+                           "/cells/updates/pending_swap_direction")
+                       .getSpace().getSimpleExtentNpoints() == count);
+            assert(file.openDataSet("/cells/updates/parent_uid")
+                       .getSpace().getSimpleExtentNpoints() == 0);
+            assert(file.openDataSet("/cells/births/uid")
+                       .getSpace().getSimpleExtentNpoints() == 0);
+        }
+        const CheckpointData3D churn_restored =
+            read_hdf5_checkpoint(high_churn_delta_path, churn_config);
+        assert(churn_restored.state_checksum == after.state_checksum());
+        assert(churn_restored.stats.migration_swap_waits == count);
+        assert(churn_restored.cells.front().swap_ready_time == 20.0);
+        assert(churn_restored.cells.front().swap_wait_state == 1);
+        assert(churn_restored.cells.front().pending_swap_direction == 6);
+    }
+
+    // A death followed by a birth may reuse the same stable slot. The field
+    // delta stores the death UID and a full birth row while preserving the
+    // exact current free-list.
+    {
+        Model3DConfig reuse_config = cell_only_config(10.0);
+        reuse_config.initial_r_cells = 0;
+        reuse_config.initial_K_cells = 0;
+        reuse_config.migration_swap_enabled = true;
+        CellInit first = lesion_cell({0, 0, 0}, 1);
+        CellInit survivor = lesion_cell({3, 0, 0}, 2);
+        first.migration_schedule_generation = 1;
+        first.division_schedule_generation = 1;
+        first.death_schedule_generation = 1;
+        survivor.migration_schedule_generation = 1;
+        survivor.division_schedule_generation = 1;
+        survivor.death_schedule_generation = 1;
+        Simulation3D reuse_parent(reuse_config);
+        reuse_parent.restore({first, survivor}, 3, {}, {}, {}, {}, 3,
+                             {0, 1}, {2});
+
+        CellInit newborn = lesion_cell({0, 0, 0}, 3);
+        newborn.parent_uid = 2;
+        newborn.next_migration_time = 9.0;
+        newborn.swap_ready_time = 9.0;
+        newborn.swap_wait_state = 1;
+        newborn.pending_swap_direction = 2;
+        newborn.migration_schedule_generation = 1;
+        newborn.division_schedule_generation = 1;
+        newborn.death_schedule_generation = 1;
+        SimulationClock3D reuse_clock;
+        reuse_clock.time_hours = 1.0;
+        reuse_clock.completed_events = 2;
+        std::vector<LineageEdge> reuse_lineage{
+            {1.0, 3, 2, newborn.clone_id, newborn.type}};
+        Simulation3D reuse_current(reuse_config);
+        reuse_current.restore({survivor, newborn}, 4, reuse_clock, {},
+                              reuse_lineage, {}, 3, {1, 0}, {2});
+        write_hdf5_checkpoint(slot_reuse_base_path, reuse_parent);
+
+        const std::vector<CellInit> parent_cells =
+            reuse_parent.snapshot_cells();
+        const std::vector<Slot> parent_slots =
+            reuse_parent.snapshot_cell_slots();
+        const std::vector<CellInit> current_cells =
+            reuse_current.snapshot_cells();
+        const std::vector<Slot> current_slots =
+            reuse_current.snapshot_cell_slots();
+        const VasculatureState3D parent_vessels =
+            reuse_parent.snapshot_vasculature();
+        const VasculatureState3D current_vessels =
+            reuse_current.snapshot_vasculature();
+        const CheckpointSnapshotView3D parent_view{
+            parent_cells, parent_slots, reuse_parent.cells().slot_count(),
+            reuse_parent.cells().free_slots(), reuse_parent.next_uid(),
+            reuse_parent.clock(), reuse_parent.stats(),
+            reuse_parent.lineage(), parent_vessels,
+            reuse_parent.state_checksum()};
+        const CheckpointSnapshotView3D current_view{
+            current_cells, current_slots,
+            reuse_current.cells().slot_count(),
+            reuse_current.cells().free_slots(), reuse_current.next_uid(),
+            reuse_current.clock(), reuse_current.stats(),
+            reuse_current.lineage(), current_vessels,
+            reuse_current.state_checksum()};
+        write_hdf5_delta_checkpoint(
+            slot_reuse_delta_path, current_view, parent_view,
+            slot_reuse_base_path, 1, reuse_config);
+        const CheckpointData3D reuse_restored =
+            read_hdf5_checkpoint(slot_reuse_delta_path, reuse_config);
+        assert((reuse_restored.cell_slots == std::vector<Slot>{1, 0}));
+        assert((reuse_restored.cell_free_slots == std::vector<Slot>{2}));
+        assert(reuse_restored.cells.size() == 2);
+        assert(reuse_restored.cells[0].uid == 2);
+        assert(reuse_restored.cells[1].uid == 3);
+        assert(reuse_restored.cells[1].swap_ready_time == 9.0);
+        assert(reuse_restored.state_checksum ==
+               reuse_current.state_checksum());
+    }
+
+    // A checkpoint can precede the first density-modulated arrival by many
+    // output hours. The compatibility aggregate is rebased to checkpoint time
+    // together with its pending hazard; retaining the lesion's older hazard
+    // timestamps would make an otherwise valid checkpoint fail validation.
+    Model3DConfig pending_hazard_config = vascular_config(1.0);
+    pending_hazard_config.angiogenesis.seed_process_model =
+        "density_modulated_poisson_v1";
+    pending_hazard_config.angiogenesis.seed_rate_sites_per_30_days = 1.0e-6;
+    pending_hazard_config.angiogenesis.seed_rate_sites_per_hour =
+        1.0e-6 / 720.0;
+    pending_hazard_config.angiogenesis.seed_density_stress_on_fraction = 0.0;
+    pending_hazard_config.angiogenesis.seed_density_stress_full_fraction =
+        0.001;
+    pending_hazard_config.angiogenesis.max_total_roots = 64;
+    pending_hazard_config.validate();
+    Simulation3D pending_hazard(pending_hazard_config);
+    pending_hazard.run();
+    const AngiogenesisProcessState3D pending_state =
+        pending_hazard.angiogenesis_state();
+    assert(pending_hazard.clock().time_hours == 1.0);
+    assert(pending_state.eligible);
+    assert(pending_state.next_seed_time_hours > 1.0);
+    assert(pending_state.hazard_last_update_hours == 1.0);
+    assert(pending_state.hazard_not_before_hours >= 1.0);
+    write_hdf5_checkpoint(pending_hazard_path, pending_hazard);
+    const CheckpointData3D pending_hazard_data =
+        read_hdf5_checkpoint(pending_hazard_path, pending_hazard_config);
+    assert(pending_hazard_data.state_checksum == pending_hazard.state_checksum());
+
+    // A growing tip may intentionally have direction=stay while waiting for
+    // its configured blocked-geometry retry event. That is a scheduled active
+    // state, not a corrupt checkpoint or a terminal blocked tip.
+    Model3DConfig retry_tip_config = vascular_config(2.0);
+    Simulation3D retry_tip_base(retry_tip_config);
+    retry_tip_base.initialize();
+    VasculatureState3D retry_tip_state =
+        retry_tip_base.snapshot_vasculature();
+    assert(retry_tip_state.lesions.processes.size() == 1);
+    const LesionId retry_source =
+        retry_tip_state.lesions.processes.front().lesion_id;
+    AngiogenesisProcessState3D completed_seed;
+    completed_seed.event_sequence = 1;
+    completed_seed.schedule_generation = 1;
+    completed_seed.attempted_events = 1;
+    completed_seed.committed_roots = 1;
+    retry_tip_state.lesions.processes.front().process = completed_seed;
+    retry_tip_state.process = aggregate_angiogenesis_process_states(
+        retry_tip_state.lesions.processes, 0.0);
+    VesselNodeInit3D retry_root;
+    retry_root.position = {100, 0, 0};
+    retry_root.uid = 1;
+    retry_root.vessel_id = 1;
+    retry_root.source_lesion_id = retry_source;
+    retry_root.role = VesselBranchRole::root;
+    retry_root.perfused = true;
+    retry_root.diameter_voxels = 1.0F;
+    retry_tip_state.nodes = {retry_root};
+    VesselTipInit3D waiting_tip;
+    waiting_tip.position = retry_root.position;
+    waiting_tip.bias_axis = {1, 0, 0};
+    waiting_tip.target = {110, 0, 0};
+    waiting_tip.uid = 1;
+    waiting_tip.vessel_id = 1;
+    waiting_tip.source_lesion_id = retry_source;
+    waiting_tip.current_node_uid = 1;
+    waiting_tip.current_node_slot = 0;
+    waiting_tip.role = VesselBranchRole::outward;
+    waiting_tip.status = VesselTipStatus::active;
+    waiting_tip.perfused = true;
+    waiting_tip.pending_direction = kStayDirection;
+    waiting_tip.diameter_voxels = 1.0F;
+    waiting_tip.speed_voxels_per_hour = 1.0F;
+    waiting_tip.max_length_voxels = 10.0F;
+    waiting_tip.next_growth_time = 1.0;
+    waiting_tip.schedule_generation = 1;
+    retry_tip_state.tips = {waiting_tip};
+    retry_tip_state.perfused_vessels = {1};
+    retry_tip_state.next_vessel_id = 2;
+    retry_tip_state.next_node_uid = 2;
+    retry_tip_state.next_tip_uid = 2;
+    SimulationStats3D retry_tip_stats;
+    retry_tip_stats.angiogenesis_seed_attempts = 1;
+    retry_tip_stats.angiogenesis_roots = 1;
+    Simulation3D retry_tip_simulation(retry_tip_config);
+    retry_tip_simulation.restore(
+        retry_tip_base.snapshot_cells(), retry_tip_base.next_uid(),
+        retry_tip_base.clock(), retry_tip_stats, retry_tip_base.lineage(),
+        retry_tip_state, retry_tip_base.cells().slot_count(),
+        retry_tip_base.snapshot_cell_slots(),
+        retry_tip_base.cells().free_slots());
+    write_hdf5_checkpoint(retry_tip_path, retry_tip_simulation);
+    const CheckpointData3D retry_tip_data =
+        read_hdf5_checkpoint(retry_tip_path, retry_tip_config);
+    assert(retry_tip_data.vasculature.tips.size() == 1);
+    assert(retry_tip_data.vasculature.tips.front().status ==
+           VesselTipStatus::active);
+    assert(retry_tip_data.vasculature.tips.front().pending_direction ==
+           kStayDirection);
+    assert(retry_tip_data.state_checksum == retry_tip_simulation.state_checksum());
 
     // A checkpoint taken while bidirectional vessel tips have pending events
     // must be bit-for-bit continuous after resume, including reconstructed

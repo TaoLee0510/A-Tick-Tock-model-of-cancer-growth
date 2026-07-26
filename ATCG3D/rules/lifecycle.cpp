@@ -126,6 +126,7 @@ void reset_migration_for_new_cycle(Slot slot,
     cells.set_flags(slot, cells.flags(slot) &
         static_cast<std::uint8_t>(~kMigrationActive));
     cells.set_last_direction(slot, kStayDirection);
+    cells.clear_swap_wait(slot);
 }
 
 void update_colocation_stages(Vec3i site,
@@ -276,6 +277,18 @@ bool refresh_migration_activation_state(Slot slot,
         config.migration_activation_window_edge,
         config.migration_activation_block_edge, config.thin_layer);
     if (migration_density < config.migration_activation_threshold) return false;
+    return activate_migration_state_if_density_high(slot, now, cells, config);
+}
+
+bool activate_migration_state_if_density_high(
+    Slot slot,
+    double now,
+    CellStore3D& cells,
+    const Model3DConfig& config) {
+    if (!cells.valid(slot) || !config.migration_activation_enabled ||
+        (cells.flags(slot) & static_cast<std::uint8_t>(kMigrationActive)) != 0) {
+        return false;
+    }
     const double density_rate = cells.density_growth_rate(slot);
     if (!(density_rate > config.death_growth_rate_threshold)) return false;
     const float quantized_now = static_cast<float>(now);
@@ -309,6 +322,7 @@ bool refresh_migration_activation_state(Slot slot,
     }
     cells.set_flags(slot, cells.flags(slot) |
         static_cast<std::uint8_t>(kMigrationActive));
+    cells.clear_swap_wait(slot);
     const double stored_end =
         cells.set_migration_activation_end_time(slot, end_time);
     if (!(stored_end > now) || stored_end > latest_end) {
@@ -338,6 +352,7 @@ bool expire_migration_activation_state(Slot slot,
         static_cast<std::uint8_t>(~kMigrationActive));
     cells.set_migration_activation_end_time(slot, 0.0);
     cells.set_last_direction(slot, kStayDirection);
+    cells.clear_swap_wait(slot);
     return true;
 }
 
@@ -385,7 +400,8 @@ GrowthRefreshResult refresh_growth_state(
     CellStore3D& cells,
     const BlockDensityIndex3D& density,
     const Model3DConfig& config,
-    const VascularInfluenceField3D* vascular_influence) {
+    const VascularInfluenceField3D* vascular_influence,
+    bool refresh_migration_activation) {
     GrowthRefreshResult result;
     if (!cells.valid(slot)) {
         return result;
@@ -420,7 +436,7 @@ GrowthRefreshResult refresh_growth_state(
     }
     const float quantized_rate = static_cast<float>(rate);
     cells.set_density_growth_rate(slot, quantized_rate);
-    result.migration_activation_changed =
+    result.migration_activation_changed = refresh_migration_activation &&
         refresh_migration_activation_state(slot, now, cells, density, config);
 
     const double effective_rate = static_cast<double>(quantized_rate);
@@ -714,7 +730,8 @@ DivisionResult commit_division_proposal(
     BlockDensityIndex3D& density,
     const Model3DConfig& config,
     std::vector<LineageEdge>& lineage,
-    const VascularInfluenceField3D* vascular_influence) {
+    const VascularInfluenceField3D* vascular_influence,
+    bool refresh_migration_activation) {
     DivisionResult result;
     const Slot mother = proposal.mother;
     if (proposal.action == DivisionAction::none || !cells.valid(mother) ||
@@ -779,14 +796,18 @@ DivisionResult commit_division_proposal(
         reset_migration_for_new_cycle(daughter, cells, config, sequence);
         lineage.push_back({now, cells.uid(daughter), mother_uid, cells.clone_id(daughter), cells.type(daughter)});
         density.add(cells.anchor(daughter), cells.type(daughter), daughter);
-        refresh_growth_state(mother, now, cells, density, config, vascular_influence);
-        refresh_growth_state(daughter, now, cells, density, config, vascular_influence);
+        refresh_growth_state(mother, now, cells, density, config,
+                             vascular_influence, false);
+        refresh_growth_state(daughter, now, cells, density, config,
+                             vascular_influence, false);
         initialize_division_cycle(mother, now, cells, config);
         initialize_division_cycle(daughter, now, cells, config);
-        (void)refresh_migration_activation_state(
-            mother, now, cells, density, config);
-        (void)refresh_migration_activation_state(
-            daughter, now, cells, density, config);
+        if (refresh_migration_activation) {
+            (void)refresh_migration_activation_state(
+                mother, now, cells, density, config);
+            (void)refresh_migration_activation_state(
+                daughter, now, cells, density, config);
+        }
     };
 
     if (mother_stage == CellStage::large) {

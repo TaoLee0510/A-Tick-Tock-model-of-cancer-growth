@@ -31,6 +31,13 @@ bool same_time(double lhs, double rhs) {
     return std::abs(lhs - rhs) <= 1e-10 * std::max({1.0, std::abs(lhs), std::abs(rhs)});
 }
 
+int floor_div_coordinate(int value, int divisor) noexcept {
+    int quotient = value / divisor;
+    const int remainder = value % divisor;
+    if (remainder != 0 && ((remainder < 0) != (divisor < 0))) --quotient;
+    return quotient;
+}
+
 double next_periodic_output_boundary(const Model3DConfig& config,
                                      double after_time) noexcept {
     if (!config.output_enabled) return std::numeric_limits<double>::infinity();
@@ -211,6 +218,25 @@ void validate_restored_cell_schedule(const CellInit& cell,
         throw std::runtime_error(
             "restored cell migration activation/rate and event time are inconsistent");
     }
+    const bool waiting_for_swap = cell.swap_wait_state != 0;
+    if ((!config.migration_swap_enabled && waiting_for_swap) ||
+        (waiting_for_swap &&
+         (cell.stage != CellStage::small ||
+          cell.pending_swap_direction == kStayDirection ||
+          cell.pending_swap_direction > 26 ||
+          cell.swap_ready_time + tolerance < clock.time_hours ||
+          !same_time(cell.next_migration_time, cell.swap_ready_time))) ||
+        (!waiting_for_swap &&
+         (cell.swap_ready_time != 0.0 ||
+          cell.pending_swap_direction != kStayDirection))) {
+        throw std::runtime_error(
+            "restored cell crowding-exchange state is inconsistent");
+    }
+    if (waiting_for_swap && config.thin_layer &&
+        direction_vector(cell.pending_swap_direction).z != 0) {
+        throw std::runtime_error(
+            "restored thin-layer crowding exchange has a 3D direction");
+    }
 
     const bool growth_active =
         cell.density_growth_rate > config.death_growth_rate_threshold;
@@ -222,6 +248,230 @@ void validate_restored_cell_schedule(const CellInit& cell,
 }
 
 }  // namespace
+
+std::size_t Simulation3D::ProposalCacheKeyHash::operator()(
+    const ProposalCacheKey& key) const noexcept {
+    std::uint64_t value = key.time_bits;
+    value ^= key.uid + 0x9e3779b97f4a7c15ULL + (value << 6U) + (value >> 2U);
+    value ^= static_cast<std::uint64_t>(key.generation) * 0xbf58476d1ce4e5b9ULL;
+    value ^= static_cast<std::uint64_t>(key.kind) * 0x94d049bb133111ebULL;
+    return static_cast<std::size_t>(value ^ (value >> 32U));
+}
+
+int Simulation3D::IndexedEventQueue::cell_position_class(
+    EventKind kind) noexcept {
+    switch (kind) {
+        case EventKind::death: return 0;
+        case EventKind::migration_activation_end: return 1;
+        case EventKind::division: return 2;
+        case EventKind::migration: return 3;
+        default: return -1;
+    }
+}
+
+Simulation3D::IndexedEventQueue::Position
+Simulation3D::IndexedEventQueue::position(
+    const Event& event) const noexcept {
+    const int cell_class = cell_position_class(event.kind);
+    if (cell_class >= 0) {
+        const auto& positions =
+            cell_positions_[static_cast<std::size_t>(cell_class)];
+        return event.slot < positions.size()
+            ? positions[event.slot]
+            : kNoPosition;
+    }
+    if (event.kind == EventKind::vessel_growth) {
+        return event.slot < vessel_positions_.size()
+            ? vessel_positions_[event.slot]
+            : kNoPosition;
+    }
+    if (event.kind == EventKind::angiogenesis_seed) {
+        const auto found = seed_positions_.find(event.uid);
+        return found == seed_positions_.end()
+            ? kNoPosition
+            : found->second;
+    }
+    if (event.kind == EventKind::lesion_refresh) {
+        return lesion_refresh_position_;
+    }
+    return kNoPosition;
+}
+
+void Simulation3D::IndexedEventQueue::set_position(
+    const Event& event, Position value) {
+    const int cell_class = cell_position_class(event.kind);
+    if (cell_class >= 0) {
+        auto& positions =
+            cell_positions_[static_cast<std::size_t>(cell_class)];
+        if (positions.size() <= event.slot) {
+            positions.resize(
+                static_cast<std::size_t>(event.slot) + 1U, kNoPosition);
+        }
+        positions[event.slot] = value;
+        return;
+    }
+    if (event.kind == EventKind::vessel_growth) {
+        if (vessel_positions_.size() <= event.slot) {
+            vessel_positions_.resize(
+                static_cast<std::size_t>(event.slot) + 1U, kNoPosition);
+        }
+        vessel_positions_[event.slot] = value;
+        return;
+    }
+    if (event.kind == EventKind::angiogenesis_seed) {
+        seed_positions_[event.uid] = value;
+        return;
+    }
+    if (event.kind == EventKind::lesion_refresh) {
+        lesion_refresh_position_ = value;
+    }
+}
+
+void Simulation3D::IndexedEventQueue::clear_position(
+    const Event& event) {
+    const int cell_class = cell_position_class(event.kind);
+    if (cell_class >= 0) {
+        auto& positions =
+            cell_positions_[static_cast<std::size_t>(cell_class)];
+        if (event.slot < positions.size()) {
+            positions[event.slot] = kNoPosition;
+        }
+        return;
+    }
+    if (event.kind == EventKind::vessel_growth) {
+        if (event.slot < vessel_positions_.size()) {
+            vessel_positions_[event.slot] = kNoPosition;
+        }
+        return;
+    }
+    if (event.kind == EventKind::angiogenesis_seed) {
+        seed_positions_.erase(event.uid);
+        return;
+    }
+    if (event.kind == EventKind::lesion_refresh) {
+        lesion_refresh_position_ = kNoPosition;
+    }
+}
+
+bool Simulation3D::IndexedEventQueue::earlier(
+    const Event& lhs, const Event& rhs) const noexcept {
+    if (lhs.time != rhs.time) return lhs.time < rhs.time;
+    if (lhs.kind != rhs.kind) return lhs.kind < rhs.kind;
+    return lhs.uid < rhs.uid;
+}
+
+void Simulation3D::IndexedEventQueue::swap_entries(
+    Position lhs, Position rhs) {
+    std::swap(heap_[lhs], heap_[rhs]);
+    set_position(heap_[lhs], lhs);
+    set_position(heap_[rhs], rhs);
+}
+
+Simulation3D::IndexedEventQueue::Position
+Simulation3D::IndexedEventQueue::sift_up(Position current) {
+    while (current > 0) {
+        const Position parent = (current - 1U) / 2U;
+        if (!earlier(heap_[current], heap_[parent])) break;
+        swap_entries(current, parent);
+        current = parent;
+    }
+    return current;
+}
+
+void Simulation3D::IndexedEventQueue::sift_down(Position current) {
+    for (;;) {
+        const std::uint64_t left64 =
+            static_cast<std::uint64_t>(current) * 2ULL + 1ULL;
+        if (left64 >= heap_.size()) break;
+        const Position left = static_cast<Position>(left64);
+        const Position right = left + 1U;
+        Position best = left;
+        if (right < heap_.size() &&
+            earlier(heap_[right], heap_[left])) {
+            best = right;
+        }
+        if (!earlier(heap_[best], heap_[current])) break;
+        swap_entries(current, best);
+        current = best;
+    }
+}
+
+void Simulation3D::IndexedEventQueue::erase_at(Position index) {
+    if (index >= heap_.size()) return;
+    clear_position(heap_[index]);
+    const Position last =
+        static_cast<Position>(heap_.size() - 1U);
+    if (index == last) {
+        heap_.pop_back();
+        return;
+    }
+    heap_[index] = std::move(heap_.back());
+    heap_.pop_back();
+    set_position(heap_[index], index);
+    const Position moved = sift_up(index);
+    sift_down(moved);
+}
+
+const Simulation3D::Event&
+Simulation3D::IndexedEventQueue::top() const {
+    if (heap_.empty()) {
+        throw std::logic_error("top requested from empty event queue");
+    }
+    return heap_.front();
+}
+
+void Simulation3D::IndexedEventQueue::pop() {
+    if (heap_.empty()) {
+        throw std::logic_error("pop requested from empty event queue");
+    }
+    erase_at(0);
+}
+
+void Simulation3D::IndexedEventQueue::push(
+    const Event& event) {
+    schedule(event, true);
+}
+
+void Simulation3D::IndexedEventQueue::schedule(
+    const Event& event, bool active) {
+    if (!active) {
+        cancel(event.kind, event.slot, event.uid);
+        return;
+    }
+    const Position existing = position(event);
+    if (existing != kNoPosition && existing < heap_.size()) {
+        heap_[existing] = event;
+        set_position(heap_[existing], existing);
+        const Position moved = sift_up(existing);
+        sift_down(moved);
+        return;
+    }
+    if (heap_.size() >= static_cast<std::size_t>(kNoPosition)) {
+        throw std::overflow_error(
+            "indexed event queue exceeds uint32 position capacity");
+    }
+    const Position inserted =
+        static_cast<Position>(heap_.size());
+    heap_.push_back(event);
+    set_position(heap_.back(), inserted);
+    (void)sift_up(inserted);
+}
+
+void Simulation3D::IndexedEventQueue::cancel(
+    EventKind kind, std::uint32_t slot, std::uint64_t uid) {
+    const Event key{0.0, slot, uid, kind, 0};
+    const Position found = position(key);
+    if (found != kNoPosition) erase_at(found);
+}
+
+void Simulation3D::IndexedEventQueue::cancel_cell(
+    std::uint32_t slot) {
+    for (const EventKind kind :
+         {EventKind::death, EventKind::migration_activation_end,
+          EventKind::division, EventKind::migration}) {
+        cancel(kind, slot);
+    }
+}
 
 AngiogenesisProcessState3D aggregate_angiogenesis_process_states(
     std::span<const LesionAngiogenesisState3D> processes,
@@ -242,6 +492,7 @@ AngiogenesisProcessState3D aggregate_angiogenesis_process_states(
 
     AngiogenesisProcessState3D aggregate;
     double next_time = std::numeric_limits<double>::infinity();
+    bool copied_hazard = false;
     LesionId previous = kNoLesionId;
     bool first = true;
     for (const LesionAngiogenesisState3D* entry : ordered) {
@@ -272,6 +523,21 @@ AngiogenesisProcessState3D aggregate_angiogenesis_process_states(
             }
             elapsed += snapshot_time_hours - state.eligibility_started_hours;
             aggregate.eligible = true;
+            if (!copied_hazard ||
+                (state.next_seed_time_hours > 0.0 &&
+                 (!std::isfinite(next_time) ||
+                  state.next_seed_time_hours < next_time))) {
+                aggregate.remaining_hazard = state.remaining_hazard;
+                aggregate.hazard_last_update_hours =
+                    state.hazard_last_update_hours;
+                aggregate.hazard_not_before_hours =
+                    state.hazard_not_before_hours;
+                aggregate.current_rate_sites_per_30_days =
+                    state.current_rate_sites_per_30_days;
+                aggregate.current_density_stress =
+                    state.current_density_stress;
+                copied_hazard = true;
+            }
             if (state.next_seed_time_hours > 0.0) {
                 next_time = std::min(next_time, state.next_seed_time_hours);
             }
@@ -297,6 +563,26 @@ AngiogenesisProcessState3D aggregate_angiogenesis_process_states(
         std::isfinite(next_time) ? next_time : 0.0;
     aggregate.eligibility_started_hours =
         aggregate.eligible ? snapshot_time_hours : 0.0;
+    if (aggregate.eligible && copied_hazard) {
+        // The aggregate is rebased to the snapshot time. Rebase the selected
+        // pending hazard as well; otherwise its original lesion activation
+        // time can precede the aggregate eligibility start and the derived
+        // compatibility row is internally inconsistent at checkpoint time.
+        const double hazard_start = std::max(
+            aggregate.hazard_last_update_hours,
+            aggregate.hazard_not_before_hours);
+        if (snapshot_time_hours > hazard_start &&
+            aggregate.current_rate_sites_per_30_days > 0.0) {
+            const double consumed = (snapshot_time_hours - hazard_start) *
+                AngiogenesisProcess3D::rate_per_hour(
+                    aggregate.current_rate_sites_per_30_days);
+            aggregate.remaining_hazard =
+                std::max(0.0, aggregate.remaining_hazard - consumed);
+        }
+        aggregate.hazard_last_update_hours = snapshot_time_hours;
+        aggregate.hazard_not_before_hours = std::max(
+            snapshot_time_hours, aggregate.hazard_not_before_hours);
+    }
     return aggregate;
 }
 
@@ -306,6 +592,10 @@ Simulation3D::Simulation3D(Model3DConfig config)
       vessel_grid_(config_.chunk_edge, domain_),
       grid_(config_.chunk_edge, domain_),
       density_(config_.density_block_edge),
+      migration_activation_counts_(
+          config_.migration_activation_window_edge,
+          config_.migration_activation_block_edge,
+          config_.thin_layer),
       vascular_influence_(config_.density_block_edge,
                           static_cast<float>(config_.angiogenesis.influence_cutoff_radius_voxels),
                           static_cast<float>(config_.angiogenesis.influence_max_relief_fraction),
@@ -316,16 +606,21 @@ Simulation3D::Simulation3D(Model3DConfig config)
       lesion_index_(lesion_index_config(config_)) {
     config_.validate();
     grid_.attach_vessel_grid(&vessel_grid_);
+    density_.attach_quantized_count_index(&migration_activation_counts_);
+    density_.configure_local_window_counts(
+        config_.growth_density_window_edge, config_.thin_layer);
 }
 
 void Simulation3D::initialize() {
     if (initialized_) {
         throw std::logic_error("simulation is already initialized");
     }
+    density_.begin_local_window_bulk_load();
     InitializationResult result = initialize_sphere_and_shell(cells_, grid_, density_, config_);
     next_uid_ = result.next_uid;
     lineage_ = std::move(result.lineage);
     rebuild_migration_activation_class_cache();
+    density_.reset_quantized_cache();
     if (config_.angiogenesis.enabled) {
         rebuild_tumor_surface();
         rebuild_lesion_index();
@@ -356,6 +651,7 @@ void Simulation3D::restore(const std::vector<CellInit>& restored_cells,
     } else {
         cells_.reserve(restored_cells.size());
     }
+    density_.begin_local_window_bulk_load();
     for (std::size_t index = 0; index < restored_cells.size(); ++index) {
         const CellInit& cell = restored_cells[index];
         validate_restored_cell_schedule(cell, clock, config_);
@@ -374,6 +670,7 @@ void Simulation3D::restore(const std::vector<CellInit>& restored_cells,
         }
         density_.add(cell.anchor, cell.type, slot);
     }
+    density_.finish_local_window_bulk_load(cells_.slot_count(), config_.threads);
 
     vessel_nodes_.reserve(vasculature.nodes.size());
     for (const VesselNodeInit3D& node : vasculature.nodes) {
@@ -433,6 +730,7 @@ void Simulation3D::restore(const std::vector<CellInit>& restored_cells,
     stats_ = stats;
     lineage_ = std::move(lineage);
     rebuild_migration_activation_class_cache();
+    density_.reset_quantized_cache();
     if (!config_.angiogenesis.enabled &&
         !vasculature.lesions.source_ownership.empty()) {
         throw std::runtime_error(
@@ -553,7 +851,7 @@ void Simulation3D::restore(const std::vector<CellInit>& restored_cells,
         }
         // In-memory/manual fixtures from the pre-lesion API may still supply
         // one aggregate process. Map it only when exactly one lesion exists;
-        // versioned checkpoint v3 always writes explicit lesion processes.
+        // Versioned checkpoints v3+ always write explicit lesion processes.
         if (vasculature.lesions.processes.empty() &&
             (vasculature.process.eligible ||
              vasculature.process.event_sequence != 0 ||
@@ -596,13 +894,18 @@ void Simulation3D::restore(const std::vector<CellInit>& restored_cells,
                  lesion_refresh_schedule_generation_);
     }
     reset_event_queue_rebuild_threshold();
+    // Restored state is the checkpoint baseline, not a set of post-checkpoint
+    // mutations. Subsequent writes begin a fresh slot-journal epoch.
+    cells_.reset_checkpoint_journal();
 }
 
 void Simulation3D::run(const std::function<void(const Simulation3D&)>& observer) {
     if (!initialized_) initialize();
     if (observer) observer(*this);
+    if (stop_requested_) return;
     double last_observer_time = clock_.time_hours;
-    while (clock_.completed_events < config_.max_events) {
+    while (!stop_requested_ &&
+           clock_.completed_events < config_.max_events) {
         // Output is part of the event-driven clock, but never of the
         // biological event queue. If no biological event occurs for several
         // hours, advance through each requested output boundary and expose the
@@ -621,6 +924,7 @@ void Simulation3D::run(const std::function<void(const Simulation3D&)>& observer)
             clock_.time_hours = next_output_time;
             observer(*this);
             last_observer_time = clock_.time_hours;
+            if (stop_requested_) break;
             continue;
         }
 
@@ -628,6 +932,7 @@ void Simulation3D::run(const std::function<void(const Simulation3D&)>& observer)
         if (observer && (!same_time(clock_.time_hours, last_observer_time) || events_.empty())) {
             observer(*this);
             last_observer_time = clock_.time_hours;
+            if (stop_requested_) break;
         }
     }
 }
@@ -641,6 +946,8 @@ bool Simulation3D::step() {
                                      events_.empty() ? config_.end_time_hours : events_.top().time);
         return false;
     }
+
+    prefetch_proposal_window();
 
     const double batch_time = events_.top().time;
     std::vector<Event> batch;
@@ -732,16 +1039,14 @@ bool Simulation3D::current(const Event& event) const {
     if (event.kind == EventKind::vessel_growth) {
         const VesselTipSlot slot = event.slot;
         return vessel_tips_.valid(slot) && vessel_tips_.uid(slot) == event.uid &&
-               vessel_tips_.status(slot) == VesselTipStatus::active &&
+               vessel_tip_growing(vessel_tips_.status(slot)) &&
                vessel_tips_.schedule_generation(slot) == event.generation &&
-               vessel_tips_.pending_direction(slot) != kStayDirection &&
                same_time(vessel_tips_.next_growth_time(slot), event.time);
     }
     const Slot slot = event.slot;
     if (!cells_.valid(slot) || cells_.uid(slot) != event.uid) return false;
     if (event.kind == EventKind::migration_activation_end) {
         return (cells_.flags(slot) & static_cast<std::uint8_t>(kMigrationActive)) != 0 &&
-               event.generation == cells_.migration_schedule_generation(slot) &&
                cells_.migration_activation_end_time(slot) > 0.0 &&
                same_time(cells_.migration_activation_end_time(slot), event.time);
     }
@@ -786,9 +1091,9 @@ std::uint32_t Simulation3D::bump_event_generation(EventKind kind, Slot slot) {
 
 void Simulation3D::schedule(EventKind kind, std::uint32_t slot, std::uint64_t uid,
                             double time, std::uint32_t generation) {
-    if (time > 0.0 && time >= clock_.time_hours && std::isfinite(time)) {
-        events_.push({time, slot, uid, kind, generation});
-    }
+    const bool active =
+        time > 0.0 && time >= clock_.time_hours && std::isfinite(time);
+    events_.schedule({time, slot, uid, kind, generation}, active);
 }
 
 void Simulation3D::reset_event_queue_rebuild_threshold() {
@@ -802,34 +1107,237 @@ void Simulation3D::reset_event_queue_rebuild_threshold() {
 }
 
 void Simulation3D::maybe_compact_event_queue() {
-    if (events_.size() <= event_queue_rebuild_threshold_) return;
+    // Indexed replacement keeps one live key per actor/event-kind, so queue
+    // growth from stale generations and periodic full rebuilds no longer
+    // exist. The compatibility counter intentionally remains zero.
+}
 
-    // Generation changes intentionally make old heap entries inert. Rebuild
-    // only after the heap has grown materially (25%, with a small fixed slack)
-    // so stale entries remain bounded without an O(N) pass on every event.
-    // Canonical next times/generations are copied from stores without drawing
-    // RNG or bumping a generation, so maintenance is thread-neutral and cannot
-    // affect future biology.
-    events_ = decltype(events_){};
-    for (const Slot slot : cells_.alive_slots()) restore_cell_events(slot);
-    for (const VesselTipSlot slot : vessel_tips_.alive_slots()) {
-        restore_vessel_tip_event(slot);
+Simulation3D::ProposalCacheKey Simulation3D::proposal_cache_key(
+    const Event& event) const noexcept {
+    return {std::bit_cast<std::uint64_t>(event.time), event.uid,
+            event.generation, event.kind};
+}
+
+Simulation3D::SpatialVersionStamp Simulation3D::capture_spatial_stamp(
+    Vec3i anchor, int radius) const {
+    SpatialVersionStamp stamp;
+    const int edge = config_.proposal_dependency_block_edge;
+    const Vec3i minimum{anchor.x - radius, anchor.y - radius, anchor.z - radius};
+    const Vec3i maximum{anchor.x + radius, anchor.y + radius, anchor.z + radius};
+    const Vec3i first{floor_div_coordinate(minimum.x, edge),
+                      floor_div_coordinate(minimum.y, edge),
+                      floor_div_coordinate(minimum.z, edge)};
+    const Vec3i last{floor_div_coordinate(maximum.x, edge),
+                     floor_div_coordinate(maximum.y, edge),
+                     floor_div_coordinate(maximum.z, edge)};
+    stamp.chunks.reserve(static_cast<std::size_t>(last.x - first.x + 1) *
+                         static_cast<std::size_t>(last.y - first.y + 1) *
+                         static_cast<std::size_t>(last.z - first.z + 1));
+    for (int x = first.x; x <= last.x; ++x) {
+        for (int y = first.y; y <= last.y; ++y) {
+            for (int z = first.z; z <= last.z; ++z) {
+                const Vec3i chunk{x, y, z};
+                const auto found = spatial_versions_.find(chunk);
+                stamp.chunks.push_back(
+                    {chunk, found == spatial_versions_.end() ? 0 : found->second});
+            }
+        }
     }
-    for (const auto& [lesion_id, process] : lesion_angiogenesis_processes_) {
-        if (process.state().eligible) schedule_seed_event(lesion_id);
+    return stamp;
+}
+
+bool Simulation3D::spatial_stamp_current(
+    const SpatialVersionStamp& stamp) const {
+    return std::all_of(stamp.chunks.begin(), stamp.chunks.end(),
+                       [this](const auto& entry) {
+        const auto found = spatial_versions_.find(entry.first);
+        const std::uint64_t current_version =
+            found == spatial_versions_.end() ? 0 : found->second;
+        return current_version == entry.second;
+    });
+}
+
+void Simulation3D::mark_spatial_changes(
+    std::span<const Vec3i> changed_sites) {
+    if (changed_sites.empty()) return;
+    if (next_spatial_version_ == std::numeric_limits<std::uint64_t>::max()) {
+        spatial_versions_.clear();
+        migration_proposal_cache_.clear();
+        next_spatial_version_ = 1;
+        proposal_cache_horizon_ = -1.0;
     }
-    if (next_lesion_refresh_time_hours_ > 0.0) {
-        schedule(EventKind::lesion_refresh, kEmptySlot, kNoLesionId,
-                 next_lesion_refresh_time_hours_,
-                 lesion_refresh_schedule_generation_);
+    const std::uint64_t version = next_spatial_version_++;
+    const int edge = config_.proposal_dependency_block_edge;
+    for (const Vec3i site : changed_sites) {
+        spatial_versions_[{floor_div_coordinate(site.x, edge),
+                           floor_div_coordinate(site.y, edge),
+                           floor_div_coordinate(site.z, edge)}] = version;
     }
-    ++event_queue_rebuild_count_;
-    reset_event_queue_rebuild_threshold();
+}
+
+void Simulation3D::prefetch_proposal_window() {
+    if (config_.scheduler_backend == "event_queue_v1") return;
+    if (!(config_.proposal_window_hours > 0.0) || events_.empty()) return;
+    const double start = events_.top().time;
+    if (!migration_proposal_cache_.empty() ||
+        (start <= proposal_cache_horizon_ &&
+         !same_time(start, proposal_cache_horizon_))) {
+        return;
+    }
+
+    migration_proposal_cache_.clear();
+    const double horizon = std::min(
+        config_.end_time_hours, start + config_.proposal_window_hours);
+    std::vector<Event> removed;
+    removed.reserve(static_cast<std::size_t>(std::min<std::uint64_t>(
+        config_.proposal_window_max_events, 262144)));
+    while (!events_.empty() && events_.top().time <= horizon &&
+           removed.size() < config_.proposal_window_max_events) {
+        Event event = events_.top();
+        events_.pop();
+        removed.push_back(event);
+    }
+    for (const Event& event : removed) events_.push(event);
+    proposal_cache_horizon_ = horizon;
+    ++proposal_window_diagnostics_.windows;
+
+    struct WorkItem {
+        Event event;
+        std::uint64_t sequence{};
+        SpatialVersionStamp stamp;
+        MoveProposal proposal;
+    };
+    std::vector<WorkItem> work;
+    work.reserve(removed.size());
+    const int read_radius = std::max(3, config_.direction_density_radius + 2);
+    const int dependency_edge = config_.proposal_dependency_block_edge;
+    std::unordered_set<Vec3i, Vec3iHash> possible_earlier_changes;
+    possible_earlier_changes.reserve(removed.size());
+    bool global_spatial_barrier = false;
+    const auto mark_possible_changes = [&](Vec3i anchor, int radius) {
+        const Vec3i minimum =
+            anchor - Vec3i{radius, radius,
+                           config_.thin_layer ? 0 : radius};
+        const Vec3i maximum =
+            anchor + Vec3i{radius, radius,
+                           config_.thin_layer ? 0 : radius};
+        const Vec3i first{
+            floor_div_coordinate(minimum.x, dependency_edge),
+            floor_div_coordinate(minimum.y, dependency_edge),
+            floor_div_coordinate(minimum.z, dependency_edge)};
+        const Vec3i last{
+            floor_div_coordinate(maximum.x, dependency_edge),
+            floor_div_coordinate(maximum.y, dependency_edge),
+            floor_div_coordinate(maximum.z, dependency_edge)};
+        for (int bx = first.x; bx <= last.x; ++bx) {
+            for (int by = first.y; by <= last.y; ++by) {
+                for (int bz = first.z; bz <= last.z; ++bz) {
+                    possible_earlier_changes.insert({bx, by, bz});
+                }
+            }
+        }
+    };
+    // Events were popped in exact commit order. Only speculate an event whose
+    // read blocks cannot be changed by any earlier event in this window. This
+    // turns nearly all retained proposals into cache hits instead of doing
+    // expensive parallel work that must immediately be discarded.
+    for (const Event& event : removed) {
+        if (!current(event)) continue;
+        if (event.kind == EventKind::migration &&
+            cells_.valid(event.slot)) {
+            const Vec3i anchor = cells_.anchor(event.slot);
+            SpatialVersionStamp stamp =
+                capture_spatial_stamp(anchor, read_radius);
+            const bool blocked =
+                global_spatial_barrier ||
+                std::any_of(
+                    stamp.chunks.begin(), stamp.chunks.end(),
+                    [&](const auto& entry) {
+                        return possible_earlier_changes.contains(entry.first);
+                    });
+            if (!blocked) {
+                work.push_back(
+                    {event, cells_.event_sequence(event.slot),
+                     std::move(stamp), {}});
+            }
+            mark_possible_changes(anchor, 2);
+            continue;
+        }
+        if ((event.kind == EventKind::death ||
+             event.kind == EventKind::division) &&
+            cells_.valid(event.slot)) {
+            mark_possible_changes(cells_.anchor(event.slot), 3);
+            continue;
+        }
+        if (event.kind == EventKind::vessel_growth &&
+            vessel_tips_.valid(event.slot)) {
+            const int radius = std::max(
+                2, static_cast<int>(std::ceil(
+                       vessel_tips_.diameter_voxels(event.slot) * 0.5F)) +
+                       2);
+            mark_possible_changes(
+                vessel_tips_.position(event.slot), radius);
+            continue;
+        }
+        if (event.kind == EventKind::angiogenesis_seed) {
+            // Root placement is selected from an entire lesion surface.
+            global_spatial_barrier = true;
+        }
+    }
+    if (work.empty()) return;
+    const int workers = select_worker_count(
+        cells_.alive_count(), work.size(), config_, available_worker_threads(),
+        config_.proposal_min_events_per_thread);
+    proposal_window_diagnostics_.maximum_workers =
+        std::max(proposal_window_diagnostics_.maximum_workers, workers);
+    deterministic_parallel_for(work.size(), workers, [&](std::size_t index) {
+        WorkItem& item = work[index];
+        const std::uint64_t time_bucket = config_.conflict_bucket_hours > 0.0
+            ? static_cast<std::uint64_t>(
+                  std::floor(item.event.time / config_.conflict_bucket_hours))
+            : std::bit_cast<std::uint64_t>(item.event.time);
+        item.proposal = make_move_proposal(
+            item.event.slot, cells_, grid_, density_, config_, item.sequence,
+            time_bucket);
+    });
+    for (WorkItem& item : work) {
+        migration_proposal_cache_.emplace(
+            proposal_cache_key(item.event),
+            CachedMigrationProposal{item.sequence, std::move(item.proposal),
+                                    std::move(item.stamp)});
+    }
+    proposal_window_diagnostics_.migration_proposals += work.size();
+    // A non-empty cache is a rolling window. Once all retained proposals have
+    // either committed or failed spatial-version validation, the next event
+    // may refill immediately instead of serially traversing the remainder of
+    // the original time horizon. Empty windows retain the horizon as a retry
+    // guard so a fully dependent region is not rescanned for every event.
+    proposal_cache_horizon_ = start;
+}
+
+std::optional<MoveProposal> Simulation3D::take_cached_migration_proposal(
+    const Event& event, std::uint64_t event_sequence) {
+    const auto found = migration_proposal_cache_.find(proposal_cache_key(event));
+    if (found == migration_proposal_cache_.end()) {
+        ++proposal_window_diagnostics_.migration_cache_misses;
+        return std::nullopt;
+    }
+    CachedMigrationProposal cached = std::move(found->second);
+    migration_proposal_cache_.erase(found);
+    if (cached.event_sequence != event_sequence ||
+        !spatial_stamp_current(cached.read_stamp)) {
+        ++proposal_window_diagnostics_.migration_cache_invalidations;
+        return std::nullopt;
+    }
+    ++proposal_window_diagnostics_.migration_cache_hits;
+    return std::move(cached.proposal);
 }
 
 void Simulation3D::schedule_cell(Slot slot) {
     if (!cells_.valid(slot)) return;
     reschedule_event(EventKind::migration, slot);
+    schedule(EventKind::migration_activation_end, slot, cells_.uid(slot),
+             cells_.migration_activation_end_time(slot), 0);
     reschedule_event(EventKind::division, slot);
     reschedule_event(EventKind::death, slot);
 }
@@ -841,7 +1349,7 @@ void Simulation3D::restore_cell_events(Slot slot) {
     schedule(EventKind::migration, slot, cells_.uid(slot),
              cells_.next_migration_time(slot), migration_generation);
     schedule(EventKind::migration_activation_end, slot, cells_.uid(slot),
-             cells_.migration_activation_end_time(slot), migration_generation);
+             cells_.migration_activation_end_time(slot), 0);
     for (const EventKind kind : {EventKind::division, EventKind::death}) {
         schedule(kind, slot, cells_.uid(slot), event_time(kind, slot),
                  event_generation(kind, slot));
@@ -856,10 +1364,6 @@ void Simulation3D::reschedule_event(EventKind kind, Slot slot) {
     }
     const std::uint32_t generation = bump_event_generation(kind, slot);
     schedule(kind, slot, cells_.uid(slot), event_time(kind, slot), generation);
-    if (kind == EventKind::migration) {
-        schedule(EventKind::migration_activation_end, slot, cells_.uid(slot),
-                 cells_.migration_activation_end_time(slot), generation);
-    }
 }
 
 void Simulation3D::synchronize_migration_schedule(Slot slot,
@@ -871,6 +1375,8 @@ void Simulation3D::synchronize_migration_schedule(Slot slot,
                   ? clock_.time_hours + 1.0 / rate
                   : 0.0);
     reschedule_event(EventKind::migration, slot);
+    schedule(EventKind::migration_activation_end, slot, cells_.uid(slot),
+             cells_.migration_activation_end_time(slot), 0);
 }
 
 void Simulation3D::apply_growth_refresh(Slot slot,
@@ -920,24 +1426,28 @@ void Simulation3D::process_deaths(const std::vector<Event>& events) {
     // snapshot. No removal is visible while another death is being judged.
     // This read-only phase is safe to parallelize; refresh and commit remain
     // ordered below so thread scheduling cannot affect model evolution.
-#ifdef _OPENMP
     const int worker_count = select_worker_count(
         cells_.alive_count(), pending.size(), config_, available_worker_threads());
-#pragma omp parallel for schedule(static) num_threads(worker_count)
-#endif
-    for (std::int64_t index = 0;
-         index < static_cast<std::int64_t>(pending.size()); ++index) {
-        const Event& event = pending[static_cast<std::size_t>(index)];
+    deterministic_parallel_for(
+        pending.size(), worker_count, [&](std::size_t index) {
+        const Event& event = pending[index];
         const double rate = density_growth_rate_for_cell(
             cells_, event.slot, density_, config_, influence);
-        decisions[static_cast<std::size_t>(index)] = {
+        decisions[index] = {
             event, rate <= config_.death_growth_rate_threshold};
-    }
+    });
     for (const DeathDecision& decision : decisions) {
         const Event& event = decision.event;
         if (!decision.remove) {
-            const GrowthRefreshResult refresh = refresh_growth_state(
-                event.slot, clock_.time_hours, cells_, density_, config_, influence);
+            GrowthRefreshResult refresh = refresh_growth_state(
+                event.slot, clock_.time_hours, cells_, density_, config_,
+                influence, false);
+            refresh.migration_activation_changed =
+                apply_migration_activation_class(
+                    event.slot,
+                    migration_activation_class(
+                        migration_activation_query_block(
+                            cells_.anchor(event.slot))));
             apply_growth_refresh(event.slot, refresh);
         } else {
             removals.push_back(event);
@@ -949,6 +1459,7 @@ void Simulation3D::process_deaths(const std::vector<Event>& events) {
         if (!cells_.valid(event.slot) || cells_.uid(event.slot) != event.uid) continue;
         const std::vector<Vec3i> occupied = occupied_sites_for_cell(cells_, event.slot);
         if (remove_cell(event.slot, cells_, grid_, density_)) {
+            events_.cancel_cell(event.slot);
             ++stats_.deaths;
             changed_sites.insert(changed_sites.end(), occupied.begin(), occupied.end());
         }
@@ -957,6 +1468,7 @@ void Simulation3D::process_deaths(const std::vector<Event>& events) {
         recover_neighborhood(changed_sites);
         refresh_tumor_surface(changed_sites);
         refresh_neighborhood(changed_sites);
+        mark_spatial_changes(changed_sites);
     }
 }
 
@@ -979,8 +1491,14 @@ void Simulation3D::process_divisions(const std::vector<Event>& events) {
         ? &vascular_influence_ : nullptr;
     for (const Event& event : events) {
         if (!current(event)) continue;
-        const GrowthRefreshResult event_refresh = refresh_growth_state(
-            event.slot, clock_.time_hours, cells_, density_, config_, influence);
+        GrowthRefreshResult event_refresh = refresh_growth_state(
+            event.slot, clock_.time_hours, cells_, density_, config_, influence,
+            false);
+        event_refresh.migration_activation_changed =
+            apply_migration_activation_class(
+                event.slot,
+                migration_activation_class(
+                    migration_activation_query_block(cells_.anchor(event.slot))));
         if (event_refresh.death_time_changed) {
             reschedule_event(EventKind::death, event.slot);
         }
@@ -999,22 +1517,19 @@ void Simulation3D::process_divisions(const std::vector<Event>& events) {
         });
     }
     std::vector<OrderedDivision> ordered(eligible.size());
-#ifdef _OPENMP
     const int worker_count = select_worker_count(
         cells_.alive_count(), eligible.size(), config_, available_worker_threads());
-#pragma omp parallel for schedule(static) num_threads(worker_count)
-#endif
-    for (std::int64_t index = 0;
-         index < static_cast<std::int64_t>(eligible.size()); ++index) {
-        const EligibleDivision& candidate = eligible[static_cast<std::size_t>(index)];
-        ordered[static_cast<std::size_t>(index)] = OrderedDivision{
+    deterministic_parallel_for(
+        eligible.size(), worker_count, [&](std::size_t index) {
+        const EligibleDivision& candidate = eligible[index];
+        ordered[index] = OrderedDivision{
             candidate.event,
             make_division_proposal(
                 candidate.event.slot, cells_, grid_, config_),
             candidate.mother_death_before,
             candidate.priority,
         };
-    }
+    });
     std::sort(ordered.begin(), ordered.end(), [](const OrderedDivision& lhs,
                                                   const OrderedDivision& rhs) {
         if (lhs.priority != rhs.priority) return lhs.priority > rhs.priority;
@@ -1058,13 +1573,23 @@ void Simulation3D::process_divisions(const std::vector<Event>& events) {
 
         DivisionResult result = commit_division_proposal(
             proposal, clock_.time_hours, next_uid_, cells_, grid_, density_,
-            config_, lineage_, influence);
+            config_, lineage_, influence, false);
         if (result.changed) {
             needs_opportunistic_recovery =
                 needs_opportunistic_recovery || !result.stage_recovery;
             changed_sites.insert(changed_sites.end(), result.changed_sites.begin(),
                                  result.changed_sites.end());
             if (result.daughter != kEmptySlot) {
+                const bool mother_activation_changed =
+                    apply_migration_activation_class(
+                        contender.event.slot,
+                        migration_activation_class(
+                            migration_activation_query_block(
+                                cells_.anchor(contender.event.slot))));
+                (void)apply_migration_activation_class(
+                    result.daughter,
+                    migration_activation_class(migration_activation_query_block(
+                        cells_.anchor(result.daughter))));
                 ++stats_.divisions;
                 const double rate = effective_migration_rate(
                     result.daughter, cells_, config_);
@@ -1089,9 +1614,19 @@ void Simulation3D::process_divisions(const std::vector<Event>& events) {
                         mother_rate > 0.0
                             ? clock_.time_hours + 1.0 / mother_rate
                             : 0.0);
-                    reschedule_event(EventKind::migration, contender.event.slot);
+                    if (mother_activation_changed) {
+                        // This transition owns the one activation-end event;
+                        // ordinary migration rescheduling intentionally does
+                        // not append duplicates.
+                        synchronize_migration_schedule(
+                            contender.event.slot, true);
+                    } else {
+                        reschedule_event(
+                            EventKind::migration, contender.event.slot);
+                    }
                 }
             } else if (result.mother_removed) {
+                events_.cancel_cell(contender.event.slot);
                 ++stats_.deaths;
             } else if (cells_.valid(contender.event.slot)) {
                 cells_.set_next_division_time(
@@ -1110,9 +1645,12 @@ void Simulation3D::process_divisions(const std::vector<Event>& events) {
         }
     }
     if (!changed_sites.empty()) {
-        if (needs_opportunistic_recovery) recover_neighborhood(changed_sites);
+        if (needs_opportunistic_recovery) {
+            recover_neighborhood(changed_sites);
+        }
         refresh_tumor_surface(changed_sites);
         refresh_neighborhood(changed_sites);
+        mark_spatial_changes(changed_sites);
     }
 }
 
@@ -1122,8 +1660,11 @@ void Simulation3D::process_migrations(const std::vector<Event>& events) {
     pending.reserve(events.size());
     for (const Event& event : events) {
         if (!current(event)) continue;
-        if (refresh_migration_activation_state(
-                event.slot, clock_.time_hours, cells_, density_, config_)) {
+        if (apply_migration_activation_class(
+                event.slot,
+                migration_activation_class(migration_activation_query_block(
+                    cells_.anchor(event.slot))))) {
+            cells_.clear_swap_wait(event.slot);
             const double rate = effective_migration_rate(
                 event.slot, cells_, config_);
             cells_.set_next_migration_time(
@@ -1134,30 +1675,197 @@ void Simulation3D::process_migrations(const std::vector<Event>& events) {
         pending.push_back({event, cells_.consume_event_sequence(event.slot)});
     }
     std::vector<MoveProposal> proposals(pending.size());
+    std::vector<std::uint8_t> proposal_needs_compute(pending.size(), 0);
+    for (std::size_t index = 0; index < pending.size(); ++index) {
+        std::optional<MoveProposal> cached =
+            take_cached_migration_proposal(
+                pending[index].event, pending[index].sequence);
+        if (cached.has_value()) {
+            proposals[index] = std::move(*cached);
+        } else {
+            proposal_needs_compute[index] = 1;
+        }
+    }
     const std::uint64_t time_bucket = config_.conflict_bucket_hours > 0.0
         ? static_cast<std::uint64_t>(std::floor(clock_.time_hours / config_.conflict_bucket_hours))
         : std::bit_cast<std::uint64_t>(clock_.time_hours);
-#ifdef _OPENMP
     const int worker_count = select_worker_count(
         cells_.alive_count(), pending.size(), config_, available_worker_threads());
-#pragma omp parallel for schedule(static) num_threads(worker_count)
-#endif
-    for (std::int64_t index = 0; index < static_cast<std::int64_t>(pending.size()); ++index) {
-        proposals[static_cast<std::size_t>(index)] = make_move_proposal(
-            pending[static_cast<std::size_t>(index)].event.slot, cells_, grid_, density_, config_,
-            pending[static_cast<std::size_t>(index)].sequence, time_bucket);
-    }
+    deterministic_parallel_for(
+        pending.size(), worker_count, [&](std::size_t index) {
+        const Pending& item = pending[index];
+        if (proposal_needs_compute[index] != 0) {
+            proposals[index] = make_move_proposal(
+                item.event.slot, cells_, grid_, density_, config_,
+                item.sequence, time_bucket);
+        }
+        if (config_.migration_swap_enabled &&
+            proposals[index].direction == kStayDirection &&
+            cells_.valid(item.event.slot) &&
+            cells_.swap_wait_state(item.event.slot) != 0 &&
+            clock_.time_hours + 1.0e-10 >=
+                cells_.swap_ready_time(item.event.slot) &&
+            feasible_directions(item.event.slot, cells_, grid_,
+                                config_.thin_layer).empty()) {
+            const DirectionCandidates3D swap_directions =
+                feasible_crowding_swap_directions(
+                    item.event.slot, cells_, grid_, config_.thin_layer);
+            DirectionId direction =
+                cells_.pending_swap_direction(item.event.slot);
+            if (std::find(swap_directions.begin(), swap_directions.end(),
+                          direction) == swap_directions.end()) {
+                direction = select_crowding_swap_direction(
+                    item.event.slot, cells_, grid_, config_, item.sequence);
+            }
+            if (direction != kStayDirection) {
+                proposals[index] = make_crowding_swap_proposal(
+                    item.event.slot, direction, cells_, grid_, config_,
+                    time_bucket);
+            }
+        }
+    });
     std::sort(proposals.begin(), proposals.end(), [](const MoveProposal& lhs, const MoveProposal& rhs) {
         if (lhs.priority != rhs.priority) return lhs.priority > rhs.priority;
         return lhs.uid < rhs.uid;
     });
 
     std::unordered_set<Vec3i, Vec3iHash> reserved;
+    std::unordered_set<Slot> locked_slots;
+    std::unordered_set<Slot> pending_slots;
+    pending_slots.reserve(pending.size());
+    for (const Pending& item : pending) {
+        pending_slots.insert(item.event.slot);
+    }
+    std::unordered_set<Slot> rescheduled_slots;
     std::vector<Vec3i> changed_sites;
     for (const MoveProposal& proposal : proposals) {
         ++stats_.migration_attempts;
-        if (proposal.direction == kStayDirection) {
-            if (cells_.valid(proposal.slot)) cells_.set_last_direction(proposal.slot, kStayDirection);
+        if (!cells_.valid(proposal.slot)) {
+            continue;
+        }
+        // A successful earlier swap may have moved and rescheduled this
+        // proposal's actor as the passive partner. Its proposal was computed
+        // from the pre-batch geometry and must not mutate the new cooldown or
+        // pending-swap state. The already consumed event still counts as an
+        // attempted migration.
+        if (locked_slots.contains(proposal.slot) ||
+            rescheduled_slots.contains(proposal.slot)) {
+            ++stats_.conflict_rejections;
+            continue;
+        }
+        if (proposal.swaps_anchors) {
+            ++stats_.migration_swap_attempts;
+            const bool conflict =
+                locked_slots.contains(proposal.slot) ||
+                locked_slots.contains(proposal.swap_partner) ||
+                std::any_of(
+                    proposal.reserved_sites.begin(),
+                    proposal.reserved_sites.end(),
+                    [&reserved](Vec3i site) {
+                        return reserved.contains(site);
+                    });
+            if (conflict ||
+                !commit_crowding_swap(
+                    proposal, cells_, grid_, density_)) {
+                ++stats_.migration_swap_rejections;
+                ++stats_.conflict_rejections;
+                if (cells_.valid(proposal.slot)) {
+                    const double rate = effective_migration_rate(
+                        proposal.slot, cells_, config_);
+                    const DirectionId retry_direction =
+                        select_crowding_swap_direction(
+                            proposal.slot, cells_, grid_, config_,
+                            cells_.event_sequence(proposal.slot));
+                    if (rate > 0.0 &&
+                        retry_direction != kStayDirection) {
+                        cells_.set_swap_wait_state(proposal.slot, 1);
+                        cells_.set_pending_swap_direction(
+                            proposal.slot, retry_direction);
+                        cells_.set_swap_ready_time(
+                            proposal.slot,
+                            clock_.time_hours +
+                                config_.migration_swap_wait_fraction / rate);
+                    } else {
+                        cells_.clear_swap_wait(proposal.slot);
+                    }
+                }
+            } else {
+                ++stats_.migration_swap_commits;
+                ++stats_.migration_commits;
+                locked_slots.insert(proposal.slot);
+                locked_slots.insert(proposal.swap_partner);
+                reserved.insert(proposal.reserved_sites.begin(),
+                                proposal.reserved_sites.end());
+                changed_sites.push_back(proposal.from);
+                changed_sites.push_back(proposal.to);
+
+                if (cells_.valid(proposal.swap_partner)) {
+                    if (!pending_slots.contains(proposal.swap_partner)) {
+                        (void)cells_.consume_event_sequence(
+                            proposal.swap_partner);
+                    }
+                    const double partner_rate = effective_migration_rate(
+                        proposal.swap_partner, cells_, config_);
+                    cells_.set_next_migration_time(
+                        proposal.swap_partner,
+                        migration_allowed_for_cell(
+                            proposal.swap_partner, cells_, config_) &&
+                                partner_rate > 0.0
+                            ? clock_.time_hours +
+                                  config_
+                                      .migration_swap_post_cooldown_fraction /
+                                      partner_rate
+                            : 0.0);
+                    reschedule_event(
+                        EventKind::migration, proposal.swap_partner);
+                    rescheduled_slots.insert(proposal.swap_partner);
+                }
+                const double actor_rate = effective_migration_rate(
+                    proposal.slot, cells_, config_);
+                cells_.set_next_migration_time(
+                    proposal.slot,
+                    migration_allowed_for_cell(
+                        proposal.slot, cells_, config_) &&
+                            actor_rate > 0.0
+                        ? clock_.time_hours +
+                              config_.migration_swap_post_cooldown_fraction /
+                                  actor_rate
+                        : 0.0);
+                reschedule_event(EventKind::migration, proposal.slot);
+                rescheduled_slots.insert(proposal.slot);
+            }
+        } else if (proposal.direction == kStayDirection) {
+            const bool spatially_blocked =
+                feasible_directions(proposal.slot, cells_, grid_,
+                                    config_.thin_layer).empty();
+            const double rate = effective_migration_rate(
+                proposal.slot, cells_, config_);
+            if (config_.migration_swap_enabled && spatially_blocked &&
+                cells_.stage(proposal.slot) == CellStage::small &&
+                rate > 0.0) {
+                const DirectionId direction =
+                    select_crowding_swap_direction(
+                        proposal.slot, cells_, grid_, config_,
+                        cells_.event_sequence(proposal.slot));
+                if (direction != kStayDirection) {
+                    cells_.set_swap_wait_state(proposal.slot, 1);
+                    cells_.set_pending_swap_direction(
+                        proposal.slot, direction);
+                    cells_.set_swap_ready_time(
+                        proposal.slot,
+                        clock_.time_hours +
+                            config_.migration_swap_wait_fraction / rate);
+                    ++stats_.migration_swap_waits;
+                } else {
+                    cells_.clear_swap_wait(proposal.slot);
+                    cells_.set_last_direction(
+                        proposal.slot, kStayDirection);
+                }
+            } else {
+                cells_.clear_swap_wait(proposal.slot);
+                cells_.set_last_direction(
+                    proposal.slot, kStayDirection);
+            }
         } else {
             const bool conflict = std::any_of(
                 proposal.reserved_sites.begin(), proposal.reserved_sites.end(),
@@ -1165,25 +1873,47 @@ void Simulation3D::process_migrations(const std::vector<Event>& events) {
             if (conflict) {
                 ++stats_.conflict_rejections;
             } else if (commit_move(proposal, cells_, grid_, density_)) {
+                cells_.clear_swap_wait(proposal.slot);
+                locked_slots.insert(proposal.slot);
                 reserved.insert(proposal.reserved_sites.begin(), proposal.reserved_sites.end());
-                changed_sites.push_back(proposal.from);
-                changed_sites.push_back(proposal.to);
+                if (cells_.stage(proposal.slot) == CellStage::large) {
+                    const auto before = large_footprint(proposal.from);
+                    const auto after = large_footprint(proposal.to);
+                    changed_sites.insert(changed_sites.end(), before.begin(), before.end());
+                    changed_sites.insert(changed_sites.end(), after.begin(), after.end());
+                } else {
+                    changed_sites.push_back(proposal.from);
+                    changed_sites.push_back(proposal.to);
+                }
                 ++stats_.migration_commits;
             }
         }
-        if (cells_.valid(proposal.slot)) {
+        if (cells_.valid(proposal.slot) &&
+            !rescheduled_slots.contains(proposal.slot)) {
             const double rate = effective_migration_rate(
                 proposal.slot, cells_, config_);
-            cells_.set_next_migration_time(proposal.slot,
-                migration_allowed_for_cell(proposal.slot, cells_, config_) && rate > 0.0
-                    ? clock_.time_hours + 1.0 / rate : 0.0);
+            const bool waiting =
+                cells_.swap_wait_state(proposal.slot) != 0 &&
+                cells_.swap_ready_time(proposal.slot) >
+                    clock_.time_hours;
+            cells_.set_next_migration_time(
+                proposal.slot,
+                waiting
+                    ? cells_.swap_ready_time(proposal.slot)
+                    : (migration_allowed_for_cell(
+                           proposal.slot, cells_, config_) &&
+                               rate > 0.0
+                           ? clock_.time_hours + 1.0 / rate
+                           : 0.0));
             reschedule_event(EventKind::migration, proposal.slot);
+            rescheduled_slots.insert(proposal.slot);
         }
     }
     if (!changed_sites.empty()) {
         recover_neighborhood(changed_sites);
         refresh_tumor_surface(changed_sites);
         refresh_neighborhood(changed_sites);
+        mark_spatial_changes(changed_sites);
     }
 }
 
@@ -1195,6 +1925,40 @@ void Simulation3D::rebuild_tumor_surface() {
                 [&](Vec3i site, Slot) { visitor(site); });
         },
         [this](Vec3i site) { return grid_.owner(site) != kEmptySlot; });
+    tumor_surface_dirty_blocks_.clear();
+}
+
+void Simulation3D::flush_tumor_surface_dirty() {
+    if (!config_.angiogenesis.enabled || tumor_surface_dirty_blocks_.empty()) {
+        return;
+    }
+    constexpr int kDirtyBlockEdge = 8;
+    std::vector<Vec3i> blocks(tumor_surface_dirty_blocks_.begin(),
+                              tumor_surface_dirty_blocks_.end());
+    std::sort(blocks.begin(), blocks.end());
+    std::vector<Vec3i> sites;
+    sites.reserve(static_cast<std::size_t>(kDirtyBlockEdge) *
+                  kDirtyBlockEdge * (config_.thin_layer ? 1 : kDirtyBlockEdge));
+    for (const Vec3i block : blocks) {
+        sites.clear();
+        const Vec3i minimum{block.x * kDirtyBlockEdge,
+                            block.y * kDirtyBlockEdge,
+                            config_.thin_layer ? block.z
+                                               : block.z * kDirtyBlockEdge};
+        for (int dx = 0; dx < kDirtyBlockEdge; ++dx) {
+            for (int dy = 0; dy < kDirtyBlockEdge; ++dy) {
+                const int z_count = config_.thin_layer ? 1 : kDirtyBlockEdge;
+                for (int dz = 0; dz < z_count; ++dz) {
+                    sites.push_back(minimum + Vec3i{dx, dy, dz});
+                }
+            }
+        }
+        tumor_surface_.refresh(
+            sites, [this](Vec3i site) {
+                return grid_.owner(site) != kEmptySlot;
+            });
+    }
+    tumor_surface_dirty_blocks_.clear();
 }
 
 void Simulation3D::rebuild_lesion_index() {
@@ -1351,22 +2115,18 @@ void Simulation3D::schedule_lesion_refresh_event() {
 
 void Simulation3D::refresh_tumor_surface(std::span<const Vec3i> changed_sites) {
     if (!config_.angiogenesis.enabled || changed_sites.empty()) return;
-    std::vector<Vec3i> expanded;
-    expanded.reserve(changed_sites.size() * 8U);
-    for (const Vec3i anchor : changed_sites) {
-        for (int dx = 0; dx <= 1; ++dx) {
-            for (int dy = 0; dy <= 1; ++dy) {
-                for (int dz = 0; dz <= (config_.thin_layer ? 0 : 1); ++dz) {
-                    expanded.push_back(anchor + Vec3i{dx, dy, dz});
-                }
-            }
-        }
+    constexpr int kDirtyBlockEdge = 8;
+    const auto floor_div = [](std::int32_t value) {
+        std::int32_t quotient = value / kDirtyBlockEdge;
+        if (value % kDirtyBlockEdge < 0) --quotient;
+        return quotient;
+    };
+    for (const Vec3i site : changed_sites) {
+        tumor_surface_dirty_blocks_.insert(
+            {floor_div(site.x), floor_div(site.y),
+             config_.thin_layer ? site.z : floor_div(site.z)});
     }
-    std::sort(expanded.begin(), expanded.end());
-    expanded.erase(std::unique(expanded.begin(), expanded.end()), expanded.end());
-    tumor_surface_.refresh(expanded,
-        [this](Vec3i site) { return grid_.owner(site) != kEmptySlot; });
-    lesion_index_.mark_dirty_sites(expanded);
+    mark_lesion_dirty(changed_sites);
 }
 
 double Simulation3D::biological_tumor_volume() const noexcept {
@@ -1429,6 +2189,63 @@ void Simulation3D::update_lesion_source_ownership(
     }
 }
 
+double Simulation3D::lesion_density_stress(
+    const LesionSummary3D& lesion) const {
+    if (lesion.core_blocks.empty()) return 0.0;
+    const int edge = config_.angiogenesis.lesion_block_edge;
+    const std::uint64_t block_capacity = static_cast<std::uint64_t>(edge) * edge *
+        (config_.thin_layer ? 1ULL : static_cast<std::uint64_t>(edge));
+    long double effective_occupied = 0.0L;
+    for (const Vec3i block : lesion.core_blocks) {
+        const std::int64_t minimum_x = static_cast<std::int64_t>(block.x) * edge;
+        const std::int64_t minimum_y = static_cast<std::int64_t>(block.y) * edge;
+        const std::int64_t minimum_z = static_cast<std::int64_t>(block.z) * edge;
+        for (int dx = 0; dx < edge; ++dx) {
+            for (int dy = 0; dy < edge; ++dy) {
+                const int z_count = config_.thin_layer ? 1 : edge;
+                for (int dz = 0; dz < z_count; ++dz) {
+                    const Vec3i site{
+                        static_cast<std::int32_t>(minimum_x + dx),
+                        static_cast<std::int32_t>(minimum_y + dy),
+                        static_cast<std::int32_t>(minimum_z + dz)};
+                    if (grid_.owner(site) == kEmptySlot) continue;
+                    effective_occupied +=
+                        1.0L - static_cast<long double>(
+                                   vascular_influence_.relief(site));
+                }
+            }
+        }
+    }
+    const long double total_capacity =
+        static_cast<long double>(block_capacity) * lesion.core_blocks.size();
+    const double occupied_fraction = total_capacity > 0.0L
+        ? static_cast<double>(effective_occupied / total_capacity) : 0.0;
+    const double onset = config_.angiogenesis.seed_density_stress_on_fraction;
+    const double full = config_.angiogenesis.seed_density_stress_full_fraction;
+    return std::clamp((occupied_fraction - onset) / (full - onset), 0.0, 1.0);
+}
+
+double Simulation3D::lesion_seed_rate(
+    const LesionSummary3D& lesion,
+    double density_stress) const {
+    if (config_.angiogenesis.seed_process_model == "homogeneous_poisson") {
+        return config_.angiogenesis.seed_rate_sites_per_30_days;
+    }
+    const double density_multiplier = std::pow(
+        std::clamp(density_stress, 0.0, 1.0),
+        config_.angiogenesis.seed_density_stress_exponent);
+    const double volume_ratio = lesion.biological_volume /
+        config_.angiogenesis.seed_volume_reference_voxels3;
+    const double volume_multiplier = std::pow(
+        std::max(0.0, volume_ratio),
+        config_.angiogenesis.seed_volume_exponent);
+    const double multiplier = std::clamp(
+        density_multiplier * volume_multiplier,
+        config_.angiogenesis.seed_minimum_rate_multiplier,
+        config_.angiogenesis.seed_maximum_rate_multiplier);
+    return config_.angiogenesis.seed_rate_sites_per_30_days * multiplier;
+}
+
 void Simulation3D::sync_angiogenesis_eligibility(bool force_refresh) {
     if (!initialized_ || !config_.angiogenesis.enabled) return;
     const bool refreshed = refresh_lesion_index(force_refresh);
@@ -1442,10 +2259,25 @@ void Simulation3D::sync_angiogenesis_eligibility(bool force_refresh) {
     for (const LesionSummary3D& lesion : lesion_index_.lesions()) {
         current_lesions.insert(lesion.id);
     }
-    for (auto& [lesion_id, process] : lesion_angiogenesis_processes_) {
-        if (!current_lesions.contains(lesion_id) && process.state().eligible) {
-            process.stop(clock_.time_hours);
+    const auto process_is_pristine =
+        [](const AngiogenesisProcessState3D& state) noexcept {
+        return !state.eligible && state.next_seed_time_hours == 0.0 &&
+            state.accumulated_eligible_hours == 0.0 &&
+            state.event_sequence == 0 && state.attempted_events == 0 &&
+            state.committed_roots == 0 && state.rejected_events == 0;
+    };
+    for (auto found = lesion_angiogenesis_processes_.begin();
+         found != lesion_angiogenesis_processes_.end();) {
+        if (!current_lesions.contains(found->first)) {
+            if (found->second.state().eligible) {
+                found->second.stop(clock_.time_hours);
+            }
+            if (process_is_pristine(found->second.state())) {
+                found = lesion_angiogenesis_processes_.erase(found);
+                continue;
+            }
         }
+        ++found;
     }
 
     recompute_aggregate_angiogenesis_state();
@@ -1453,29 +2285,56 @@ void Simulation3D::sync_angiogenesis_eligibility(bool force_refresh) {
         aggregate_angiogenesis_state_.committed_roots >=
         config_.angiogenesis.max_total_roots;
     for (const LesionSummary3D& lesion : lesion_index_.lesions()) {
-        auto [found, inserted] = lesion_angiogenesis_processes_.try_emplace(
-            lesion.id, config_.seed, lesion.id);
-        (void)inserted;
-        AngiogenesisProcess3D& process = found->second;
         const bool geometry_eligible =
             lesion.core_blocks.size() >=
             config_.angiogenesis.trigger_minimum_core_blocks;
         if (!geometry_eligible) {
-            if (process.state().eligible) process.stop(clock_.time_hours);
+            const auto found =
+                lesion_angiogenesis_processes_.find(lesion.id);
+            if (found != lesion_angiogenesis_processes_.end()) {
+                if (found->second.state().eligible) {
+                    found->second.stop(clock_.time_hours);
+                }
+                if (process_is_pristine(found->second.state())) {
+                    lesion_angiogenesis_processes_.erase(found);
+                }
+            }
             continue;
         }
-        const bool changed = process.update_volume(
+        auto found = lesion_angiogenesis_processes_.find(lesion.id);
+        if (found == lesion_angiogenesis_processes_.end()) {
+            // A process has no state to preserve before the lesion first
+            // reaches its activation threshold. Avoid retaining one empty
+            // scheduler object for every small metastatic focus.
+            if (global_limit_reached ||
+                lesion.biological_volume <
+                    config_.angiogenesis.trigger_activation_volume_voxels3) {
+                continue;
+            }
+            found = lesion_angiogenesis_processes_
+                        .try_emplace(lesion.id, config_.seed, lesion.id)
+                        .first;
+        }
+        AngiogenesisProcess3D& process = found->second;
+        const double density_stress = lesion_density_stress(lesion);
+        const double seed_rate = lesion_seed_rate(lesion, density_stress);
+        bool changed = process.update_volume(
             clock_.time_hours, lesion.biological_volume,
             config_.angiogenesis.trigger_activation_volume_voxels3,
             config_.angiogenesis.trigger_deactivation_volume_voxels3,
             config_.angiogenesis.trigger_delay_hours,
-            config_.angiogenesis.seed_rate_sites_per_30_days);
+            seed_rate);
+        if (process.state().eligible) {
+            changed = process.update_rate(clock_.time_hours, seed_rate,
+                                          density_stress) || changed;
+        }
         if ((global_limit_reached ||
              process.state().committed_roots >=
                  config_.angiogenesis.max_roots_per_lesion) &&
             process.state().eligible) {
             process.stop(clock_.time_hours);
-        } else if (changed && process.state().eligible) {
+        } else if (changed && process.state().eligible &&
+                   process.state().next_seed_time_hours > 0.0) {
             schedule_seed_event(lesion.id);
         }
     }
@@ -1499,8 +2358,21 @@ void Simulation3D::schedule_seed_event(LesionId lesion_id) {
 bool Simulation3D::process_seed_event(const Event& event) {
     if (!current(event)) return false;
     sync_angiogenesis_eligibility(true);
-    if (!current(event)) return false;
     auto process_found = lesion_angiogenesis_processes_.find(event.uid);
+    if (process_found == lesion_angiogenesis_processes_.end() ||
+        !process_found->second.state().eligible ||
+        process_found->second.state().next_seed_time_hours <= 0.0 ||
+        !same_time(process_found->second.state().next_seed_time_hours,
+                   event.time)) {
+        return false;
+    }
+    // Refreshing density at the exact arrival time may update the process
+    // rate and therefore its schedule generation.  The already-due unit
+    // hazard still represents this arrival; only the updated rate applies to
+    // the next hazard.  Do not discard the due event solely because that
+    // refresh replaced its generation with an equivalent event at the same
+    // time.
+    flush_tumor_surface_dirty();
     const LesionSummary3D* lesion = lesion_index_.find_lesion(event.uid);
     if (process_found == lesion_angiogenesis_processes_.end() || lesion == nullptr) {
         return false;
@@ -1561,7 +2433,8 @@ bool Simulation3D::process_seed_event(const Event& event) {
         }
     }
     process.consume_event(
-        clock_.time_hours, committed, config_.angiogenesis.seed_rate_sites_per_30_days);
+        clock_.time_hours, committed,
+        process.state().current_rate_sites_per_30_days);
     if (committed) {
         ++stats_.angiogenesis_roots;
     } else {
@@ -1573,7 +2446,7 @@ bool Simulation3D::process_seed_event(const Event& event) {
         process.state().committed_roots >=
             config_.angiogenesis.max_roots_per_lesion) {
         process.stop(clock_.time_hours);
-    } else {
+    } else if (process.state().next_seed_time_hours > 0.0) {
         schedule_seed_event(event.uid);
     }
     recompute_aggregate_angiogenesis_state();
@@ -1610,6 +2483,38 @@ bool Simulation3D::root_has_local_support(
         }
     }
     return support.size() >= config_.angiogenesis.surface_min_local_cells;
+}
+
+float Simulation3D::inward_length_budget(
+    Vec3i start, const LesionSummary3D& lesion) const {
+    const Vec3i centre = rounded_lesion_centroid(lesion);
+    const double centre_through_distance =
+        2.0 * segment_length(start, centre);
+    double farthest_bound_distance = 0.0;
+    for (const std::int32_t x :
+         {lesion.minimum_site.x, lesion.maximum_site.x}) {
+        for (const std::int32_t y :
+             {lesion.minimum_site.y, lesion.maximum_site.y}) {
+            for (const std::int32_t z :
+                 {lesion.minimum_site.z, lesion.maximum_site.z}) {
+                farthest_bound_distance = std::max(
+                    farthest_bound_distance,
+                    segment_length(start, {x, y, z}));
+            }
+        }
+    }
+    const double lesion_scale =
+        std::max(centre_through_distance, farthest_bound_distance);
+    const double requested =
+        std::ceil(lesion_scale *
+                      config_.angiogenesis.inward_length_tortuosity_factor +
+                  config_.angiogenesis.inward_exit_margin_voxels);
+    const double bounded = std::clamp(
+        requested,
+        static_cast<double>(config_.angiogenesis.inward_max_length_voxels),
+        static_cast<double>(
+            config_.angiogenesis.inward_hard_max_length_voxels));
+    return static_cast<float>(bounded);
 }
 
 bool Simulation3D::create_vessel_root(LesionId source_lesion_id,
@@ -1678,8 +2583,11 @@ bool Simulation3D::create_vessel_root(LesionId source_lesion_id,
     inward.diameter_voxels = diameter;
     inward.speed_voxels_per_hour =
         static_cast<float>(config_.angiogenesis.inward_speed_voxels_per_hour);
-    inward.max_length_voxels =
-        static_cast<float>(config_.angiogenesis.inward_max_length_voxels);
+    const LesionSummary3D* source_lesion =
+        lesion_index_.find_lesion(source_lesion_id);
+    inward.max_length_voxels = source_lesion == nullptr
+        ? static_cast<float>(config_.angiogenesis.inward_max_length_voxels)
+        : inward_length_budget(root_position, *source_lesion);
     const VesselTipSlot inward_slot = vessel_tips_.create(inward);
 
     VesselTipInit3D outward = inward;
@@ -1704,14 +2612,33 @@ bool Simulation3D::create_vessel_root(LesionId source_lesion_id,
         refresh_neighborhood(displaced);
     }
     if (immediate) refresh_growth_near_vessel(root_capsule);
+    std::vector<Vec3i> root_changes = root_capsule;
+    root_changes.insert(root_changes.end(), displaced.begin(), displaced.end());
+    mark_spatial_changes(root_changes);
     return true;
+}
+
+std::vector<LesionId> Simulation3D::vessel_contact_lesions(
+    std::span<const Vec3i> capsule) const {
+    std::vector<LesionId> result;
+    for (const Vec3i site : capsule) {
+        for (const Slot occupant : grid_.occupants(site)) {
+            if (!cells_.valid(occupant)) continue;
+            const auto lesion =
+                lesion_index_.lesion_for_anchor(cells_.anchor(occupant));
+            if (lesion.has_value()) result.push_back(*lesion);
+        }
+    }
+    std::sort(result.begin(), result.end());
+    result.erase(std::unique(result.begin(), result.end()), result.end());
+    return result;
 }
 
 std::vector<DirectionId> Simulation3D::feasible_vessel_directions(
     VesselTipSlot slot) const {
     std::vector<DirectionId> feasible;
     if (!vessel_tips_.valid(slot) ||
-        vessel_tips_.status(slot) != VesselTipStatus::active) return feasible;
+        !vessel_tip_growing(vessel_tips_.status(slot))) return feasible;
     const Vec3i from = vessel_tips_.position(slot);
     const float diameter = vessel_tips_.diameter_voxels(slot);
     const float grown = vessel_tips_.grown_length_voxels(slot);
@@ -1724,10 +2651,24 @@ std::vector<DirectionId> Simulation3D::feasible_vessel_directions(
         const Vec3i to = from + delta;
         const std::vector<Vec3i> capsule = rasterize_capsule(from, to, diameter);
         if (!vessel_grid_.all_in_domain(capsule)) continue;
-        if (vessel_tips_.role(slot) == VesselBranchRole::outward &&
-            std::any_of(capsule.begin(), capsule.end(),
-                        [this](Vec3i site) { return grid_.owner(site) != kEmptySlot; })) {
-            continue;
+        if (vessel_tips_.role(slot) == VesselBranchRole::outward) {
+            const bool contacts_cells = std::any_of(
+                capsule.begin(), capsule.end(),
+                [this](Vec3i site) { return grid_.owner(site) != kEmptySlot; });
+            if (contacts_cells) {
+                const std::vector<LesionId> contacts =
+                    vessel_contact_lesions(capsule);
+                const LesionId source = current_lesion_for_source(
+                    vessel_tips_.source_lesion_id(slot));
+                const bool source_contact = source != kNoLesionId &&
+                    std::find(contacts.begin(), contacts.end(), source) !=
+                        contacts.end();
+                if (source_contact || contacts.empty() ||
+                    config_.angiogenesis.outward_other_lesion_contact_policy !=
+                        "convert_to_inward") {
+                    continue;
+                }
+            }
         }
         feasible.push_back(direction);
     }
@@ -1736,22 +2677,48 @@ std::vector<DirectionId> Simulation3D::feasible_vessel_directions(
 
 void Simulation3D::schedule_vessel_tip(VesselTipSlot slot) {
     if (!vessel_tips_.valid(slot) ||
-        vessel_tips_.status(slot) != VesselTipStatus::active) return;
+        !vessel_tip_growing(vessel_tips_.status(slot))) return;
     const Vec3i position = vessel_tips_.position(slot);
     if (vessel_tips_.role(slot) == VesselBranchRole::inward) {
+        const Vec3i prior_bias = vessel_tips_.bias_axis(slot);
         const Vec3i bias = vessel_tips_.target(slot) - position;
         vessel_tips_.set_bias_axis(slot, bias);
-        if (segment_length(position, vessel_tips_.target(slot)) <=
+        if (vessel_tips_.status(slot) == VesselTipStatus::active &&
+            segment_length(position, vessel_tips_.target(slot)) <=
             config_.angiogenesis.inward_target_tolerance_voxels) {
-            vessel_tips_.set_status(slot, VesselTipStatus::reached_target);
-            vessel_tips_.set_pending_direction(slot, kStayDirection);
-            vessel_tips_.set_next_growth_time(slot, 0.0);
-            vessel_tips_.bump_schedule_generation(slot);
-            return;
+            if (config_.angiogenesis.inward_path_policy ==
+                "through_lesion_v1") {
+                Vec3i axis{};
+                const DirectionId previous = vessel_tips_.last_direction(slot);
+                if (previous != kStayDirection) {
+                    axis = direction_vector(previous);
+                } else {
+                    axis = {(prior_bias.x > 0) - (prior_bias.x < 0),
+                            (prior_bias.y > 0) - (prior_bias.y < 0),
+                            (prior_bias.z > 0) - (prior_bias.z < 0)};
+                }
+                if (squared_length(axis) == 0) axis = {1, 0, 0};
+                const int remaining = std::max(
+                    1, static_cast<int>(std::ceil(
+                           vessel_tips_.max_length_voxels(slot) -
+                           vessel_tips_.grown_length_voxels(slot))));
+                vessel_tips_.set_target(
+                    slot, position + Vec3i{axis.x * remaining,
+                                           axis.y * remaining,
+                                           axis.z * remaining});
+                vessel_tips_.set_bias_axis(slot, axis);
+                vessel_tips_.set_status(slot, VesselTipStatus::transiting);
+            } else {
+                vessel_tips_.set_status(slot, VesselTipStatus::reached_target);
+                vessel_tips_.set_pending_direction(slot, kStayDirection);
+                vessel_tips_.set_next_growth_time(slot, 0.0);
+                vessel_tips_.bump_schedule_generation(slot);
+                return;
+            }
         }
     }
-    if (vessel_tips_.grown_length_voxels(slot) >=
-        vessel_tips_.max_length_voxels(slot) - 1e-6F) {
+    if (vessel_tips_.max_length_voxels(slot) -
+            vessel_tips_.grown_length_voxels(slot) < 1.0F - 1e-6F) {
         vessel_tips_.set_status(slot, VesselTipStatus::max_length);
         vessel_tips_.set_pending_direction(slot, kStayDirection);
         vessel_tips_.set_next_growth_time(slot, 0.0);
@@ -1775,10 +2742,20 @@ void Simulation3D::schedule_vessel_tip(VesselTipSlot slot) {
         feasible, vessel_tips_.bias_axis(slot), vessel_tips_.last_direction(slot),
         parameters, config_.seed, vessel_tips_.uid(slot), sequence);
     if (selected == kStayDirection) {
-        vessel_tips_.set_status(slot, VesselTipStatus::blocked);
         vessel_tips_.set_pending_direction(slot, kStayDirection);
-        vessel_tips_.set_next_growth_time(slot, 0.0);
-        vessel_tips_.bump_schedule_generation(slot);
+        if (config_.angiogenesis.vessel_blocked_policy == "retry") {
+            vessel_tips_.set_next_growth_time(
+                slot, clock_.time_hours +
+                          config_.angiogenesis.vessel_blocked_retry_interval_hours);
+            const std::uint32_t generation =
+                vessel_tips_.bump_schedule_generation(slot);
+            schedule(EventKind::vessel_growth, slot, vessel_tips_.uid(slot),
+                     vessel_tips_.next_growth_time(slot), generation);
+        } else {
+            vessel_tips_.set_status(slot, VesselTipStatus::blocked);
+            vessel_tips_.set_next_growth_time(slot, 0.0);
+            vessel_tips_.bump_schedule_generation(slot);
+        }
         return;
     }
     const double duration = std::sqrt(
@@ -1793,9 +2770,8 @@ void Simulation3D::schedule_vessel_tip(VesselTipSlot slot) {
 
 void Simulation3D::restore_vessel_tip_event(VesselTipSlot slot) {
     if (!vessel_tips_.valid(slot) ||
-        vessel_tips_.status(slot) != VesselTipStatus::active) return;
-    if (vessel_tips_.pending_direction(slot) == kStayDirection ||
-        !(vessel_tips_.next_growth_time(slot) > clock_.time_hours)) {
+        !vessel_tip_growing(vessel_tips_.status(slot))) return;
+    if (!(vessel_tips_.next_growth_time(slot) > clock_.time_hours)) {
         throw std::runtime_error(
             "active restored vessel tip has no valid pending event");
     }
@@ -1812,13 +2788,43 @@ Simulation3D::VesselGrowthProposal Simulation3D::make_vessel_growth_proposal(
     const VesselTipSlot slot = event.slot;
     proposal.direction = vessel_tips_.pending_direction(slot);
     proposal.from = vessel_tips_.position(slot);
+    const std::uint64_t time_key = config_.conflict_bucket_hours > 0.0
+        ? static_cast<std::uint64_t>(
+              std::floor(event.time / config_.conflict_bucket_hours))
+        : double_bits(event.time);
+    proposal.priority = rng_word(
+        config_.seed, event.uid, kVesselConflictEvent, time_key, 0);
+    if (proposal.direction == kStayDirection) {
+        proposal.retry_wakeup = true;
+        proposal.valid = true;
+        return proposal;
+    }
     proposal.to = proposal.from + direction_vector(proposal.direction);
     proposal.capsule = rasterize_capsule(
         proposal.from, proposal.to, vessel_tips_.diameter_voxels(slot));
     if (!vessel_grid_.all_in_domain(proposal.capsule)) return proposal;
+    proposal.contacts_cells = std::any_of(
+        proposal.capsule.begin(), proposal.capsule.end(),
+        [this](Vec3i site) { return grid_.owner(site) != kEmptySlot; });
+    if (proposal.contacts_cells) {
+        const std::vector<LesionId> contacts =
+            vessel_contact_lesions(proposal.capsule);
+        const LesionId source = current_lesion_for_source(
+            vessel_tips_.source_lesion_id(slot));
+        proposal.contacts_source_lesion =
+            source != kNoLesionId &&
+            std::find(contacts.begin(), contacts.end(), source) != contacts.end();
+        const auto other = std::find_if(
+            contacts.begin(), contacts.end(),
+            [source](LesionId id) { return id != source; });
+        if (other != contacts.end()) proposal.contacted_lesion = *other;
+    }
     if (vessel_tips_.role(slot) == VesselBranchRole::outward &&
-        std::any_of(proposal.capsule.begin(), proposal.capsule.end(),
-                    [this](Vec3i site) { return grid_.owner(site) != kEmptySlot; })) {
+        proposal.contacts_cells &&
+        (proposal.contacts_source_lesion ||
+         proposal.contacted_lesion == kNoLesionId ||
+         config_.angiogenesis.outward_other_lesion_contact_policy !=
+             "convert_to_inward")) {
         return proposal;
     }
 
@@ -1843,35 +2849,33 @@ Simulation3D::VesselGrowthProposal Simulation3D::make_vessel_growth_proposal(
                              allowed_previous_capsule.end(), site) ==
                        allowed_previous_capsule.end();
         });
-    const std::uint64_t time_key = config_.conflict_bucket_hours > 0.0
-        ? static_cast<std::uint64_t>(
-              std::floor(event.time / config_.conflict_bucket_hours))
-        : double_bits(event.time);
-    proposal.priority = rng_word(
-        config_.seed, event.uid, kVesselConflictEvent, time_key, 0);
     proposal.valid = true;
     return proposal;
 }
 
 void Simulation3D::process_vessel_growth(const std::vector<Event>& events) {
     std::vector<VesselGrowthProposal> proposals(events.size());
-#ifdef _OPENMP
     const int worker_count = select_worker_count(
         cells_.alive_count(), events.size(), config_, available_worker_threads());
-#pragma omp parallel for schedule(static) num_threads(worker_count)
-#endif
-    for (std::int64_t index = 0;
-         index < static_cast<std::int64_t>(events.size()); ++index) {
-        proposals[static_cast<std::size_t>(index)] =
-            make_vessel_growth_proposal(events[static_cast<std::size_t>(index)]);
-    }
+    deterministic_parallel_for(
+        events.size(), worker_count, [&](std::size_t index) {
+        proposals[index] = make_vessel_growth_proposal(events[index]);
+    });
     std::sort(proposals.begin(), proposals.end(), [](const auto& lhs, const auto& rhs) {
         if (lhs.priority != rhs.priority) return lhs.priority > rhs.priority;
         return lhs.event.uid < rhs.event.uid;
     });
 
     std::unordered_set<Vec3i, Vec3iHash> reserved;
+    std::vector<Vec3i> changed_sites;
     for (const VesselGrowthProposal& proposal : proposals) {
+        if (proposal.retry_wakeup) {
+            if (proposal.valid && current(proposal.event)) {
+                vessel_tips_.set_next_growth_time(proposal.event.slot, 0.0);
+                schedule_vessel_tip(proposal.event.slot);
+            }
+            continue;
+        }
         ++stats_.vessel_growth_attempts;
         bool conflict = !proposal.valid;
         if (!conflict) {
@@ -1890,7 +2894,7 @@ void Simulation3D::process_vessel_growth(const std::vector<Event>& events) {
         if (conflict) {
             ++stats_.conflict_rejections;
             if (vessel_tips_.valid(proposal.event.slot) &&
-                vessel_tips_.status(proposal.event.slot) == VesselTipStatus::active) {
+                vessel_tip_growing(vessel_tips_.status(proposal.event.slot))) {
                 vessel_tips_.set_pending_direction(proposal.event.slot, kStayDirection);
                 vessel_tips_.set_next_growth_time(proposal.event.slot, 0.0);
                 schedule_vessel_tip(proposal.event.slot);
@@ -1900,18 +2904,63 @@ void Simulation3D::process_vessel_growth(const std::vector<Event>& events) {
         for (const Vec3i site : proposal.capsule) {
             if (!vessel_grid_.occupied(site)) reserved.insert(site);
         }
-        if (commit_vessel_growth(proposal)) ++stats_.vessel_growth_commits;
+        if (commit_vessel_growth(proposal)) {
+            ++stats_.vessel_growth_commits;
+            changed_sites.insert(changed_sites.end(), proposal.capsule.begin(),
+                                 proposal.capsule.end());
+        }
     }
+    mark_spatial_changes(changed_sites);
 }
 
 bool Simulation3D::commit_vessel_growth(const VesselGrowthProposal& proposal) {
     if (!proposal.valid || !current(proposal.event)) return false;
     const VesselTipSlot tip_slot = proposal.event.slot;
-    const VesselBranchRole role = vessel_tips_.role(tip_slot);
-    if (role == VesselBranchRole::outward &&
-        std::any_of(proposal.capsule.begin(), proposal.capsule.end(),
-                    [this](Vec3i site) { return grid_.owner(site) != kEmptySlot; })) {
-        return false;
+    VesselBranchRole role = vessel_tips_.role(tip_slot);
+    const bool contacts_cells_now = std::any_of(
+        proposal.capsule.begin(), proposal.capsule.end(),
+        [this](Vec3i site) { return grid_.owner(site) != kEmptySlot; });
+    LesionId contacted_lesion = proposal.contacted_lesion;
+    bool contacts_source = proposal.contacts_source_lesion;
+    if (contacts_cells_now) {
+        const std::vector<LesionId> contacts =
+            vessel_contact_lesions(proposal.capsule);
+        const LesionId source = current_lesion_for_source(
+            vessel_tips_.source_lesion_id(tip_slot));
+        contacts_source = source != kNoLesionId &&
+            std::find(contacts.begin(), contacts.end(), source) != contacts.end();
+        const auto other = std::find_if(
+            contacts.begin(), contacts.end(),
+            [source](LesionId id) { return id != source; });
+        contacted_lesion = other == contacts.end() ? kNoLesionId : *other;
+    } else {
+        contacts_source = false;
+        contacted_lesion = kNoLesionId;
+    }
+    if (role == VesselBranchRole::outward && contacts_cells_now) {
+        if (contacts_source || contacted_lesion == kNoLesionId ||
+            config_.angiogenesis.outward_other_lesion_contact_policy !=
+                "convert_to_inward") {
+            return false;
+        }
+        const LesionSummary3D* lesion =
+            lesion_index_.find_lesion(contacted_lesion);
+        if (lesion == nullptr) return false;
+        const Vec3i target{
+            static_cast<int>(std::llround(lesion->centroid.x)),
+            static_cast<int>(std::llround(lesion->centroid.y)),
+            static_cast<int>(std::llround(lesion->centroid.z))};
+        role = VesselBranchRole::inward;
+        vessel_tips_.set_role(tip_slot, role);
+        vessel_tips_.set_status(tip_slot, VesselTipStatus::active);
+        vessel_tips_.set_target(tip_slot, target);
+        vessel_tips_.set_bias_axis(tip_slot, target - proposal.from);
+        vessel_tips_.set_grown_length_voxels(tip_slot, 0.0F);
+        vessel_tips_.set_max_length_voxels(
+            tip_slot, inward_length_budget(proposal.from, *lesion));
+        vessel_tips_.set_speed_voxels_per_hour(
+            tip_slot,
+            static_cast<float>(config_.angiogenesis.inward_speed_voxels_per_hour));
     }
 
     const auto collision = centerline_nodes_.find(proposal.to);
@@ -1968,6 +3017,13 @@ bool Simulation3D::commit_vessel_growth(const VesselGrowthProposal& proposal) {
         vessel_tips_.set_status(tip_slot, VesselTipStatus::merged);
         ++stats_.vessel_anastomoses;
     } else if (role == VesselBranchRole::inward &&
+               vessel_tips_.status(tip_slot) == VesselTipStatus::transiting &&
+               !contacts_cells_now &&
+               config_.angiogenesis.inward_far_surface_policy ==
+                   "stop_complete") {
+        vessel_tips_.set_status(tip_slot, VesselTipStatus::complete);
+    } else if (role == VesselBranchRole::inward &&
+               config_.angiogenesis.inward_path_policy != "through_lesion_v1" &&
                segment_length(proposal.to, vessel_tips_.target(tip_slot)) <=
                    config_.angiogenesis.inward_target_tolerance_voxels) {
         vessel_tips_.set_status(tip_slot, VesselTipStatus::reached_target);
@@ -1981,7 +3037,7 @@ bool Simulation3D::commit_vessel_growth(const VesselGrowthProposal& proposal) {
         refresh_tumor_surface(displaced);
         refresh_neighborhood(displaced);
     }
-    if (vessel_tips_.status(tip_slot) == VesselTipStatus::active) {
+    if (vessel_tip_growing(vessel_tips_.status(tip_slot))) {
         schedule_vessel_tip(tip_slot);
     } else {
         vessel_tips_.bump_schedule_generation(tip_slot);
@@ -2038,7 +3094,10 @@ std::vector<Vec3i> Simulation3D::displace_cells_for_vessel(
         if (!cells_.valid(slot)) continue;
         const std::vector<Vec3i> occupied = occupied_sites_for_cell(cells_, slot);
         changed.insert(changed.end(), occupied.begin(), occupied.end());
-        if (remove_cell(slot, cells_, grid_, density_)) ++stats_.vascular_displacements;
+        if (remove_cell(slot, cells_, grid_, density_)) {
+            events_.cancel_cell(slot);
+            ++stats_.vascular_displacements;
+        }
     }
     std::sort(changed.begin(), changed.end());
     changed.erase(std::unique(changed.begin(), changed.end()), changed.end());
@@ -2117,24 +3176,49 @@ void Simulation3D::refresh_growth_near_vessel(std::span<const Vec3i> vessel_site
     std::sort(slots.begin(), slots.end(), [this](Slot lhs, Slot rhs) {
         return cells_.uid(lhs) < cells_.uid(rhs);
     });
-    for (const Slot slot : slots) {
+    std::vector<GrowthRefreshResult> refreshes(slots.size());
+    const int workers = select_worker_count(
+        cells_.alive_count(), slots.size(), config_, available_worker_threads(),
+        config_.parallel_min_refresh_items_per_thread);
+    proposal_window_diagnostics_.maximum_workers =
+        std::max(proposal_window_diagnostics_.maximum_workers, workers);
+    deterministic_parallel_for(slots.size(), workers, [&](std::size_t index) {
+        refreshes[index] = refresh_growth_state(
+            slots[index], clock_.time_hours, cells_,
+            density_, config_, &vascular_influence_, false);
+    });
+    for (std::size_t index = 0; index < slots.size(); ++index) {
         ++vascular_refresh_diagnostics_.refreshed_cell_slots;
-        const GrowthRefreshResult refresh = refresh_growth_state(
-            slot, clock_.time_hours, cells_, density_, config_, &vascular_influence_);
-        apply_growth_refresh(slot, refresh);
+        refreshes[index].migration_activation_changed =
+            apply_migration_activation_class(
+                slots[index], migration_activation_class(
+                                  migration_activation_query_block(
+                                      cells_.anchor(slots[index]))));
+        apply_growth_refresh(slots[index], refreshes[index]);
     }
 }
 
-std::vector<Slot> Simulation3D::nearby_slots(const std::vector<Vec3i>& sites,
-                                              int radius) const {
-    std::unordered_set<Slot> unique;
+std::vector<Slot> Simulation3D::nearby_slots(std::span<const Vec3i> sites,
+                                              int radius) {
+    if (slot_visit_marks_.size() < cells_.slot_count()) {
+        slot_visit_marks_.resize(cells_.slot_count(), 0);
+    }
+    if (++slot_visit_epoch_ == 0) {
+        std::fill(slot_visit_marks_.begin(), slot_visit_marks_.end(), 0);
+        slot_visit_epoch_ = 1;
+    }
+    std::vector<Slot> result;
     for (const Vec3i center : sites) {
         const Vec3i delta{radius, radius, config_.thin_layer ? 0 : radius};
         density_.for_each_slot_in_box(center - delta, center + delta, [&](Slot slot) {
-            if (cells_.valid(slot)) unique.insert(slot);
+            if (!cells_.valid(slot) || slot_visit_marks_[slot] == slot_visit_epoch_) {
+                return;
+            }
+            slot_visit_marks_[slot] = slot_visit_epoch_;
+            result.push_back(slot);
         });
     }
-    return {unique.begin(), unique.end()};
+    return result;
 }
 
 void Simulation3D::recover_neighborhood(std::vector<Vec3i>& changed_sites) {
@@ -2190,6 +3274,8 @@ void Simulation3D::recover_neighborhood(std::vector<Vec3i>& changed_sites) {
                       cells_.type(proposal.slot), proposal.slot);
         changed_sites.push_back(proposal.from);
         changed_sites.push_back(proposal.target);
+        changed_sites.insert(changed_sites.end(), proposal.reserved_sites.begin(),
+                             proposal.reserved_sites.end());
     }
     std::sort(changed_sites.begin(), changed_sites.end());
     changed_sites.erase(
@@ -2205,39 +3291,34 @@ void Simulation3D::refresh_neighborhood(const std::vector<Vec3i>& changed_sites)
     });
     const VascularInfluenceField3D* influence = config_.angiogenesis.enabled
         ? &vascular_influence_ : nullptr;
-    for (const Slot slot : slots) {
-        const GrowthRefreshResult refresh = refresh_growth_state(
-            slot, clock_.time_hours, cells_, density_, config_, influence);
-        apply_growth_refresh(slot, refresh);
+    std::vector<GrowthRefreshResult> refreshes(slots.size());
+    const int workers = select_worker_count(
+        cells_.alive_count(), slots.size(), config_, available_worker_threads(),
+        config_.parallel_min_refresh_items_per_thread);
+    proposal_window_diagnostics_.maximum_workers =
+        std::max(proposal_window_diagnostics_.maximum_workers, workers);
+    deterministic_parallel_for(slots.size(), workers, [&](std::size_t index) {
+        refreshes[index] = refresh_growth_state(
+            slots[index], clock_.time_hours, cells_,
+            density_, config_, influence, false);
+    });
+    for (std::size_t index = 0; index < slots.size(); ++index) {
+        refreshes[index].migration_activation_changed =
+            apply_migration_activation_class(
+                slots[index], migration_activation_class(
+                                  migration_activation_query_block(
+                                      cells_.anchor(slots[index]))));
+        apply_growth_refresh(slots[index], refreshes[index]);
     }
     refresh_migration_activation_near(changed_sites);
 }
 
 Vec3i Simulation3D::migration_activation_query_block(Vec3i anchor) const noexcept {
-    const std::int64_t edge = config_.migration_activation_block_edge;
-    const auto floor_div = [edge](std::int32_t value) {
-        const std::int64_t wide = value;
-        std::int64_t quotient = wide / edge;
-        if (wide % edge < 0) --quotient;
-        return static_cast<std::int32_t>(quotient);
-    };
-    return {floor_div(anchor.x), floor_div(anchor.y), floor_div(anchor.z)};
+    return migration_activation_counts_.query_block(anchor);
 }
 
 std::uint8_t Simulation3D::migration_activation_class(Vec3i query_block) const {
-    const std::int64_t edge = config_.migration_activation_block_edge;
-    const auto representative = [edge](std::int32_t coordinate) {
-        return static_cast<std::int32_t>(std::clamp<std::int64_t>(
-            static_cast<std::int64_t>(coordinate) * edge,
-            std::numeric_limits<std::int32_t>::min(),
-            std::numeric_limits<std::int32_t>::max()));
-    };
-    const Vec3i anchor{representative(query_block.x),
-                       representative(query_block.y),
-                       representative(query_block.z)};
-    const DensityCounts3D counts = density_.estimate_quantized_box(
-        anchor, config_.migration_activation_window_edge,
-        config_.migration_activation_block_edge, config_.thin_layer);
+    const std::uint64_t count = migration_activation_counts_.count(query_block);
     const double window_edge = config_.migration_activation_window_edge;
     const double small_capacity = config_.thin_layer
         ? window_edge * window_edge
@@ -2245,11 +3326,11 @@ std::uint8_t Simulation3D::migration_activation_class(Vec3i query_block) const {
     const double large_capacity = small_capacity /
         (config_.thin_layer ? 4.0 : 8.0);
     std::uint8_t classes = 0;
-    if (static_cast<double>(counts.total()) / small_capacity >=
+    if (static_cast<double>(count) / small_capacity >=
         config_.migration_activation_threshold) {
         classes |= kSmallMigrationActivationClass;
     }
-    if (static_cast<double>(counts.total()) / large_capacity >=
+    if (static_cast<double>(count) / large_capacity >=
         config_.migration_activation_threshold) {
         classes |= kLargeMigrationActivationClass;
     }
@@ -2263,12 +3344,7 @@ void Simulation3D::rebuild_migration_activation_class_cache() {
     migration_activation_class_recomputes_ = 0;
     if (!config_.migration_activation_enabled) return;
 
-    std::unordered_set<Vec3i, Vec3iHash> unique;
-    for (const Slot slot : cells_.alive_slots()) {
-        unique.insert(migration_activation_query_block(cells_.anchor(slot)));
-    }
-    std::vector<Vec3i> blocks(unique.begin(), unique.end());
-    std::sort(blocks.begin(), blocks.end());
+    const std::vector<Vec3i> blocks = migration_activation_counts_.resident_blocks();
     migration_activation_class_cache_.reserve(blocks.size());
     for (const Vec3i block : blocks) {
         migration_activation_class_cache_.emplace(
@@ -2276,9 +3352,9 @@ void Simulation3D::rebuild_migration_activation_class_cache() {
     }
 }
 
-void Simulation3D::apply_migration_activation_class(
+bool Simulation3D::apply_migration_activation_class(
     Slot slot, std::uint8_t classes) {
-    if (!cells_.valid(slot)) return;
+    if (!cells_.valid(slot)) return false;
     const std::uint8_t stage_class = cells_.stage(slot) == CellStage::large
         ? kLargeMigrationActivationClass
         : kSmallMigrationActivationClass;
@@ -2289,35 +3365,15 @@ void Simulation3D::apply_migration_activation_class(
     // does not terminate an already active interval; only its scheduled end
     // event does. After expiry, a later high-density refresh can activate it
     // again.
-    if (!high_density || already_active) return;
-    synchronize_migration_schedule(
-        slot, refresh_migration_activation_state(
-                  slot, clock_.time_hours, cells_, density_, config_));
+    if (!high_density || already_active) return false;
+    return activate_migration_state_if_density_high(
+        slot, clock_.time_hours, cells_, config_);
 }
 
 void Simulation3D::refresh_migration_activation_near(
     const std::vector<Vec3i>& changed_sites) {
     if (!config_.migration_activation_enabled || changed_sites.empty()) return;
     const std::int64_t query_edge = config_.migration_activation_block_edge;
-    const std::int64_t lower =
-        (config_.migration_activation_window_edge - 1) / 2;
-    const std::int64_t upper =
-        config_.migration_activation_window_edge - lower - 1;
-    const auto floor_div = [](std::int64_t value, std::int64_t divisor) {
-        std::int64_t quotient = value / divisor;
-        if (value % divisor < 0) --quotient;
-        return quotient;
-    };
-    const auto ceil_div = [&](std::int64_t value, std::int64_t divisor) {
-        return -floor_div(-value, divisor);
-    };
-    const auto affected_range = [&](std::int32_t value) {
-        const std::int64_t shifted =
-            static_cast<std::int64_t>(value) - query_edge / 2;
-        return std::pair<std::int64_t, std::int64_t>{
-            ceil_div(shifted - upper, query_edge),
-            floor_div(shifted + lower, query_edge)};
-    };
 
     // Direct anchors are always refreshed. This is necessary when a cell moves
     // between two blocks whose aggregate classes both remain unchanged, and
@@ -2340,28 +3396,14 @@ void Simulation3D::refresh_migration_activation_near(
     // moved/born anchor. Empty surrounding blocks are not materialized.
     std::unordered_set<Vec3i, Vec3iHash> affected_blocks;
     for (const Vec3i site : changed_sites) {
-        const auto [first_x, last_x] = affected_range(site.x);
-        const auto [first_y, last_y] = affected_range(site.y);
-        const auto [first_z, last_z] = affected_range(site.z);
-        for (std::int64_t x = first_x; x <= last_x; ++x) {
-            for (std::int64_t y = first_y; y <= last_y; ++y) {
-                for (std::int64_t z = first_z; z <= last_z; ++z) {
-                    if (x < std::numeric_limits<std::int32_t>::min() ||
-                        x > std::numeric_limits<std::int32_t>::max() ||
-                        y < std::numeric_limits<std::int32_t>::min() ||
-                        y > std::numeric_limits<std::int32_t>::max() ||
-                        z < std::numeric_limits<std::int32_t>::min() ||
-                        z > std::numeric_limits<std::int32_t>::max()) continue;
-                    const Vec3i block{static_cast<std::int32_t>(x),
-                                      static_cast<std::int32_t>(y),
-                                      static_cast<std::int32_t>(z)};
-                    if (migration_activation_class_cache_.contains(block) ||
-                        direct_blocks.contains(block)) {
-                        affected_blocks.insert(block);
-                    }
-                }
+        migration_activation_counts_.for_each_affected_block(
+            site, [&](Vec3i block) {
+            if (migration_activation_class_cache_.contains(block) ||
+                migration_activation_counts_.resident_count(block) != 0 ||
+                direct_blocks.contains(block)) {
+                affected_blocks.insert(block);
             }
-        }
+        });
     }
     affected_blocks.insert(direct_blocks.begin(), direct_blocks.end());
     std::vector<Vec3i> blocks(affected_blocks.begin(), affected_blocks.end());
@@ -2422,7 +3464,8 @@ void Simulation3D::refresh_migration_activation_near(
                 "migration activation cache is missing a direct cell block");
         }
         ++migration_activation_direct_slot_visits_;
-        apply_migration_activation_class(slot, found->second);
+        synchronize_migration_schedule(
+            slot, apply_migration_activation_class(slot, found->second));
     }
     for (const Slot slot : bulk) {
         if (!cells_.valid(slot)) continue;
@@ -2433,14 +3476,15 @@ void Simulation3D::refresh_migration_activation_near(
                 "migration activation cache is missing a bulk cell block");
         }
         ++migration_activation_bulk_slot_visits_;
-        apply_migration_activation_class(slot, found->second);
+        synchronize_migration_schedule(
+            slot, apply_migration_activation_class(slot, found->second));
     }
 }
 
 std::size_t Simulation3D::active_vessel_tip_count() const {
     std::size_t count = 0;
     for (const VesselTipSlot slot : vessel_tips_.alive_slots()) {
-        if (vessel_tips_.status(slot) == VesselTipStatus::active) ++count;
+        if (vessel_tip_growing(vessel_tips_.status(slot))) ++count;
     }
     return count;
 }
@@ -2458,7 +3502,7 @@ std::size_t Simulation3D::active_vessel_tip_count(
     LesionId source_lesion_id) const {
     std::size_t count = 0;
     for (const VesselTipSlot slot : vessel_tips_.alive_slots()) {
-        if (vessel_tips_.status(slot) == VesselTipStatus::active &&
+        if (vessel_tip_growing(vessel_tips_.status(slot)) &&
             current_lesion_for_source(
                 vessel_tips_.source_lesion_id(slot)) == source_lesion_id) {
             ++count;
@@ -2523,6 +3567,10 @@ std::uint64_t Simulation3D::state_checksum() const {
     checksum = hash_combine(checksum, double_bits(clock_.time_hours));
     checksum = hash_combine(checksum, stats_.migration_attempts);
     checksum = hash_combine(checksum, stats_.migration_commits);
+    checksum = hash_combine(checksum, stats_.migration_swap_waits);
+    checksum = hash_combine(checksum, stats_.migration_swap_attempts);
+    checksum = hash_combine(checksum, stats_.migration_swap_commits);
+    checksum = hash_combine(checksum, stats_.migration_swap_rejections);
     checksum = hash_combine(checksum, stats_.divisions);
     checksum = hash_combine(checksum, stats_.deaths);
     checksum = hash_combine(checksum, stats_.conflict_rejections);
@@ -2558,6 +3606,9 @@ std::uint64_t Simulation3D::state_checksum() const {
         checksum = hash_combine(checksum, double_bits(cell.next_division_time));
         checksum = hash_combine(checksum, double_bits(cell.death_deadline));
         checksum = hash_combine(checksum, double_bits(cell.last_update_time));
+        checksum = hash_combine(checksum, double_bits(cell.swap_ready_time));
+        checksum = hash_combine(checksum, cell.swap_wait_state);
+        checksum = hash_combine(checksum, cell.pending_swap_direction);
         checksum = hash_combine(checksum, cell.event_sequence);
         checksum = hash_combine(checksum, cell.migration_schedule_generation);
         checksum = hash_combine(checksum, cell.division_schedule_generation);
@@ -2579,6 +3630,13 @@ std::uint64_t Simulation3D::state_checksum() const {
     checksum = hash_combine(checksum, double_bits(vascular.process.next_seed_time_hours));
     checksum = hash_combine(checksum, double_bits(vascular.process.eligibility_started_hours));
     checksum = hash_combine(checksum, double_bits(vascular.process.accumulated_eligible_hours));
+    checksum = hash_combine(checksum, double_bits(vascular.process.remaining_hazard));
+    checksum = hash_combine(checksum, double_bits(vascular.process.hazard_last_update_hours));
+    checksum = hash_combine(checksum, double_bits(vascular.process.hazard_not_before_hours));
+    checksum = hash_combine(
+        checksum, double_bits(vascular.process.current_rate_sites_per_30_days));
+    checksum = hash_combine(
+        checksum, double_bits(vascular.process.current_density_stress));
     checksum = hash_combine(checksum, vascular.process.event_sequence);
     checksum = hash_combine(checksum, vascular.process.schedule_generation);
     checksum = hash_combine(checksum, vascular.process.attempted_events);
@@ -2640,6 +3698,15 @@ std::uint64_t Simulation3D::state_checksum() const {
             checksum, double_bits(process.eligibility_started_hours));
         checksum = hash_combine(
             checksum, double_bits(process.accumulated_eligible_hours));
+        checksum = hash_combine(checksum, double_bits(process.remaining_hazard));
+        checksum = hash_combine(
+            checksum, double_bits(process.hazard_last_update_hours));
+        checksum = hash_combine(
+            checksum, double_bits(process.hazard_not_before_hours));
+        checksum = hash_combine(
+            checksum, double_bits(process.current_rate_sites_per_30_days));
+        checksum = hash_combine(
+            checksum, double_bits(process.current_density_stress));
         checksum = hash_combine(checksum, process.event_sequence);
         checksum = hash_combine(checksum, process.schedule_generation);
         checksum = hash_combine(checksum, process.attempted_events);

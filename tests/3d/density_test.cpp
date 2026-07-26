@@ -1,12 +1,15 @@
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <cmath>
+#include <thread>
 #include <vector>
 
 #include "config/model_config.hpp"
 #include "core/cell_store.hpp"
 #include "rules/density.hpp"
 #include "space/density_index.hpp"
+#include "space/quantized_box_count_index.hpp"
 
 int main() {
     using namespace atcg3d;
@@ -68,6 +71,24 @@ int main() {
         const double indexed =
             cone_blocks.estimate_directional_density({0, 0, 0}, direction, 5, 45.0);
         assert(std::abs(oracle - indexed) < 1e-12);
+    }
+    const auto all_directional =
+        cone_blocks.estimate_all_directional_densities(
+            {0, 0, 0}, 5, 45.0);
+    for (DirectionId direction = 1; direction <= 26; ++direction) {
+        const double indexed =
+            cone_blocks.estimate_directional_density(
+                {0, 0, 0}, direction, 5, 45.0);
+        assert(std::abs(indexed - all_directional[direction]) < 1e-12);
+    }
+    const auto all_thin_directional =
+        cone_blocks.estimate_all_directional_densities(
+            {0, 0, 0}, 5, 45.0, true);
+    for (DirectionId direction = 1; direction <= 26; ++direction) {
+        const double indexed =
+            cone_blocks.estimate_directional_density(
+                {0, 0, 0}, direction, 5, 45.0, true);
+        assert(std::abs(indexed - all_thin_directional[direction]) < 1e-12);
     }
 
     // Complete blocks are aggregated and boundary blocks inspect their compact
@@ -200,4 +221,205 @@ int main() {
     }
     assert(bounded_cache.quantized_cache_size() <=
            BlockDensityIndex3D::quantized_cache_capacity());
+
+    // Neighborhood refresh workers share the quantized migration-activation
+    // cache. Concurrent cache misses must not race while registering layouts,
+    // inserting keys, or clearing at capacity.
+    BlockDensityIndex3D concurrent_cache(4);
+    concurrent_cache.add({0, 0, 0}, CellType::r, 70);
+    std::atomic<bool> start{false};
+    std::atomic<int> failures{0};
+    std::vector<std::thread> readers;
+    for (int worker = 0; worker < 18; ++worker) {
+        readers.emplace_back([&, worker] {
+            while (!start.load(std::memory_order_acquire)) {
+                std::this_thread::yield();
+            }
+            for (int query = 0; query < 2048; ++query) {
+                const Vec3i anchor{query - 1024, worker * 3 - 27,
+                                   (query + worker) % 31 - 15};
+                const DensityCounts3D value =
+                    concurrent_cache.estimate_quantized_box(anchor, 8, 4);
+                if (value.total() > 1) {
+                    failures.fetch_add(1, std::memory_order_relaxed);
+                }
+            }
+        });
+    }
+    start.store(true, std::memory_order_release);
+    for (std::thread& reader : readers) reader.join();
+    assert(failures.load(std::memory_order_relaxed) == 0);
+    assert(concurrent_cache.quantized_cache_size() <=
+           BlockDensityIndex3D::quantized_cache_capacity());
+
+    // The runtime migration-activation index maintains the same exact
+    // quantized box counts incrementally, including negative coordinates and
+    // movements across query-block boundaries.
+    BlockDensityIndex3D incremental_oracle(4);
+    QuantizedBoxCountIndex3D incremental(70, 32, false);
+    const std::vector<Vec3i> incremental_anchors{
+        {-65, -33, -1}, {-34, 0, 0}, {-1, -1, -1}, {0, 0, 0},
+        {31, 31, 31}, {32, 32, 32}, {35, 0, 0}, {70, 2, -40}};
+    for (std::size_t index = 0; index < incremental_anchors.size(); ++index) {
+        incremental_oracle.add(incremental_anchors[index], CellType::r,
+                               static_cast<Slot>(100 + index));
+        incremental.add(incremental_anchors[index]);
+    }
+    for (int x = -3; x <= 3; ++x) {
+        for (int y = -2; y <= 2; ++y) {
+            for (int z = -2; z <= 2; ++z) {
+                const Vec3i block{x, y, z};
+                const Vec3i representative{x * 32, y * 32, z * 32};
+                assert(incremental.count(block) ==
+                       incremental_oracle
+                           .estimate_quantized_box(representative, 70, 32)
+                           .total());
+            }
+        }
+    }
+    incremental_oracle.move({31, 31, 31}, {64, -32, 1}, CellType::r, 104);
+    incremental.move({31, 31, 31}, {64, -32, 1});
+    incremental_oracle.remove({-34, 0, 0}, CellType::r, 101);
+    incremental.remove({-34, 0, 0});
+    for (const Vec3i block : incremental.resident_blocks()) {
+        const Vec3i representative{block.x * 32, block.y * 32, block.z * 32};
+        assert(incremental.count(block) ==
+               incremental_oracle
+                   .estimate_quantized_box(representative, 70, 32)
+                   .total());
+        assert(incremental.resident_count(block) > 0);
+    }
+
+    // Growth windows use an exact per-slot incremental cache in production.
+    // Every mutation must remain identical to the brute block estimator,
+    // including sparse slots, negative coordinates, moves, and removals.
+    BlockDensityIndex3D local_windows(4);
+    local_windows.configure_local_window_counts(6, false);
+    std::vector<std::pair<Slot, Vec3i>> local_cells;
+    const auto add_local = [&](Slot slot, Vec3i anchor, CellType type) {
+        local_windows.add(anchor, type, slot);
+        local_cells.push_back({slot, anchor});
+    };
+    add_local(2, {-4, -3, -2}, CellType::r);
+    add_local(5, {-1, -1, 0}, CellType::K);
+    add_local(7, {0, 0, 0}, CellType::r);
+    add_local(11, {3, 2, 1}, CellType::K);
+    const auto verify_local = [&] {
+        for (const auto& [slot, anchor] : local_cells) {
+            const DensityCounts3D cached_counts =
+                local_windows.local_window_counts(slot);
+            const DensityCounts3D exact_counts = local_windows.estimate_box(
+                anchor - Vec3i{2, 2, 2}, anchor + Vec3i{3, 3, 3});
+            assert(cached_counts.r == exact_counts.r);
+            assert(cached_counts.K == exact_counts.K);
+        }
+    };
+    verify_local();
+    local_windows.move({-1, -1, 0}, {4, -2, 3}, CellType::K, 5);
+    local_cells[1].second = {4, -2, 3};
+    verify_local();
+    local_windows.remove({-4, -3, -2}, CellType::r, 2);
+    local_cells.erase(local_cells.begin());
+    verify_local();
+
+    BlockDensityIndex3D local_thin(4);
+    local_thin.configure_local_window_counts(6, true);
+    local_thin.add({0, 0, 0}, CellType::r, 1);
+    local_thin.add({1, 1, 1}, CellType::K, 3);
+    assert(local_thin.local_window_counts(1).total() == 1);
+    assert(local_thin.local_window_counts(3).total() == 1);
+
+    // An axial one-voxel move updates only the symmetric differences of the
+    // old/new six-wide windows. Each difference is two 6x6 slabs (72 lattice
+    // sites), rather than rescanning two complete 6x6x6 windows (432 sites).
+    // The moving cell's translated observation window is updated by the same
+    // bounded method, and every cached count remains exact.
+    BlockDensityIndex3D axial_move(4);
+    axial_move.configure_local_window_counts(6, false);
+    struct AxialCell {
+        Slot slot{};
+        Vec3i anchor{};
+        CellType type{CellType::r};
+    };
+    std::vector<AxialCell> axial_cells;
+    axial_cells.push_back({0, {0, 0, 0}, CellType::r});
+    axial_move.add({0, 0, 0}, CellType::r, 0);
+    Slot next_axial_slot = 1;
+    for (int x = -4; x <= 4; ++x) {
+        for (int y = -3; y <= 3; ++y) {
+            for (int z = -3; z <= 3; ++z) {
+                const Vec3i anchor{x, y, z};
+                if (anchor == Vec3i{0, 0, 0} ||
+                    anchor == Vec3i{1, 0, 0}) {
+                    continue;
+                }
+                const CellType type =
+                    (x + 2 * y + 3 * z) % 2 == 0
+                        ? CellType::r : CellType::K;
+                axial_move.add(anchor, type, next_axial_slot);
+                axial_cells.push_back({next_axial_slot, anchor, type});
+                ++next_axial_slot;
+            }
+        }
+    }
+    axial_move.move({0, 0, 0}, {1, 0, 0}, CellType::r, 0);
+    axial_cells.front().anchor = {1, 0, 0};
+    const LocalWindowMoveDiagnostics3D axial_diagnostics =
+        axial_move.last_local_window_move_diagnostics();
+    assert(axial_diagnostics.affected_window_query_sites == 72);
+    assert(axial_diagnostics.moving_window_query_sites == 72);
+    assert(axial_diagnostics.affected_window_query_sites <
+           2ULL * 6ULL * 6ULL * 6ULL);
+    assert(axial_diagnostics.affected_slot_visits > 0);
+    const auto verify_axial_cells = [&] {
+        for (const AxialCell& cell : axial_cells) {
+            const DensityCounts3D cached_counts =
+                axial_move.local_window_counts(cell.slot);
+            const DensityCounts3D exact_counts = axial_move.estimate_box(
+                cell.anchor - Vec3i{2, 2, 2},
+                cell.anchor + Vec3i{3, 3, 3});
+            assert(cached_counts.r == exact_counts.r);
+            assert(cached_counts.K == exact_counts.K);
+        }
+    };
+    verify_axial_cells();
+    std::vector<Slot> former_anchor_slots;
+    axial_move.for_each_slot_in_box(
+        {0, 0, 0}, {0, 0, 0},
+        [&](Slot slot) { former_anchor_slots.push_back(slot); });
+    assert(std::find(former_anchor_slots.begin(), former_anchor_slots.end(), 0) ==
+           former_anchor_slots.end());
+    std::vector<Slot> target_anchor_slots;
+    axial_move.for_each_slot_in_box(
+        {1, 0, 0}, {1, 0, 0},
+        [&](Slot slot) { target_anchor_slots.push_back(slot); });
+    assert((target_anchor_slots == std::vector<Slot>{0}));
+
+    // Plane- and space-diagonal unit moves exercise all disjoint slab axes.
+    // Their symmetric-difference volumes are likewise much smaller than two
+    // complete windows and retain exact cached counts even with co-location at
+    // the destination anchor.
+    axial_move.move({1, 0, 0}, {2, 1, 0}, CellType::r, 0);
+    axial_cells.front().anchor = {2, 1, 0};
+    const LocalWindowMoveDiagnostics3D plane_diagnostics =
+        axial_move.last_local_window_move_diagnostics();
+    assert(plane_diagnostics.affected_window_query_sites == 132);
+    assert(plane_diagnostics.moving_window_query_sites == 132);
+    verify_axial_cells();
+
+    axial_move.move({2, 1, 0}, {3, 2, 1}, CellType::r, 0);
+    axial_cells.front().anchor = {3, 2, 1};
+    const LocalWindowMoveDiagnostics3D spatial_diagnostics =
+        axial_move.last_local_window_move_diagnostics();
+    assert(spatial_diagnostics.affected_window_query_sites == 182);
+    assert(spatial_diagnostics.moving_window_query_sites == 182);
+    verify_axial_cells();
+
+    local_thin.move({0, 0, 0}, {1, 0, 0}, CellType::r, 1);
+    const LocalWindowMoveDiagnostics3D thin_move_diagnostics =
+        local_thin.last_local_window_move_diagnostics();
+    assert(thin_move_diagnostics.affected_window_query_sites == 12);
+    assert(thin_move_diagnostics.moving_window_query_sites == 12);
+    assert(local_thin.local_window_counts(1).total() == 1);
+    assert(local_thin.local_window_counts(3).total() == 1);
 }

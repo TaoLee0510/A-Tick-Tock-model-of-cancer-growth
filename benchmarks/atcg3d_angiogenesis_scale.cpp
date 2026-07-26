@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
             config.angiogenesis.max_active_tips = 2;
             config.angiogenesis.diameter_voxels = 1.0;
             config.angiogenesis.inward_speed_voxels_per_hour = 4.0;
-            config.angiogenesis.outward_speed_voxels_per_hour = 4.0;
+            config.angiogenesis.outward_speed_voxels_per_hour = 8.0;
             config.angiogenesis.inward_max_length_voxels = 12;
             config.angiogenesis.outward_max_length_voxels = 12;
             config.angiogenesis.inward_target_tolerance_voxels = 0.0;

@@ -13,7 +13,8 @@ namespace atcg3d {
 int select_worker_count(std::size_t live_cells,
                         std::size_t work_items,
                         const Model3DConfig& config,
-                        int available_threads) {
+                        int available_threads,
+                        std::uint64_t minimum_items_per_thread) {
     if (work_items <= 1 || available_threads <= 1 || config.threads <= 1) return 1;
 
     const std::size_t int_max =
@@ -34,7 +35,9 @@ int select_worker_count(std::size_t live_cells,
         static_cast<int>(std::floor(static_cast<double>(config.threads) * fraction)));
 
     const std::size_t minimum_batch =
-        static_cast<std::size_t>(config.parallel_min_events_per_thread);
+        static_cast<std::size_t>(minimum_items_per_thread == 0
+            ? config.parallel_min_events_per_thread
+            : minimum_items_per_thread);
     const std::size_t event_workers = 1 + (work_items - 1) / minimum_batch;
     const int event_limit = static_cast<int>(std::min(event_workers, int_max));
     const int selected = std::max(

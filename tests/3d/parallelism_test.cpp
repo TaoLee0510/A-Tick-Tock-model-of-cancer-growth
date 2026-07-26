@@ -37,5 +37,11 @@ int main() {
     adaptive.parallel_mode = "adaptive_cells_and_events_v1";
     adaptive.parallel_min_events_per_thread = 37;
     assert(adaptive.dynamics_json() == config.dynamics_json());
+    adaptive.proposal_window_hours = 7.5;
+    adaptive.proposal_window_max_events = 9999;
+    adaptive.proposal_dependency_block_edge = 3;
+    adaptive.output_async_enabled = true;
+    adaptive.output_async_queue_depth = 4;
+    assert(adaptive.dynamics_json() == config.dynamics_json());
     return 0;
 }

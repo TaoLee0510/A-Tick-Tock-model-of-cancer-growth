@@ -1,7 +1,10 @@
 #pragma once
 
+#include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <shared_mutex>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -9,6 +12,8 @@
 #include "core/types.hpp"
 
 namespace atcg3d {
+
+class QuantizedBoxCountIndex3D;
 
 struct DensityCounts3D {
     std::uint64_t r{};
@@ -22,19 +27,45 @@ struct DensityCounts3D {
     }
 };
 
+// Execution-only diagnostics for the most recent anchor move while exact
+// per-slot growth-window counts were enabled. The queried lattice-site
+// volumes describe the disjoint box regions presented to the block index; they
+// do not affect biology, checkpoint state, or deterministic simulation output.
+struct LocalWindowMoveDiagnostics3D {
+    std::uint64_t affected_window_query_sites{};
+    std::uint64_t moving_window_query_sites{};
+    std::uint64_t affected_slot_visits{};
+};
+
 class BlockDensityIndex3D {
 public:
     explicit BlockDensityIndex3D(int block_edge);
 
     int block_edge() const noexcept { return block_edge_; }
     std::size_t block_count() const noexcept { return counts_.size(); }
-    std::size_t allocated_bytes() const noexcept;
-    std::size_t quantized_cache_size() const noexcept { return quantized_box_cache_.size(); }
+    std::size_t allocated_bytes() const;
+    std::size_t quantized_cache_size() const;
     static constexpr std::size_t quantized_cache_capacity() noexcept { return 65536; }
 
     void add(Vec3i anchor, CellType type, Slot slot);
     void remove(Vec3i anchor, CellType type, Slot slot);
     void move(Vec3i from, Vec3i to, CellType type, Slot slot);
+    void attach_quantized_count_index(QuantizedBoxCountIndex3D* index) noexcept {
+        incremental_quantized_index_ = index;
+    }
+    void configure_local_window_counts(int window_edge, bool thin_layer);
+    void begin_local_window_bulk_load();
+    void finish_local_window_bulk_load(std::size_t slot_count, int workers);
+    bool has_local_window_counts(int window_edge, bool thin_layer) const noexcept {
+        return local_window_edge_ == window_edge &&
+               local_window_thin_layer_ == thin_layer;
+    }
+    DensityCounts3D local_window_counts(Slot slot) const;
+    const LocalWindowMoveDiagnostics3D&
+    last_local_window_move_diagnostics() const noexcept {
+        return last_local_window_move_diagnostics_;
+    }
+    void reset_quantized_cache();
 
     template <class Visitor>
     void for_each_slot_in_block(Vec3i coordinate, Visitor&& visitor) const {
@@ -86,6 +117,13 @@ public:
                                         int radius,
                                         double half_angle_degrees,
                                         bool thin_layer = false) const;
+    // Evaluates all 26 lattice cones while visiting nearby anchors only once.
+    // Element zero is unused and remains zero.
+    std::array<double, 27> estimate_all_directional_densities(
+        Vec3i anchor,
+        int radius,
+        double half_angle_degrees,
+        bool thin_layer = false) const;
 
 private:
     struct AnchorEntry {
@@ -126,13 +164,29 @@ private:
     Vec3i block_coordinate(Vec3i site) const noexcept;
     AnchorEntry local_entry(Vec3i site, CellType type, Slot slot) const noexcept;
     void invalidate_quantized_cache(Vec3i anchor);
-    void register_cache_layout(CacheLayout layout) const;
+    void register_cache_layout_locked(CacheLayout layout) const;
+    void adjust_local_window_counts(Vec3i changed_anchor,
+                                    CellType changed_type,
+                                    bool add);
+    void set_local_window_counts(Slot slot, DensityCounts3D counts);
 
     int block_edge_{};
     std::unordered_map<Vec3i, Block, Vec3iHash> counts_;
     mutable std::vector<CacheLayout> cache_layouts_;
     mutable std::unordered_map<QuantizedCacheKey, DensityCounts3D,
                                QuantizedCacheKeyHash> quantized_box_cache_;
+    mutable std::shared_mutex quantized_cache_mutex_;
+    mutable std::atomic<bool> has_quantized_cache_layouts_{false};
+    QuantizedBoxCountIndex3D* incremental_quantized_index_{};
+    struct LocalCounts {
+        std::uint32_t r{};
+        std::uint32_t K{};
+    };
+    std::vector<LocalCounts> local_window_counts_;
+    int local_window_edge_{};
+    bool local_window_thin_layer_{};
+    bool local_window_bulk_loading_{};
+    LocalWindowMoveDiagnostics3D last_local_window_move_diagnostics_;
 };
 
 }  // namespace atcg3d

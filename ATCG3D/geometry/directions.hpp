@@ -33,16 +33,31 @@ inline constexpr int dot(Vec3i lhs, Vec3i rhs) {
 }
 
 inline double direction_angle_degrees(DirectionId lhs, DirectionId rhs) {
-    const Vec3i a = direction_vector(lhs);
-    const Vec3i b = direction_vector(rhs);
-    const int a2 = squared_length(a);
-    const int b2 = squared_length(b);
-    if (a2 == 0 || b2 == 0) {
-        return 180.0;
-    }
-    const double cosine = std::clamp(
-        static_cast<double>(dot(a, b)) / std::sqrt(static_cast<double>(a2 * b2)), -1.0, 1.0);
-    return std::acos(cosine) * 180.0 / std::acos(-1.0);
+    // Direction geometry is immutable. Cache all 27x27 angles once instead of
+    // paying for sqrt/acos in every migration and vessel proposal.
+    static const std::array<std::array<double, 27>, 27> angles = [] {
+        std::array<std::array<double, 27>, 27> result{};
+        for (DirectionId left = 0; left <= 26; ++left) {
+            for (DirectionId right = 0; right <= 26; ++right) {
+                const Vec3i a = direction_vector(left);
+                const Vec3i b = direction_vector(right);
+                const int a2 = squared_length(a);
+                const int b2 = squared_length(b);
+                if (a2 == 0 || b2 == 0) {
+                    result[left][right] = 180.0;
+                    continue;
+                }
+                const double cosine = std::clamp(
+                    static_cast<double>(dot(a, b)) /
+                        std::sqrt(static_cast<double>(a2 * b2)),
+                    -1.0, 1.0);
+                result[left][right] =
+                    std::acos(cosine) * 180.0 / std::acos(-1.0);
+            }
+        }
+        return result;
+    }();
+    return angles[lhs <= 26 ? lhs : 0][rhs <= 26 ? rhs : 0];
 }
 
 inline DirectionId opposite_direction(DirectionId id) {

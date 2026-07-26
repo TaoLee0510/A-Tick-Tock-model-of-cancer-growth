@@ -1,5 +1,7 @@
+#include <algorithm>
 #include <cassert>
 #include <filesystem>
+#include <fstream>
 #include <vector>
 
 #include <vtkDataArray.h>
@@ -13,6 +15,10 @@
 #include "config/model_config.hpp"
 #include "engine/simulation.hpp"
 #include "io/output_manager.hpp"
+#ifdef ATCG3D_HAS_HDF5_CHECKPOINT
+#include <H5Cpp.h>
+#include "io/checkpoint_hdf5.hpp"
+#endif
 #include "io/snapshot.hpp"
 #include "io/vtkhdf_writer.hpp"
 #include "vasculature/vessel_store.hpp"
@@ -75,6 +81,9 @@ int main() {
     assert(data->GetNumberOfPoints() == 2);
     assert(data->GetNumberOfCells() == 0);
     assert(data->GetPointData()->GetArray("cell_id")->GetDataTypeSize() == 8);
+    assert(data->GetPointData()->GetArray("cell_slot")->GetDataTypeSize() == 4);
+    assert(data->GetPointData()->GetArray("cell_slot")->GetTuple1(0) == first);
+    assert(data->GetPointData()->GetArray("cell_slot")->GetTuple1(1) == second);
     assert(data->GetPointData()->GetArray("lesion_id")->GetDataTypeSize() == 8);
     assert(data->GetPointData()->GetArray("lesion_id")->GetTuple1(0) ==
            static_cast<double>(first_lesion));
@@ -89,6 +98,8 @@ int main() {
     assert(data->GetFieldData()->GetArray("total_cell_count") != nullptr);
     assert(data->GetFieldData()->GetArray("total_cell_count")->GetDataTypeSize() == 8);
     assert(data->GetFieldData()->GetArray("total_cell_count")->GetTuple1(0) == 3.0);
+    assert(data->GetFieldData()->GetArray("total_slot_count") != nullptr);
+    assert(data->GetFieldData()->GetArray("total_slot_count")->GetTuple1(0) == 3.0);
     double point[3]{};
     data->GetPoint(0, point);
     assert(point[0] == -1.0 && point[1] == 4.0 && point[2] == 5.0);
@@ -174,9 +185,24 @@ int main() {
     output_config.output_directory = run_directory;
     output_config.preview_every_hours = 1.0;
     output_config.full_every_hours = 4.0;
+#ifdef ATCG3D_HAS_HDF5_CHECKPOINT
+    output_config.checkpoint_every_hours = 4.0;
+#else
     output_config.checkpoint_every_hours = 0.0;
+#endif
+    output_config.output_async_enabled = true;
+    output_config.output_async_queue_depth = 1;
+    output_config.live_preview_when_attached = true;
+    output_config.live_preview_wall_interval_seconds = 0.001;
     Simulation3D with_output(output_config);
     OutputManager3D output(output_config);
+    std::filesystem::create_directories(run_directory / "control");
+    {
+        std::ofstream marker(
+            run_directory / "control" / "viewer.attached",
+            std::ios::binary | std::ios::trunc);
+        marker << "1\n";
+    }
     with_output.run([&output](const Simulation3D& current) { output.observe(current); });
     output.finalize(with_output);
     assert(with_output.state_checksum() == baseline.state_checksum());
@@ -184,6 +210,40 @@ int main() {
     assert(std::filesystem::exists(run_directory / "full.vtkhdf.series"));
     assert(std::filesystem::exists(run_directory / "vessels.vtkhdf.series"));
     assert(std::filesystem::is_directory(run_directory / "viz" / "vessels"));
+    assert(std::filesystem::is_regular_file(
+        run_directory / "viz" / "live" / "current.vtkhdf"));
+    assert(std::filesystem::is_regular_file(
+        run_directory / "viz" / "live" / "vessels.vtkhdf"));
+    assert(std::filesystem::is_regular_file(
+        run_directory / "live.vtkhdf.series"));
+    assert(std::filesystem::is_regular_file(
+        run_directory / "live-vessels.vtkhdf.series"));
+#ifdef ATCG3D_HAS_HDF5_CHECKPOINT
+    assert(std::filesystem::is_directory(run_directory / "checkpoints"));
+    assert(!std::filesystem::is_empty(run_directory / "checkpoints"));
+    std::vector<std::filesystem::path> evolving_checkpoints;
+    for (const auto& entry : std::filesystem::directory_iterator(
+             run_directory / "checkpoints")) {
+        if (entry.path().extension() == ".h5") {
+            evolving_checkpoints.push_back(entry.path());
+        }
+    }
+    std::sort(evolving_checkpoints.begin(), evolving_checkpoints.end());
+    assert(evolving_checkpoints.size() >= 3);
+    {
+        H5::H5File second(
+            evolving_checkpoints[1].string(), H5F_ACC_RDONLY);
+        std::uint32_t schema{};
+        second.openGroup("/meta")
+            .openAttribute("schema_version")
+            .read(H5::PredType::NATIVE_UINT32, &schema);
+        assert(schema == kCheckpointJournalDeltaSchemaVersion3D);
+    }
+    const CheckpointData3D evolving_reconstructed =
+        read_hdf5_checkpoint(evolving_checkpoints.back(), output_config);
+    assert(evolving_reconstructed.state_checksum ==
+           with_output.state_checksum());
+#endif
     assert(output.vessel_entries().size() == output.preview_entries().size());
     for (std::size_t index = 0; index < output.vessel_entries().size(); ++index) {
         assert(output.vessel_entries()[index].time_hours ==
@@ -194,4 +254,86 @@ int main() {
         assert(entry.path().extension() != ".tmp");
     }
     std::filesystem::remove_all(run_directory);
+
+#ifdef ATCG3D_HAS_HDF5_CHECKPOINT
+    // Incremental mode keeps hourly logical state while bounding self-contained
+    // full frames. The second checkpoint changes only global clock state, so it
+    // must be a schema-v7 field delta with zero updated cell rows and
+    // reconstruct exactly.
+    const auto incremental_directory =
+        std::filesystem::temp_directory_path() /
+        "atcg3d_incremental_output_test";
+    std::filesystem::remove_all(incremental_directory);
+    Model3DConfig incremental_config;
+    incremental_config.output_enabled = true;
+    incremental_config.output_directory = incremental_directory;
+    incremental_config.storage_mode = "journal_delta_hdf5_v2";
+    incremental_config.checkpoint_format =
+        "hdf5_base_v6_slot_journal_v8";
+    incremental_config.preview_every_hours = 1.0;
+    incremental_config.full_every_hours = 1.0;
+    incremental_config.checkpoint_every_hours = 1.0;
+    incremental_config.preview_keyframe_every_hours = 1.0;
+    incremental_config.full_keyframe_every_hours = 24.0;
+    incremental_config.checkpoint_base_every_hours = 168.0;
+    incremental_config.checkpoint_max_delta_chain = 168;
+    incremental_config.delta_full_ratio = 0.70;
+    incremental_config.output_async_enabled = false;
+    incremental_config.initial_r_cells = 0;
+    incremental_config.initial_K_cells = 0;
+    incremental_config.validate();
+
+    CellInit quiet_cell;
+    quiet_cell.uid = 1;
+    quiet_cell.stage = CellStage::small;
+    quiet_cell.density_growth_rate = 1.0F;
+    quiet_cell.division_work_remaining = 100.0F;
+    quiet_cell.next_division_time = 100.0;
+    quiet_cell.migration_schedule_generation = 1;
+    quiet_cell.division_schedule_generation = 1;
+    quiet_cell.death_schedule_generation = 1;
+    Simulation3D at_zero(incremental_config);
+    at_zero.restore({quiet_cell}, 2, {}, {}, {});
+    SimulationClock3D one_hour;
+    one_hour.time_hours = 1.0;
+    one_hour.completed_events = 1;
+    Simulation3D at_one(incremental_config);
+    at_one.restore({quiet_cell}, 2, one_hour, {}, {});
+    OutputManager3D incremental_output(incremental_config);
+    incremental_output.observe(at_zero);
+    incremental_output.observe(at_one);
+    incremental_output.finalize(at_one);
+    assert(incremental_output.preview_entries().size() == 2);
+    // full_every_hours is the actual full-frame sampling interval. Storage no
+    // longer silently suppresses logical frames behind a second keyframe
+    // interval.
+    assert(incremental_output.full_entries().size() == 2);
+
+    std::vector<std::filesystem::path> checkpoint_paths;
+    for (const auto& entry : std::filesystem::directory_iterator(
+             incremental_directory / "checkpoints")) {
+        if (entry.path().extension() == ".h5") {
+            checkpoint_paths.push_back(entry.path());
+        }
+    }
+    std::sort(checkpoint_paths.begin(), checkpoint_paths.end());
+    assert(checkpoint_paths.size() == 2);
+    std::uint32_t schemas[2]{};
+    for (std::size_t index = 0; index < checkpoint_paths.size(); ++index) {
+        H5::H5File file(checkpoint_paths[index].string(), H5F_ACC_RDONLY);
+        file.openGroup("/meta").openAttribute("schema_version").read(
+            H5::PredType::NATIVE_UINT32, &schemas[index]);
+    }
+    assert(schemas[0] == kCheckpointBaseSchemaVersion3D &&
+           schemas[1] == kCheckpointJournalDeltaSchemaVersion3D);
+    const CheckpointData3D reconstructed =
+        read_hdf5_checkpoint(checkpoint_paths.back(), incremental_config);
+    assert(reconstructed.state_checksum == at_one.state_checksum());
+    {
+        H5::H5File delta(checkpoint_paths.back().string(), H5F_ACC_RDONLY);
+        assert(delta.openDataSet("/cells/changed/uid")
+                   .getSpace().getSimpleExtentNpoints() == 0);
+    }
+    std::filesystem::remove_all(incremental_directory);
+#endif
 }

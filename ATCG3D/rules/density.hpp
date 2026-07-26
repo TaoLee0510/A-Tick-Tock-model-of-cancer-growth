@@ -21,6 +21,11 @@ DensityGrowthCounts growth_counts(const BlockDensityIndex3D& density,
                                   Vec3i anchor,
                                   int window_edge,
                                   bool thin_layer = false);
+DensityGrowthCounts growth_counts(const BlockDensityIndex3D& density,
+                                  Slot slot,
+                                  Vec3i anchor,
+                                  int window_edge,
+                                  bool thin_layer = false);
 double migration_activation_density(const BlockDensityIndex3D& density,
                                     Vec3i anchor,
                                     CellStage stage,

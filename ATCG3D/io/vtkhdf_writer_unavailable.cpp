@@ -9,14 +9,29 @@ bool vtkhdf_output_available() noexcept {
 }
 
 void write_vtkhdf_points_atomic(const std::filesystem::path&,
-                                const SimulationSnapshotView3D&) {
+                                const SimulationSnapshotView3D&, int) {
+    throw std::runtime_error(
+        "VTK-HDF output is unavailable: configure with "
+        "-DATCG3D_ENABLE_VTKHDF=ON and install VTK with IOHDF");
+}
+
+void write_vtkhdf_points_atomic(const std::filesystem::path&,
+                                const FrozenCellSnapshotView3D&, int) {
     throw std::runtime_error(
         "VTK-HDF output is unavailable: configure with "
         "-DATCG3D_ENABLE_VTKHDF=ON and install VTK with IOHDF");
 }
 
 void write_vtkhdf_vessels_atomic(const std::filesystem::path&,
-                                 const VesselNodeStore3D&) {
+                                 const VesselNodeStore3D&, int) {
+    throw std::runtime_error(
+        "VTK-HDF vessel output is unavailable: configure with "
+        "-DATCG3D_ENABLE_VTKHDF=ON and install VTK with IOHDF");
+}
+
+void write_vtkhdf_vessels_atomic(
+    const std::filesystem::path&,
+    std::span<const VesselNodeInit3D>, int) {
     throw std::runtime_error(
         "VTK-HDF vessel output is unavailable: configure with "
         "-DATCG3D_ENABLE_VTKHDF=ON and install VTK with IOHDF");

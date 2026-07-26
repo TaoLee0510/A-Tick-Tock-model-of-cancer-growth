@@ -1,15 +1,24 @@
 # ATCG3D checkpoint format
 
 Checkpoint files are versioned HDF5 state files and are not visualization
-frames. Schema v3 is the first schema that can resume independent, persistent
-angiogenesis processes for multiple primary or metastatic lesions. Numeric
+frames. A newly written self-contained base uses schema v6. The default
+`journal_delta_hdf5_v2` child uses schema v8 and references its immediately
+preceding checkpoint. Readers retain deterministic resume compatibility with
+schema-v7 field deltas and the older v4/v5 row-delta chain. Numeric
 datasets and attributes use explicit little-endian fixed-width HDF5 types;
 native types are used only for the in-memory transfer.
 
+All one-dimensional numeric datasets are chunked, protected by Fletcher32, and
+use shuffle+deflate according to `output.storage.hdf5_compression_level`
+(default 1). The chunk target is `hdf5_chunk_elements` (default 262144).
+
 The writer creates `NAME.h5.tmp` in the destination directory, globally
-flushes and closes it, reads it back through the strict v3 reader, and then
-atomically renames it to `NAME.h5`. A failed write or verification removes the
-temporary file. Existing final checkpoints are not overwritten.
+flushes and closes it, locally verifies that temporary file's schema, kind,
+and row counts, and then atomically renames it to `NAME.h5`. It does not
+recursively materialize the parent chain during every write. The strict reader
+performs complete chain and reconstructed-checksum validation on resume. A
+failed write or verification removes the temporary file. Existing final
+checkpoints are not overwritten.
 
 Periodic files use
 `checkpoint_<completed_events>_time_<float64-bits>.h5`. The hexadecimal
@@ -18,12 +27,69 @@ hours pass without a biological event and `completed_events` is unchanged.
 The recovery reader also accepts the earlier
 `checkpoint_<completed_events>.h5` name.
 
+## Base and delta policy
+
+`hdf5_base_v6_slot_journal_v8` writes a self-contained base first. During
+normal evolution, `CellStore3D` records one final mutation for each changed
+stable slot plus the exact ordered free-list push/pop operations. At a
+checkpoint boundary the simulator moves only that journal, global clock/stats,
+current vascular state, and the lineage suffix into the writer job. It does
+not freeze or scan every live cell. A schema-v8 child contains:
+
+- `/cells/changed`: complete current rows for slots alive at the boundary;
+- `/cells/removed_slot`: sorted slots that are dead at the boundary;
+- `/cells/free_list_mutations/{kind,slot}`: exact ordered free-list changes;
+- full current stats and vascular state;
+- lineage edges after `lineage_prefix_count`.
+
+Repeated mutations of one slot within an interval are coalesced to its final
+state. Slot reuse is represented by the final live row plus its free-list
+operations, so UID remains independent from slot. The reader recursively
+reconstructs the parent, applies removals/changes/free-list operations in
+validated order, appends lineage, then verifies the complete state checksum.
+A new base is forced when either of these holds:
+
+- `checkpoint_base_every_hours` has elapsed (default 168 h);
+- `checkpoint_max_delta_chain` is reached (default 168);
+
+`delta_full_ratio` remains accepted in schema-v3 YAML for older run metadata,
+but schema-v8 does not convert high scheduling churn into an hourly full
+checkpoint.
+
+Schema-v8 `/meta` adds `kind=slot_journal_v1`, `parent_file`,
+`parent_state_checksum`, `parent_time_hours`, `chain_length`, and
+`lineage_prefix_count`. Unsafe parent names, cycles, missing parents, excessive
+chains, parent checksum/time mismatches, invalid stable slots, inconsistent
+free-list operations, non-append lineage, and corrupt reconstructed checksums
+are fatal.
+
+The older `hdf5_base_v6_field_delta_v7` strategy remains readable. Each v7
+child records births, sorted removed UIDs, and only the individual fields that
+changed on surviving cells. It stores the exact current global state, stable
+free-list, vascular state, and lineage suffix after the parent's prefix.
+
+Schema-v7 `/meta` adds `kind=field_delta_v2`, `parent_file`,
+`parent_state_checksum`, `parent_time_hours`, `chain_length`, and
+`lineage_prefix_count`. `/cells/births` contains complete rows for new UIDs,
+`/cells/removed_uid` contains removals, and `/cells/updates` contains sorted
+`uid`, stable `slot`, and a 25-bit `field_mask`. Every field column under
+`updates` is packed: it has one value only for rows whose mask contains that
+field. Anchor uses one bit and three equally packed `x/y/z` columns. Parent
+paths must be a filename in the same directory; cycles, missing parents,
+excessive chains, parent checksum/time mismatches, non-append lineage,
+stable-slot changes, unknown/empty masks, packed-column length mismatches, and
+corrupt reconstructed checksums are fatal. Resume accepts a v4/v6 base or any
+v5/v7/v8 chain tip and reconstructs the exact state before rebuilding sparse
+runtime indexes. Derived sparse grids, density indexes, activation-class
+caches, and indexed event-heap positions are rebuilt and validated; they are
+not serialized as dense state.
+
 ## Metadata and statistics
 
 `/meta` contains scalar attributes:
 
 ```text
-schema_version = 3             UInt32
+schema_version = 6 or 8        UInt32
 dimension = 3                  UInt32
 completed_events               UInt64
 time_hours                     Float64
@@ -36,7 +102,10 @@ dynamics_config_json           UTF-8 string
 counter:
 
 ```text
-migration_attempts migration_commits divisions deaths conflict_rejections
+migration_attempts migration_commits
+migration_swap_waits migration_swap_attempts
+migration_swap_commits migration_swap_rejections
+divisions deaths conflict_rejections
 angiogenesis_seed_attempts angiogenesis_roots angiogenesis_seed_rejections
 vessel_growth_attempts vessel_growth_commits vessel_anastomoses
 vascular_displacements
@@ -63,12 +132,13 @@ x y z                                           Int32
 uid parent_uid event_sequence                   UInt64
 clone_id                                        UInt32
 type stage viability flags last_direction       UInt8
+swap_wait_state pending_swap_direction           UInt8
 inherent_growth_rate density_growth_rate
 migration_rate normal_migration_rate division_work_remaining
 death_deadline                                   Float32
 next_migration_time migration_activation_end_time
 next_division_time
-last_update_time                                Float64
+last_update_time swap_ready_time                 Float64
 migration_schedule_generation
 division_schedule_generation
 death_schedule_generation                       UInt32
@@ -92,6 +162,12 @@ activation/rate/time combinations that omit a required normal/active migration
 or pair an active flag with an invalid end time. The migration generation also
 guards the activation-end event; heap maintenance state is derived and is not
 checkpointed.
+
+`swap_wait_state=1` is persistent biological scheduling state for the
+stage-1 singleton crowding exchange. It requires a nonzero
+`pending_swap_direction`, a future `swap_ready_time`, and
+`next_migration_time == swap_ready_time`. Inactive cells store zero for all
+three fields. A thin-layer checkpoint cannot contain a pending z direction.
 
 `division_work_remaining` is the unfinished unit-rate work for the already
 sampled cell cycle. Together with `density_growth_rate` and `last_update_time`,
@@ -128,7 +204,10 @@ stores a compatibility aggregate of all retained lesion processes:
 ```text
 eligible                                         UInt8 boolean
 next_seed_time_hours eligibility_started_hours
-accumulated_eligible_hours                       Float64
+accumulated_eligible_hours remaining_hazard
+hazard_last_update_hours hazard_not_before_hours
+current_rate_sites_per_30_days
+current_density_stress                           Float64
 event_sequence attempted_events committed_roots
 rejected_events                                  UInt64
 schedule_generation                              UInt32
@@ -201,10 +280,17 @@ lesion_id event_sequence attempted_events
 committed_roots rejected_events                  UInt64
 eligible                                         UInt8 boolean
 next_seed_time_hours eligibility_started_hours
-accumulated_eligible_hours                       Float64
+accumulated_eligible_hours remaining_hazard
+hazard_last_update_hours hazard_not_before_hours
+current_rate_sites_per_30_days
+current_density_stress                           Float64
 schedule_generation                              UInt32
 ```
 
+`remaining_hazard` is the unconsumed unit-exponential target. The two hazard
+times delimit the portion eligible for integration at the current piecewise
+constant rate; an eligible zero-rate process has no absolute next event but
+retains positive remaining hazard. Density stress is finite in `[0,1]`.
 Each Poisson arrival is one attempted site and commits at most one root, so the
 reader validates `attempted_events = committed_roots + rejected_events` for
 every process. Every current core identity has a process. On lesion merge,
@@ -263,6 +349,11 @@ current process, but every such non-current source must have an explicit
 historical ownership row is rejected. Terminal tips are retained, including their inert last
 pending-direction/time fields,
 because those fields participate in the deterministic state checksum.
+An active or transiting tip normally has a nonzero pending direction. The
+intentional exception is a blocked-geometry retry: `pending_direction=0` with
+a future `next_growth_time` means “wake and recompute feasibility”, not a
+terminal tip or corrupt schedule. Schema-v6 validation and resume preserve this
+state exactly.
 Per-lesion active-tip limits resolve each tip's historical source through
 `source_ownership`, so tips created before a merge still consume the retained
 current lesion's budget.
@@ -288,7 +379,7 @@ The legacy fixed-width 150-ancestor matrix is not used.
 
 ## Validation and compatibility
 
-The v3 reader rejects missing/unreadable HDF5 objects, unsupported version or
+The v6/v7 reader rejects missing/unreadable HDF5 objects, unsupported version or
 dimension, wrong fixed-width types, non-scalar attributes, unequal column
 lengths, NaN/invalid times, invalid enums/directions/flags, duplicate or zero
 IDs, invalid next-ID counters, invalid or incomplete cell-slot partitions,
@@ -302,16 +393,22 @@ restores a fresh `Simulation3D` and recomputes the complete state checksum; it
 therefore also rejects schema-valid finite values that were changed without a
 matching checksum update.
 
-Schemas v1 and v2 are explicitly rejected. Schema v1 contains one aggregate
+Schemas v1, v2, and v3 are explicitly rejected. Schema v1 contains one aggregate
 cell scheduling generation and no complete vessel state. Schema v2 contains a
 single tumour-wide angiogenesis process and has no lesion identity, per-lesion
 processes, lesion refresh scheduler, or vessel source-lesion provenance.
-Silently interpreting either as v3 would not be a deterministic resume.
+Schema v3 adds the per-lesion topology but lacks remaining hazard, current
+rate, density stress, and integration times. Silently upgrading any of these
+formats could resample the next density-modulated arrival and would not be a
+deterministic resume.
+
+Schema v4/v5 files remain readable. Their absent swap state and four swap
+statistics are restored as zero. New writes always use v6/v7.
 
 The HDF5 test suite covers cell-only and active bidirectional-vessel
 checkpoints. In both cases, checkpoint/resume to a later time must have the
 same final checksum and counters as an uninterrupted run. It also checks the
-lesion tables, dirty observations, and source IDs, then injects v1/v2/future
+lesion tables, dirty observations, and source IDs, then injects v1/v2/v3/future
 schema versions, a mismatched lesion aggregate, an invalid dirty-block boolean,
 inconsistent node/tip source lesions, missing/corrupt source ownership,
 missing/malformed effective-configuration provenance, a mismatched cell-column

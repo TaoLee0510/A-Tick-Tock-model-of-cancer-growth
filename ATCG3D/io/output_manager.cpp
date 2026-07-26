@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iomanip>
 #include <optional>
+#include <numeric>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
@@ -15,6 +16,7 @@
 #include "io/preview_sampler.hpp"
 #include "io/snapshot.hpp"
 #include "io/vtkhdf_writer.hpp"
+#include "engine/parallelism.hpp"
 #ifdef ATCG3D_HAS_HDF5_CHECKPOINT
 #include "io/checkpoint_hdf5.hpp"
 #endif
@@ -32,7 +34,6 @@ std::string frame_name(std::size_t index) {
     return value.str();
 }
 
-#ifdef ATCG3D_HAS_HDF5_CHECKPOINT
 std::string checkpoint_name(const SimulationClock3D& clock) {
     std::ostringstream value;
     value << "checkpoint_" << std::setw(16) << std::setfill('0')
@@ -41,7 +42,6 @@ std::string checkpoint_name(const SimulationClock3D& clock) {
           << ".h5";
     return value.str();
 }
-#endif
 
 void require_unused_path(const std::filesystem::path& path) {
     if (std::filesystem::exists(path) ||
@@ -386,6 +386,9 @@ OutputManager3D::OutputManager3D(const Model3DConfig& config)
         existing_lineage_ =
             read_existing_lineage(run_directory_ / "lineage" / "edges.csv");
         lineage_written_ = existing_lineage_.size();
+        last_scheduled_preview_time_ = last_preview_time_;
+        last_scheduled_full_time_ = last_full_time_;
+        start_worker();
         return;
     }
     if (std::filesystem::exists(run_directory_) &&
@@ -403,6 +406,17 @@ OutputManager3D::OutputManager3D(const Model3DConfig& config)
     std::filesystem::create_directories(run_directory_ / "viz" / "vessels");
     resume_validated_ = true;
     update_metadata();
+    start_worker();
+}
+
+OutputManager3D::~OutputManager3D() noexcept {
+    if (!worker_.joinable()) return;
+    {
+        std::lock_guard lock(queue_mutex_);
+        worker_stopping_ = true;
+    }
+    queue_ready_.notify_all();
+    worker_.join();
 }
 
 bool OutputManager3D::due(double now, double next, double interval) const noexcept {
@@ -417,27 +431,394 @@ double OutputManager3D::advance(double next, double now, double interval) noexce
     return next;
 }
 
+OutputManager3D::FrozenSimulationState3D OutputManager3D::freeze(
+    const Simulation3D& simulation) const {
+    FrozenSimulationState3D state;
+    state.cell_slots = simulation.snapshot_cell_slots();
+    state.cells.resize(state.cell_slots.size());
+    state.lesion_ids.resize(state.cell_slots.size());
+    deterministic_parallel_for(
+        state.cell_slots.size(), std::max(1, config_.threads),
+        [&](std::size_t index) {
+            const Slot slot = state.cell_slots[index];
+            state.cells[index] = simulation.cells().snapshot(slot);
+            state.lesion_ids[index] = simulation.lesion_index()
+                .lesion_for_anchor(state.cells[index].anchor)
+                .value_or(kNoLesionId);
+        });
+    state.free_slots = simulation.cells().free_slots();
+    state.next_uid = simulation.next_uid();
+    state.clock = simulation.clock();
+    state.stats = simulation.stats();
+    state.lineage = simulation.lineage();
+    state.vasculature = simulation.snapshot_vasculature();
+    state.cell_slot_count = simulation.cells().slot_count();
+    state.state_checksum = simulation.state_checksum();
+    return state;
+}
+
+OutputManager3D::FrozenPreviewState3D OutputManager3D::freeze_preview(
+    const Simulation3D& simulation) const {
+    FrozenPreviewState3D state;
+    state.cell_slots = stable_preview_sample(
+        simulation.cells(),
+        static_cast<std::size_t>(config_.preview_max_cells),
+        config_.preview_seed);
+    state.cells.resize(state.cell_slots.size());
+    state.lesion_ids.resize(state.cell_slots.size());
+    deterministic_parallel_for(
+        state.cell_slots.size(), std::max(1, config_.threads),
+        [&](std::size_t index) {
+            const Slot slot = state.cell_slots[index];
+            state.cells[index] = simulation.cells().snapshot(slot);
+            state.lesion_ids[index] = simulation.lesion_index()
+                .lesion_for_anchor(state.cells[index].anchor)
+                .value_or(kNoLesionId);
+        });
+    state.clock = simulation.clock();
+    state.stats = simulation.stats();
+    state.vasculature = simulation.snapshot_vasculature();
+    state.cell_slot_count = simulation.cells().slot_count();
+    return state;
+}
+
+bool OutputManager3D::checkpoint_base_due(double now) const noexcept {
+    return config_.storage_mode == "self_contained_v1" ||
+           checkpoint_parent_path_.empty() ||
+           checkpoint_delta_chain_ >=
+               config_.checkpoint_max_delta_chain ||
+           checkpoint_base_time_ < 0.0 ||
+           now - checkpoint_base_time_ + 1e-10 >=
+               config_.checkpoint_base_every_hours;
+}
+
+OutputManager3D::FrozenCheckpointJournal3D
+OutputManager3D::freeze_checkpoint_journal(
+    const Simulation3D& simulation,
+    const std::filesystem::path& path) {
+    if (checkpoint_parent_path_.empty() ||
+        checkpoint_parent_time_ < 0.0) {
+        throw std::logic_error(
+            "checkpoint journal has no scheduled parent");
+    }
+    const auto& lineage = simulation.lineage();
+    if (checkpoint_lineage_scheduled_ > lineage.size()) {
+        throw std::logic_error(
+            "checkpoint lineage prefix exceeds current lineage");
+    }
+    FrozenCheckpointJournal3D state;
+    state.cells = simulation.cells().take_checkpoint_journal();
+    state.next_uid = simulation.next_uid();
+    state.clock = simulation.clock();
+    state.stats = simulation.stats();
+    state.lineage_prefix_count = checkpoint_lineage_scheduled_;
+    state.lineage_tail.assign(
+        lineage.begin() +
+            static_cast<std::ptrdiff_t>(checkpoint_lineage_scheduled_),
+        lineage.end());
+    state.vasculature = simulation.snapshot_vasculature();
+    state.state_checksum = simulation.state_checksum();
+    state.path = path;
+    state.parent_path = checkpoint_parent_path_;
+    state.parent_state_checksum =
+        checkpoint_parent_state_checksum_;
+    state.parent_time_hours = checkpoint_parent_time_;
+    state.chain_length = checkpoint_delta_chain_ + 1;
+    return state;
+}
+
+void OutputManager3D::start_worker() {
+    if (!config_.output_enabled || !config_.output_async_enabled ||
+        worker_.joinable()) return;
+    worker_ = std::thread([this] { worker_loop(); });
+}
+
+void OutputManager3D::throw_worker_error() {
+    if (!worker_failed_.load(std::memory_order_acquire)) return;
+    std::exception_ptr error;
+    {
+        std::lock_guard lock(queue_mutex_);
+        error = worker_error_;
+    }
+    if (error) std::rethrow_exception(error);
+}
+
+std::uint64_t OutputManager3D::estimate_job_bytes(
+    const OutputJob3D& job) noexcept {
+    std::uint64_t bytes = sizeof(OutputJob3D);
+    if (job.preview_state) {
+        bytes += job.preview_state->cells.capacity() * sizeof(CellInit);
+        bytes += job.preview_state->cell_slots.capacity() * sizeof(Slot);
+        bytes +=
+            job.preview_state->lesion_ids.capacity() * sizeof(LesionId);
+    }
+    if (job.full_state) {
+        bytes += job.full_state->cells.capacity() * sizeof(CellInit);
+        bytes += job.full_state->cell_slots.capacity() * sizeof(Slot);
+        bytes += job.full_state->free_slots.capacity() * sizeof(Slot);
+        bytes += job.full_state->lesion_ids.capacity() * sizeof(LesionId);
+        bytes +=
+            job.full_state->lineage.capacity() * sizeof(LineageEdge);
+    }
+    if (job.checkpoint_journal) {
+        bytes += job.checkpoint_journal->cells.mutations.capacity() *
+                 sizeof(CheckpointCellMutation3D);
+        bytes +=
+            job.checkpoint_journal->cells.free_list_mutations.capacity() *
+            sizeof(FreeListMutation3D);
+        bytes +=
+            job.checkpoint_journal->lineage_tail.capacity() *
+            sizeof(LineageEdge);
+    }
+    return bytes;
+}
+
+void OutputManager3D::enqueue(OutputJob3D job) {
+    const std::uint64_t job_bytes = estimate_job_bytes(job);
+    std::unique_lock lock(queue_mutex_);
+    if (job.live_preview &&
+        config_.preview_overflow_policy == "coalesce_latest") {
+        const auto replaceable = std::find_if(
+            jobs_.rbegin(), jobs_.rend(), [](const OutputJob3D& queued) {
+                return queued.live_preview && !queued.preview &&
+                       !queued.full && !queued.checkpoint_base &&
+                       !queued.checkpoint_journal;
+            });
+        if (replaceable != jobs_.rend()) {
+            const std::uint64_t old_bytes =
+                estimate_job_bytes(*replaceable);
+            *replaceable = std::move(job);
+            queued_snapshot_bytes_ =
+                old_bytes > queued_snapshot_bytes_
+                ? job_bytes
+                : queued_snapshot_bytes_ - old_bytes + job_bytes;
+            lock.unlock();
+            queue_ready_.notify_one();
+            return;
+        }
+    }
+    queue_space_.wait(lock, [this, job_bytes] {
+        const bool within_depth =
+            jobs_.size() < config_.output_async_queue_depth;
+        const bool within_bytes =
+            queued_snapshot_bytes_ <=
+            config_.output_async_max_pending_bytes -
+                std::min(job_bytes,
+                         config_.output_async_max_pending_bytes);
+        // A single large full snapshot is allowed through an otherwise-empty
+        // queue; the byte cap prevents several such snapshots accumulating.
+        return (within_depth && (within_bytes || jobs_.empty())) ||
+               worker_error_ || worker_stopping_;
+    });
+    if (worker_error_) {
+        const std::exception_ptr error = worker_error_;
+        lock.unlock();
+        std::rethrow_exception(error);
+    }
+    if (worker_stopping_) {
+        throw std::runtime_error("asynchronous output worker is stopping");
+    }
+    jobs_.push_back(std::move(job));
+    queued_snapshot_bytes_ += job_bytes;
+    lock.unlock();
+    queue_ready_.notify_one();
+}
+
+void OutputManager3D::worker_loop() noexcept {
+    try {
+        for (;;) {
+            OutputJob3D job;
+            {
+                std::unique_lock lock(queue_mutex_);
+                queue_ready_.wait(lock, [this] {
+                    return !jobs_.empty() || worker_stopping_;
+                });
+                if (jobs_.empty() && worker_stopping_) break;
+                const std::uint64_t job_bytes =
+                    estimate_job_bytes(jobs_.front());
+                job = std::move(jobs_.front());
+                jobs_.pop_front();
+                queued_snapshot_bytes_ =
+                    job_bytes > queued_snapshot_bytes_
+                    ? 0
+                    : queued_snapshot_bytes_ - job_bytes;
+            }
+            queue_space_.notify_one();
+
+            if (job.live_preview) {
+                if (!job.preview_state) {
+                    throw std::logic_error(
+                        "live preview job has no sampled snapshot");
+                }
+                write_live_preview(*job.preview_state);
+            }
+            if (job.preview) {
+                if (job.preview_state) {
+                    write_preview(*job.preview_state);
+                } else if (job.full_state) {
+                    write_preview(*job.full_state);
+                } else {
+                    throw std::logic_error(
+                        "preview output job has no snapshot");
+                }
+            }
+            if (job.full) {
+                if (!job.full_state) {
+                    throw std::logic_error(
+                        "full output job has no full snapshot");
+                }
+                write_full(*job.full_state);
+            }
+            if (job.checkpoint_base) {
+                if (!job.full_state) {
+                    throw std::logic_error(
+                        "base checkpoint job has no full snapshot");
+                }
+                write_checkpoint(*job.full_state);
+            } else if (job.checkpoint_journal) {
+                write_checkpoint(*job.checkpoint_journal);
+            }
+        }
+    } catch (...) {
+        {
+            std::lock_guard lock(queue_mutex_);
+            worker_error_ = std::current_exception();
+            worker_stopping_ = true;
+            jobs_.clear();
+            queued_snapshot_bytes_ = 0;
+        }
+        worker_failed_.store(true, std::memory_order_release);
+        queue_space_.notify_all();
+        queue_ready_.notify_all();
+    }
+}
+
+void OutputManager3D::finish_worker() {
+    if (!worker_.joinable()) return;
+    {
+        std::lock_guard lock(queue_mutex_);
+        worker_stopping_ = true;
+    }
+    queue_ready_.notify_all();
+    worker_.join();
+    throw_worker_error();
+}
+
+bool OutputManager3D::viewer_attached() const {
+    if (!config_.live_preview_when_attached) return false;
+    const std::filesystem::path marker =
+        run_directory_ / "control" / "viewer.attached";
+    std::error_code error;
+    const auto written =
+        std::filesystem::last_write_time(marker, error);
+    if (error) return false;
+    return std::filesystem::file_time_type::clock::now() - written <=
+           std::chrono::seconds(5);
+}
+
 void OutputManager3D::observe(const Simulation3D& simulation) {
     if (!config_.output_enabled) return;
     if (!resume_validated_) validate_resume_state(simulation);
+    throw_worker_error();
     const double now = simulation.clock().time_hours;
     const bool full_due = due(now, next_full_, config_.full_every_hours);
     const bool preview_due = due(now, next_preview_, config_.preview_every_hours);
-    if ((preview_due || full_due) && !same_time(last_preview_time_, now)) {
-        write_preview(simulation);
+    const bool write_preview_now =
+        (preview_due || full_due) &&
+        !same_time(config_.output_async_enabled
+                       ? last_scheduled_preview_time_ : last_preview_time_, now);
+    const bool write_full_now =
+        full_due &&
+        !same_time(config_.output_async_enabled
+                       ? last_scheduled_full_time_ : last_full_time_, now);
+    const bool write_checkpoint_now =
+        due(now, next_checkpoint_, config_.checkpoint_every_hours);
+    if (write_preview_now || write_full_now || write_checkpoint_now) {
+        OutputJob3D job;
+        job.preview = write_preview_now;
+        job.full = write_full_now;
+        const bool base_checkpoint =
+            write_checkpoint_now && checkpoint_base_due(now);
+        job.checkpoint_base = base_checkpoint;
+        if (write_full_now || base_checkpoint) {
+            job.full_state = freeze(simulation);
+        }
+        if (write_preview_now && !job.full_state) {
+            job.preview_state = freeze_preview(simulation);
+        }
+        if (write_checkpoint_now) {
+            const std::filesystem::path checkpoint_path =
+                run_directory_ / "checkpoints" /
+                checkpoint_name(simulation.clock());
+            if (base_checkpoint) {
+                simulation.cells().reset_checkpoint_journal();
+                checkpoint_base_time_ = now;
+                checkpoint_delta_chain_ = 0;
+                checkpoint_parent_path_ = checkpoint_path;
+                checkpoint_parent_state_checksum_ =
+                    job.full_state->state_checksum;
+                checkpoint_parent_time_ = now;
+                checkpoint_lineage_scheduled_ =
+                    simulation.lineage().size();
+            } else {
+                job.checkpoint_journal =
+                    freeze_checkpoint_journal(simulation,
+                                              checkpoint_path);
+                checkpoint_parent_path_ = checkpoint_path;
+                checkpoint_parent_state_checksum_ =
+                    job.checkpoint_journal->state_checksum;
+                checkpoint_parent_time_ = now;
+                checkpoint_delta_chain_ =
+                    job.checkpoint_journal->chain_length;
+                checkpoint_lineage_scheduled_ =
+                    simulation.lineage().size();
+            }
+        }
+        last_scheduled_state_time_ = now;
+        if (write_preview_now) last_scheduled_preview_time_ = now;
+        if (write_full_now) last_scheduled_full_time_ = now;
+        if (config_.output_async_enabled) {
+            enqueue(std::move(job));
+        } else {
+            if (job.preview) {
+                if (job.preview_state) {
+                    write_preview(*job.preview_state);
+                } else {
+                    write_preview(*job.full_state);
+                }
+            }
+            if (job.full) write_full(*job.full_state);
+            if (job.checkpoint_base) {
+                write_checkpoint(*job.full_state);
+            } else if (job.checkpoint_journal) {
+                write_checkpoint(*job.checkpoint_journal);
+            }
+        }
     }
-    if (full_due && !same_time(last_full_time_, now)) {
-        write_full(simulation);
-    }
-    if (due(now, next_checkpoint_, config_.checkpoint_every_hours)) {
-        write_checkpoint(simulation);
-    }
-    if (preview_due) next_preview_ = advance(next_preview_, now, config_.preview_every_hours);
-    if (full_due) next_full_ = advance(next_full_, now, config_.full_every_hours);
-    if (due(now, next_checkpoint_, config_.checkpoint_every_hours)) {
-        next_checkpoint_ = advance(next_checkpoint_, now, config_.checkpoint_every_hours);
+    const auto wall_now = std::chrono::steady_clock::now();
+    const bool live_wall_due =
+        last_live_preview_wall_.time_since_epoch().count() == 0 ||
+        std::chrono::duration<double>(
+            wall_now - last_live_preview_wall_).count() >=
+            config_.live_preview_wall_interval_seconds;
+    if (live_wall_due && viewer_attached() &&
+        !write_preview_now && !write_full_now) {
+        OutputJob3D live_job;
+        live_job.live_preview = true;
+        live_job.preview_state = freeze_preview(simulation);
+        if (config_.output_async_enabled) {
+            enqueue(std::move(live_job));
+        } else {
+            write_live_preview(*live_job.preview_state);
+        }
+        last_live_preview_wall_ = wall_now;
     }
     append_lineage(simulation);
+    if (preview_due) next_preview_ = advance(next_preview_, now, config_.preview_every_hours);
+    if (full_due) next_full_ = advance(next_full_, now, config_.full_every_hours);
+    if (write_checkpoint_now) {
+        next_checkpoint_ = advance(next_checkpoint_, now, config_.checkpoint_every_hours);
+    }
 }
 
 void OutputManager3D::write_preview(const Simulation3D& simulation) {
@@ -450,19 +831,112 @@ void OutputManager3D::write_preview(const Simulation3D& simulation) {
     const std::string name = frame_name(preview_.size());
     const std::filesystem::path path = run_directory_ / "viz" / "preview" / name;
     require_unused_path(path);
-    write_vtkhdf_points_atomic(path, snapshot);
+    write_vtkhdf_points_atomic(path, snapshot, config_.vtkhdf_compression_level);
     write_vessels(simulation, name);
+    write_vascular_metrics(simulation.clock().time_hours, simulation.stats(),
+                           simulation.snapshot_vasculature());
     preview_.push_back({"viz/preview/" + name, simulation.clock().time_hours});
     last_preview_time_ = simulation.clock().time_hours;
     update_metadata();
+}
+
+void OutputManager3D::write_preview(
+    const FrozenPreviewState3D& simulation) {
+    std::vector<std::size_t> indices(simulation.cells.size());
+    std::iota(indices.begin(), indices.end(), std::size_t{0});
+    const FrozenCellSnapshotView3D snapshot{
+        simulation.cells, simulation.cell_slots,
+        simulation.cell_slot_count, indices, simulation.lesion_ids,
+        simulation.clock, config_.display_radius};
+    const std::string name = frame_name(preview_.size());
+    const std::filesystem::path path =
+        run_directory_ / "viz" / "preview" / name;
+    require_unused_path(path);
+    write_vtkhdf_points_atomic(
+        path, snapshot, config_.vtkhdf_compression_level);
+    const std::filesystem::path vessel_path =
+        run_directory_ / "viz" / "vessels" / name;
+    require_unused_path(vessel_path);
+    write_vtkhdf_vessels_atomic(
+        vessel_path, simulation.vasculature.nodes,
+        config_.vtkhdf_compression_level);
+    vessels_.push_back(
+        {"viz/vessels/" + name, simulation.clock.time_hours});
+    write_vascular_metrics(simulation.clock.time_hours,
+                           simulation.stats,
+                           simulation.vasculature);
+    preview_.push_back(
+        {"viz/preview/" + name, simulation.clock.time_hours});
+    last_preview_time_ = simulation.clock.time_hours;
+    update_metadata();
+}
+
+void OutputManager3D::write_preview(
+    const FrozenSimulationState3D& simulation) {
+    const std::vector<std::size_t> indices = stable_preview_sample(
+        std::span<const CellInit>(simulation.cells),
+        static_cast<std::size_t>(config_.preview_max_cells),
+        config_.preview_seed);
+    const FrozenCellSnapshotView3D snapshot{
+        simulation.cells, simulation.cell_slots, simulation.cell_slot_count,
+        indices, simulation.lesion_ids, simulation.clock,
+        config_.display_radius};
+    const std::string name = frame_name(preview_.size());
+    const std::filesystem::path path = run_directory_ / "viz" / "preview" / name;
+    require_unused_path(path);
+    write_vtkhdf_points_atomic(path, snapshot, config_.vtkhdf_compression_level);
+    write_vessels(simulation, name);
+    write_vascular_metrics(simulation.clock.time_hours, simulation.stats,
+                           simulation.vasculature);
+    preview_.push_back({"viz/preview/" + name, simulation.clock.time_hours});
+    last_preview_time_ = simulation.clock.time_hours;
+    update_metadata();
+}
+
+void OutputManager3D::write_live_preview(
+    const FrozenPreviewState3D& simulation) {
+    std::vector<std::size_t> indices(simulation.cells.size());
+    std::iota(indices.begin(), indices.end(), std::size_t{0});
+    const FrozenCellSnapshotView3D snapshot{
+        simulation.cells, simulation.cell_slots,
+        simulation.cell_slot_count, indices, simulation.lesion_ids,
+        simulation.clock, config_.display_radius};
+    const std::filesystem::path cell_path =
+        run_directory_ / "viz" / "live" / "current.vtkhdf";
+    const std::filesystem::path vessel_path =
+        run_directory_ / "viz" / "live" / "vessels.vtkhdf";
+    write_vtkhdf_points_atomic(
+        cell_path, snapshot, config_.vtkhdf_compression_level);
+    write_vtkhdf_vessels_atomic(
+        vessel_path, simulation.vasculature.nodes,
+        config_.vtkhdf_compression_level);
+    write_series_atomic(
+        run_directory_ / "live.vtkhdf.series",
+        {{"viz/live/current.vtkhdf",
+          simulation.clock.time_hours}});
+    write_series_atomic(
+        run_directory_ / "live-vessels.vtkhdf.series",
+        {{"viz/live/vessels.vtkhdf",
+          simulation.clock.time_hours}});
 }
 
 void OutputManager3D::write_vessels(const Simulation3D& simulation,
                                     const std::string& frame) {
     const std::filesystem::path path = run_directory_ / "viz" / "vessels" / frame;
     require_unused_path(path);
-    write_vtkhdf_vessels_atomic(path, simulation.vessel_nodes());
+    write_vtkhdf_vessels_atomic(path, simulation.vessel_nodes(),
+                                config_.vtkhdf_compression_level);
     vessels_.push_back({"viz/vessels/" + frame, simulation.clock().time_hours});
+}
+
+void OutputManager3D::write_vessels(
+    const FrozenSimulationState3D& simulation,
+    const std::string& frame) {
+    const std::filesystem::path path = run_directory_ / "viz" / "vessels" / frame;
+    require_unused_path(path);
+    write_vtkhdf_vessels_atomic(path, simulation.vasculature.nodes,
+                                config_.vtkhdf_compression_level);
+    vessels_.push_back({"viz/vessels/" + frame, simulation.clock.time_hours});
 }
 
 void OutputManager3D::write_full(const Simulation3D& simulation) {
@@ -473,19 +947,89 @@ void OutputManager3D::write_full(const Simulation3D& simulation) {
     const std::string name = frame_name(full_.size());
     const std::filesystem::path path = run_directory_ / "viz" / "full" / name;
     require_unused_path(path);
-    write_vtkhdf_points_atomic(path, snapshot);
+    write_vtkhdf_points_atomic(path, snapshot, config_.vtkhdf_compression_level);
     full_.push_back({"viz/full/" + name, simulation.clock().time_hours});
     last_full_time_ = simulation.clock().time_hours;
     write_series_atomic(run_directory_ / "full.vtkhdf.series", full_);
     update_metadata();
 }
 
+void OutputManager3D::write_full(const FrozenSimulationState3D& simulation) {
+    std::vector<std::size_t> indices(simulation.cells.size());
+    std::iota(indices.begin(), indices.end(), std::size_t{0});
+    const FrozenCellSnapshotView3D snapshot{
+        simulation.cells, simulation.cell_slots, simulation.cell_slot_count,
+        indices, simulation.lesion_ids, simulation.clock,
+        config_.display_radius};
+    const std::string name = frame_name(full_.size());
+    const std::filesystem::path path = run_directory_ / "viz" / "full" / name;
+    require_unused_path(path);
+    write_vtkhdf_points_atomic(path, snapshot, config_.vtkhdf_compression_level);
+    full_.push_back({"viz/full/" + name, simulation.clock.time_hours});
+    last_full_time_ = simulation.clock.time_hours;
+    write_series_atomic(run_directory_ / "full.vtkhdf.series", full_);
+    update_metadata();
+}
+
 void OutputManager3D::write_checkpoint(const Simulation3D& simulation) {
 #ifdef ATCG3D_HAS_HDF5_CHECKPOINT
+    FrozenSimulationState3D state = freeze(simulation);
+    write_checkpoint(state);
+    simulation.cells().reset_checkpoint_journal();
+#else
+    (void)simulation;
+    throw std::runtime_error("HDF5 checkpoint support is not built");
+#endif
+}
+
+void OutputManager3D::write_checkpoint(
+    const FrozenSimulationState3D& simulation) {
+#ifdef ATCG3D_HAS_HDF5_CHECKPOINT
     const std::filesystem::path path = run_directory_ / "checkpoints" /
-                                       checkpoint_name(simulation.clock());
+                                       checkpoint_name(simulation.clock);
     require_unused_path(path);
-    write_hdf5_checkpoint(path, simulation);
+    const CheckpointSnapshotView3D snapshot{
+        simulation.cells,
+        simulation.cell_slots,
+        simulation.cell_slot_count,
+        simulation.free_slots,
+        simulation.next_uid,
+        simulation.clock,
+        simulation.stats,
+        simulation.lineage,
+        simulation.vasculature,
+        simulation.state_checksum};
+    write_hdf5_checkpoint(path, snapshot, config_);
+    last_checkpoint_was_base_ = true;
+    last_checkpoint_path_ = path;
+#else
+    (void)simulation;
+    throw std::runtime_error("HDF5 checkpoint support is not built");
+#endif
+}
+
+void OutputManager3D::write_checkpoint(
+    const FrozenCheckpointJournal3D& simulation) {
+#ifdef ATCG3D_HAS_HDF5_CHECKPOINT
+    require_unused_path(simulation.path);
+    const CheckpointJournalSnapshotView3D snapshot{
+        simulation.cells.mutations,
+        simulation.cells.free_list_mutations,
+        simulation.cells.slot_count,
+        simulation.next_uid,
+        simulation.clock,
+        simulation.stats,
+        simulation.lineage_tail,
+        simulation.lineage_prefix_count,
+        simulation.vasculature,
+        simulation.state_checksum};
+    write_hdf5_journal_delta_checkpoint(
+        simulation.path, snapshot, simulation.parent_path,
+        simulation.parent_state_checksum,
+        simulation.parent_time_hours, simulation.chain_length,
+        config_);
+    last_checkpoint_was_base_ = false;
+    last_checkpoint_path_ = simulation.path;
 #else
     (void)simulation;
     throw std::runtime_error("HDF5 checkpoint support is not built");
@@ -526,6 +1070,8 @@ void OutputManager3D::validate_resume_state(const Simulation3D& simulation) {
     collect_if_present(artifacts, run_directory_, "run.json.tmp", true);
     collect_if_present(artifacts, run_directory_, "lineage/edges.csv.tmp", true);
     collect_if_present(artifacts, run_directory_, "metrics/final.json.tmp", true);
+    collect_if_present(artifacts, run_directory_,
+                       "metrics/vascular_latest.json.tmp", true);
     collect_frame_artifacts(artifacts, run_directory_, "viz/preview", preview_prefix);
     collect_frame_artifacts(artifacts, run_directory_, "viz/full", full_prefix);
     collect_frame_artifacts(artifacts, run_directory_, "viz/vessels", vessel_prefix);
@@ -540,6 +1086,8 @@ void OutputManager3D::validate_resume_state(const Simulation3D& simulation) {
                                 has_non_temporary_artifact;
     if (state_rollback) {
         collect_if_present(artifacts, run_directory_, "metrics/final.json", true);
+        collect_if_present(artifacts, run_directory_,
+                           "metrics/vascular_latest.json", true);
     }
 
     if (catalogs_trimmed || lineage_trimmed || !artifacts.empty()) {
@@ -608,18 +1156,39 @@ void OutputManager3D::validate_resume_state(const Simulation3D& simulation) {
 
     last_preview_time_ = preview_.empty() ? -1.0 : preview_.back().time_hours;
     last_full_time_ = full_.empty() ? -1.0 : full_.back().time_hours;
+    // Constructor state may have observed catalogs newer than the selected
+    // checkpoint. Recovery trims those catalogs above, so asynchronous
+    // de-duplication markers must roll back with them; otherwise the first
+    // post-resume preview/full boundary is incorrectly treated as already
+    // scheduled while checkpoint output alone is emitted.
+    last_scheduled_preview_time_ = last_preview_time_;
+    last_scheduled_full_time_ = last_full_time_;
 
     // A resume never re-emits the restored instant. Continue each periodic
     // schedule at the first regular boundary strictly after the restored time.
     next_preview_ = advance(0.0, now, config_.preview_every_hours);
     next_full_ = advance(0.0, now, config_.full_every_hours);
     next_checkpoint_ = advance(0.0, now, config_.checkpoint_every_hours);
+    // A resumed run deliberately starts a new base at its next checkpoint.
+    // This keeps schema-4/5/6/7 recovery compatible without retaining or
+    // materializing the restored parent solely for output bookkeeping.
+    checkpoint_parent_path_.clear();
+    checkpoint_parent_state_checksum_ = 0;
+    checkpoint_parent_time_ = -1.0;
+    checkpoint_base_time_ = -1.0;
+    checkpoint_delta_chain_ = 0;
+    checkpoint_lineage_scheduled_ = simulation.lineage().size();
+    simulation.cells().reset_checkpoint_journal();
     resume_time_ = now;
     resume_validated_ = true;
 }
 
 void OutputManager3D::append_lineage(const Simulation3D& simulation) {
-    const auto& lineage = simulation.lineage();
+    append_lineage(simulation.lineage());
+}
+
+void OutputManager3D::append_lineage(
+    const std::vector<LineageEdge>& lineage) {
     if (lineage_written_ >= lineage.size()) return;
     const std::filesystem::path path = run_directory_ / "lineage" / "edges.csv";
     const bool write_header = !std::filesystem::exists(path);
@@ -665,10 +1234,92 @@ void OutputManager3D::write_metrics(const Simulation3D& simulation) {
             << simulation.stats().angiogenesis_seed_rejections << ",\n"
             << "  \"cell_store_bytes\": " << simulation.cells().allocated_bytes() << ",\n"
             << "  \"grid_bytes\": " << simulation.grid().allocated_bytes() << ",\n"
+            << "  \"density_index_bytes\": "
+            << simulation.density().allocated_bytes() << ",\n"
             << "  \"lesion_index_bytes\": "
             << simulation.lesion_index().allocated_bytes() << ",\n"
             << "  \"state_checksum\": " << simulation.state_checksum() << "\n"
             << "}\n";
+    });
+}
+
+void OutputManager3D::write_vascular_metrics(
+    double time_hours,
+    const SimulationStats3D& stats,
+    const VasculatureState3D& vasculature) {
+    std::array<std::uint64_t, 9> status_counts{};
+    std::array<std::uint64_t, 3> role_counts{};
+    for (const VesselTipInit3D& tip : vasculature.tips) {
+        const auto status = static_cast<std::size_t>(tip.status);
+        const auto role = static_cast<std::size_t>(tip.role);
+        if (status < status_counts.size()) ++status_counts[status];
+        if (role < role_counts.size()) ++role_counts[role];
+    }
+    static constexpr std::array<std::string_view, 9> status_names{
+        "dormant", "active", "blocked", "merged", "reached_target",
+        "max_length", "boundary_stop", "complete", "transiting"};
+    write_text_atomic(run_directory_ / "metrics" / "vascular_latest.json",
+                      [&](std::ostream& out) {
+        const auto& aggregate = vasculature.process;
+        out << std::setprecision(17)
+            << "{\n"
+            << "  \"time_hours\": " << time_hours << ",\n"
+            << "  \"vessel_nodes\": " << vasculature.nodes.size() << ",\n"
+            << "  \"vessel_tips\": " << vasculature.tips.size() << ",\n"
+            << "  \"tip_roles\": {\"root\": " << role_counts[0]
+            << ", \"inward\": " << role_counts[1]
+            << ", \"outward\": " << role_counts[2] << "},\n"
+            << "  \"tip_status\": {";
+        for (std::size_t index = 0; index < status_names.size(); ++index) {
+            if (index != 0) out << ", ";
+            out << '\"' << status_names[index] << "\": "
+                << status_counts[index];
+        }
+        out << "},\n"
+            << "  \"seed_attempts\": " << stats.angiogenesis_seed_attempts
+            << ",\n"
+            << "  \"committed_roots\": " << stats.angiogenesis_roots
+            << ",\n"
+            << "  \"seed_rejections\": "
+            << stats.angiogenesis_seed_rejections << ",\n"
+            << "  \"aggregate_density_stress\": "
+            << aggregate.current_density_stress << ",\n"
+            << "  \"aggregate_rate_sites_per_30_days\": "
+            << aggregate.current_rate_sites_per_30_days << ",\n"
+            << "  \"next_seed_time_hours\": "
+            << aggregate.next_seed_time_hours << ",\n"
+            << "  \"influence\": {\"profile\": \""
+            << config_.angiogenesis.influence_profile
+            << "\", \"max_relief_fraction\": "
+            << config_.angiogenesis.influence_max_relief_fraction
+            << ", \"cutoff_from_vessel_voxel_centers\": "
+            << config_.angiogenesis.influence_cutoff_radius_voxels
+            << ", \"maximum_centerline_extent_voxels\": "
+            << config_.angiogenesis.diameter_voxels * 0.5 +
+                   config_.angiogenesis.influence_cutoff_radius_voxels
+            << "},\n"
+            << "  \"lesions\": [";
+        for (std::size_t index = 0;
+             index < vasculature.lesions.processes.size(); ++index) {
+            const LesionAngiogenesisState3D& entry =
+                vasculature.lesions.processes[index];
+            const auto& process = entry.process;
+            if (index != 0) out << ',';
+            out << "\n    {\"lesion_id\": " << entry.lesion_id
+                << ", \"eligible\": "
+                << (process.eligible ? "true" : "false")
+                << ", \"density_stress\": "
+                << process.current_density_stress
+                << ", \"rate_sites_per_30_days\": "
+                << process.current_rate_sites_per_30_days
+                << ", \"next_seed_time_hours\": "
+                << process.next_seed_time_hours
+                << ", \"attempts\": " << process.attempted_events
+                << ", \"roots\": " << process.committed_roots
+                << ", \"rejections\": " << process.rejected_events << '}';
+        }
+        if (!vasculature.lesions.processes.empty()) out << '\n';
+        out << "  ]\n}\n";
     });
 }
 
@@ -678,15 +1329,60 @@ void OutputManager3D::finalize(const Simulation3D& simulation) {
     const bool advanced_since_resume =
         !resume_mode_ || (simulation.clock().time_hours > resume_time_ &&
                           !same_time(simulation.clock().time_hours, resume_time_));
-    if (!same_time(last_preview_time_, simulation.clock().time_hours) &&
+    if (config_.output_async_enabled) {
+        const double now = simulation.clock().time_hours;
+        const bool final_preview =
+            !same_time(last_scheduled_preview_time_, now) &&
+            advanced_since_resume &&
+            (config_.preview_every_hours > 0.0 ||
+             config_.full_every_hours > 0.0);
+        if (final_preview) {
+            OutputJob3D job;
+            job.preview = final_preview;
+            job.preview_state = freeze_preview(simulation);
+            enqueue(std::move(job));
+            last_scheduled_state_time_ = now;
+            last_scheduled_preview_time_ = now;
+        }
+        finish_worker();
+    } else if (!same_time(last_preview_time_, simulation.clock().time_hours) &&
         advanced_since_resume &&
         (config_.preview_every_hours > 0.0 || config_.full_every_hours > 0.0)) {
         write_preview(simulation);
     }
     append_lineage(simulation);
+    write_vascular_metrics(simulation.clock().time_hours, simulation.stats(),
+                           simulation.snapshot_vasculature());
     write_metrics(simulation);
     update_metadata();
     finalized_ = true;
+}
+
+void OutputManager3D::checkpoint_now(
+    const Simulation3D& simulation) {
+    if (!config_.output_enabled ||
+        !config_.output_on_demand_checkpoint) {
+        return;
+    }
+    if (checkpoint_parent_time_ >= 0.0 &&
+        same_time(checkpoint_parent_time_,
+                  simulation.clock().time_hours)) {
+        return;
+    }
+    finish_worker();
+    FrozenSimulationState3D state = freeze(simulation);
+    const std::filesystem::path path =
+        run_directory_ / "checkpoints" /
+        checkpoint_name(simulation.clock());
+    require_unused_path(path);
+    write_checkpoint(state);
+    simulation.cells().reset_checkpoint_journal();
+    checkpoint_parent_path_ = path;
+    checkpoint_parent_state_checksum_ = state.state_checksum;
+    checkpoint_parent_time_ = state.clock.time_hours;
+    checkpoint_base_time_ = state.clock.time_hours;
+    checkpoint_delta_chain_ = 0;
+    checkpoint_lineage_scheduled_ = state.lineage.size();
 }
 
 }  // namespace atcg3d

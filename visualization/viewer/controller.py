@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import math
 from pathlib import Path
+import struct
 from typing import Protocol
 
 
@@ -16,6 +18,7 @@ from typing import Protocol
 class Frame:
     path: Path
     time_hours: float
+    storage: str = "vtkhdf"
 
 
 @dataclass(frozen=True)
@@ -38,7 +41,8 @@ class SeriesCatalog:
         self.preview: list[Frame] = []
         self.full: list[Frame] = []
         self.vessels: list[Frame] = []
-        self._signature: tuple[tuple[int, int], tuple[int, int], tuple[int, int]] | None = None
+        self.checkpoints: list[Frame] = []
+        self._signature = None
         self.refresh()
 
     def _file_signature(self, path: Path) -> tuple[int, int]:
@@ -64,17 +68,64 @@ class SeriesCatalog:
         frames.sort(key=lambda frame: frame.time_hours)
         return frames
 
+    def _read_checkpoints(self) -> list[Frame]:
+        directory = self.run_directory / "checkpoints"
+        if not directory.is_dir():
+            return []
+        frames: list[Frame] = []
+        for path in directory.glob("checkpoint_*_time_*.h5"):
+            name = path.name
+            if name.endswith(".tmp"):
+                continue
+            time_hex = name.removesuffix(".h5").rsplit("_time_", 1)[-1]
+            if len(time_hex) != 16:
+                continue
+            try:
+                bits = int(time_hex, 16)
+                time_hours = struct.unpack(">d", bits.to_bytes(8, "big"))[0]
+            except (ValueError, OverflowError, struct.error):
+                continue
+            if not math.isfinite(time_hours) or time_hours < 0.0:
+                continue
+            frames.append(Frame(path, time_hours, "checkpoint"))
+        frames.sort(key=lambda frame: frame.time_hours)
+        return frames
+
     def refresh(self) -> bool:
         preview_path = self.run_directory / "preview.vtkhdf.series"
+        live_path = self.run_directory / "live.vtkhdf.series"
         full_path = self.run_directory / "full.vtkhdf.series"
         vessel_path = self.run_directory / "vessels.vtkhdf.series"
-        signature = (self._file_signature(preview_path), self._file_signature(full_path),
-                     self._file_signature(vessel_path))
+        live_vessel_path = self.run_directory / "live-vessels.vtkhdf.series"
+        checkpoint_path = self.run_directory / "checkpoints"
+        signature = (self._file_signature(preview_path),
+                     self._file_signature(live_path),
+                     self._file_signature(full_path),
+                     self._file_signature(vessel_path),
+                     self._file_signature(live_vessel_path),
+                     self._file_signature(checkpoint_path))
         if signature == self._signature:
             return False
-        self.preview = self._read("preview.vtkhdf.series")
+        archived_preview = self._read("preview.vtkhdf.series")
+        live_preview = self._read("live.vtkhdf.series")
+        self.preview = archived_preview + [
+            frame for frame in live_preview
+            if not any(math.isclose(frame.time_hours, archived.time_hours,
+                                    rel_tol=1e-12, abs_tol=1e-12)
+                       for archived in archived_preview)
+        ]
+        self.preview.sort(key=lambda frame: frame.time_hours)
         self.full = self._read("full.vtkhdf.series")
-        self.vessels = self._read("vessels.vtkhdf.series")
+        archived_vessels = self._read("vessels.vtkhdf.series")
+        live_vessels = self._read("live-vessels.vtkhdf.series")
+        self.vessels = archived_vessels + [
+            frame for frame in live_vessels
+            if not any(math.isclose(frame.time_hours, archived.time_hours,
+                                    rel_tol=1e-12, abs_tol=1e-12)
+                       for archived in archived_vessels)
+        ]
+        self.vessels.sort(key=lambda frame: frame.time_hours)
+        self.checkpoints = self._read_checkpoints()
         self._signature = signature
         return True
 
@@ -86,6 +137,10 @@ class SeriesCatalog:
 
     def exact_full(self, time_hours: float, tolerance: float = 1e-9) -> Frame | None:
         for frame in self.full:
+            scale = max(1.0, abs(frame.time_hours), abs(time_hours))
+            if abs(frame.time_hours - time_hours) <= tolerance * scale:
+                return frame
+        for frame in self.checkpoints:
             scale = max(1.0, abs(frame.time_hours), abs(time_hours))
             if abs(frame.time_hours - time_hours) <= tolerance * scale:
                 return frame

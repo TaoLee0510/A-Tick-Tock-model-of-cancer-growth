@@ -27,6 +27,9 @@ atcg3d::Model3DConfig test_config(int threads) {
 
     auto& vessels = config.angiogenesis;
     vessels.enabled = true;
+    // Most fixtures isolate geometry/scheduling behavior. Dedicated tests
+    // below exercise the density-modulated hazard independently.
+    vessels.seed_process_model = "homogeneous_poisson";
     // Small deterministic fixtures need a permissive lesion detector.  The
     // production profile intentionally requires a substantially denser core.
     vessels.lesion_block_edge = 8;
@@ -44,7 +47,7 @@ atcg3d::Model3DConfig test_config(int threads) {
     vessels.surface_min_separation_voxels = 0;
     vessels.diameter_voxels = 1.0;
     vessels.inward_speed_voxels_per_hour = 10.0;
-    vessels.outward_speed_voxels_per_hour = 10.0;
+    vessels.outward_speed_voxels_per_hour = 20.0;
     vessels.inward_max_length_voxels = 12;
     vessels.outward_max_length_voxels = 12;
     vessels.outward_external_connection_distance_voxels = 1.0;
@@ -247,9 +250,11 @@ int main() {
         [small_metastasis_id](const LesionAngiogenesisState3D& state) {
             return state.lesion_id == small_metastasis_id;
         });
-    assert(small_process != primary_state.lesions.processes.end());
-    assert(!small_process->process.eligible);
-    assert(small_process->process.attempted_events == 0);
+    // Ineligible lesions no longer allocate empty Poisson-process state. The
+    // process is created deterministically when this focus reaches its own
+    // activation threshold.
+    assert(small_process == primary_state.lesions.processes.end());
+    assert(primary_state.lesions.processes.size() == 1);
 
     // Once two spatially disconnected lesions independently cross the same
     // threshold, each owns a distinct Poisson process and creates at most one
@@ -395,6 +400,32 @@ int main() {
     assert(std::adjacent_find(multiple_roots.begin(), multiple_roots.end()) ==
            multiple_roots.end());
     assert(!multiple.angiogenesis_state().eligible);  // max_total_roots reached
+
+    // The production density model remains a repeated Poisson process when
+    // its intensity is scaled by approximate lesion surface area. With a
+    // fixed seed, three arrivals still create three distinct roots rather
+    // than collapsing into a one-shot pair of tips.
+    Model3DConfig surface_scaled_config =
+        seed_arrival_config(3, 6, 0, 3);
+    surface_scaled_config.angiogenesis.seed_process_model =
+        "density_modulated_poisson_v1";
+    surface_scaled_config.angiogenesis.seed_density_stress_on_fraction = 0.0;
+    surface_scaled_config.angiogenesis.seed_density_stress_full_fraction =
+        0.001;
+    surface_scaled_config.angiogenesis.seed_volume_reference_voxels3 = 1.0;
+    surface_scaled_config.angiogenesis.seed_volume_exponent = 2.0 / 3.0;
+    surface_scaled_config.angiogenesis.seed_minimum_rate_multiplier = 0.25;
+    surface_scaled_config.angiogenesis.seed_maximum_rate_multiplier = 64.0;
+    surface_scaled_config.validate();
+    Simulation3D surface_scaled(surface_scaled_config);
+    surface_scaled.initialize();
+    assert(surface_scaled.angiogenesis_state()
+               .current_rate_sites_per_30_days >
+           surface_scaled_config.angiogenesis.seed_rate_sites_per_30_days);
+    surface_scaled.run();
+    assert(surface_scaled.stats().angiogenesis_seed_attempts == 3);
+    assert(surface_scaled.stats().angiogenesis_roots == 3);
+    assert(root_positions(surface_scaled).size() == 3);
 
     Model3DConfig multiple_threads_config = seed_arrival_config(3, 6, 0, 3, 4);
     Simulation3D multiple_threads(multiple_threads_config);
@@ -629,6 +660,190 @@ int main() {
             static_cast<std::uint8_t>(kMigrationActive)) == 0);
     assert(local_refresh.cells().last_update_time(1) == 0.0);
     assert(local_refresh.cells().event_sequence(1) == remote_aabb_cell.event_sequence);
+
+    // The legacy minimum path length is only a floor. A source lesion wider
+    // than that value receives a deterministic scale-aware budget sufficient
+    // to reach its centroid, cross its far half, and leave a configured
+    // exterior margin.
+    Model3DConfig scaled_length_config = test_config(1);
+    scaled_length_config.initial_r_cells = 0;
+    scaled_length_config.initial_K_cells = 0;
+    scaled_length_config.max_events = 1;
+    scaled_length_config.angiogenesis.inward_max_length_voxels = 32;
+    scaled_length_config.angiogenesis.inward_length_tortuosity_factor = 1.5;
+    scaled_length_config.angiogenesis.inward_exit_margin_voxels = 16.0;
+    scaled_length_config.angiogenesis.inward_hard_max_length_voxels = 1024;
+    scaled_length_config.validate();
+    std::vector<CellInit> scaled_length_cells;
+    for (int x = 0; x <= 300; ++x) {
+        scaled_length_cells.push_back(
+            scheduled_cell({x, 0, 0}, 8000 + x));
+    }
+    Simulation3D scaled_length(scaled_length_config);
+    scaled_length.restore(scaled_length_cells, 8301, {}, {}, {});
+    assert(scaled_length.step());
+    bool found_scaled_inward = false;
+    for (const VesselTipSlot slot :
+         scaled_length.vessel_tips().alive_slots()) {
+        if (scaled_length.vessel_tips().role(slot) !=
+            VesselBranchRole::inward) {
+            continue;
+        }
+        found_scaled_inward = true;
+        assert(scaled_length.vessel_tips().max_length_voxels(slot) > 128.0F);
+        assert(scaled_length.vessel_tips().max_length_voxels(slot) <=
+               1024.0F);
+    }
+    assert(found_scaled_inward);
+
+    // Reaching the initial centroid is a phase transition, not a terminal
+    // state. An empty pocket beyond the centre must not be mistaken for the
+    // far tumour surface: the inward branch crosses it, displaces cells on
+    // the far side, and continues outside until its path budget is exhausted.
+    Model3DConfig through_config = test_config(1);
+    through_config.initial_r_cells = 0;
+    through_config.initial_K_cells = 0;
+    through_config.thin_layer = true;
+    through_config.bounded_domain = true;
+    through_config.domain_policy = "bounded";
+    through_config.domain_min = {-1, 0, 0};
+    through_config.domain_max = {10, 0, 0};
+    through_config.end_time_hours = 30.0;
+    through_config.max_events = 20;
+    through_config.angiogenesis.trigger_activation_volume_voxels3 = 1.0e9;
+    through_config.angiogenesis.direction_persistence_probability = 1.0;
+    through_config.angiogenesis.inward_path_policy = "through_lesion_v1";
+    through_config.validate();
+    std::vector<CellInit> through_cells;
+    for (const int x : {0, 1, 2, 4, 5}) {
+        through_cells.push_back(scheduled_cell({x, 0, 0}, 5000 + x));
+    }
+    VasculatureState3D through_state;
+    VesselNodeInit3D through_root;
+    through_root.position = {-1, 0, 0};
+    through_root.uid = 1;
+    through_root.vessel_id = 1;
+    through_root.role = VesselBranchRole::root;
+    through_root.diameter_voxels = 1.0F;
+    through_state.nodes.push_back(through_root);
+    VesselTipInit3D through_tip;
+    through_tip.position = through_root.position;
+    through_tip.bias_axis = {1, 0, 0};
+    through_tip.target = {2, 0, 0};
+    through_tip.uid = 1;
+    through_tip.vessel_id = 1;
+    through_tip.current_node_uid = 1;
+    through_tip.current_node_slot = 0;
+    through_tip.role = VesselBranchRole::inward;
+    through_tip.status = VesselTipStatus::active;
+    through_tip.last_direction = 6;
+    through_tip.pending_direction = 6;
+    through_tip.diameter_voxels = 1.0F;
+    through_tip.speed_voxels_per_hour = 1.0F;
+    through_tip.max_length_voxels = 10.0F;
+    through_tip.next_growth_time = 1.0;
+    through_tip.schedule_generation = 1;
+    through_state.tips.push_back(through_tip);
+    through_state.next_vessel_id = 2;
+    through_state.next_node_uid = 2;
+    through_state.next_tip_uid = 2;
+    Simulation3D through(through_config);
+    through.restore(through_cells, 5006, {}, {}, {}, through_state);
+    assert(through.step());
+    assert(through.step());
+    assert(through.step());
+    assert(through.vessel_tips().position(0) == (Vec3i{2, 0, 0}));
+    assert(through.vessel_tips().status(0) == VesselTipStatus::transiting);
+    through.run();
+    assert(through.vessel_tips().status(0) == VesselTipStatus::max_length);
+    assert(through.vessel_tips().position(0).x > 5);
+    assert(through.cells().alive_count() == 0);
+
+    // An outward placeholder that reaches a disconnected tumour is converted
+    // into an inward, cell-displacing branch targeted at that lesion. It does
+    // not pass through the tumour as an outward non-replacing segment.
+    Model3DConfig contact_config = through_config;
+    contact_config.domain_min = {0, 0, 0};
+    contact_config.max_events = 1;
+    contact_config.angiogenesis.outward_other_lesion_contact_policy =
+        "convert_to_inward";
+    contact_config.validate();
+    std::vector<CellInit> contact_cells{
+        scheduled_cell({5, 0, 0}, 6000),
+        scheduled_cell({6, 0, 0}, 6001)};
+    VasculatureState3D contact_state;
+    VesselNodeInit3D contact_root;
+    contact_root.position = {4, 0, 0};
+    contact_root.uid = 1;
+    contact_root.vessel_id = 1;
+    contact_root.role = VesselBranchRole::root;
+    contact_root.diameter_voxels = 1.0F;
+    contact_state.nodes.push_back(contact_root);
+    VesselTipInit3D contact_tip = through_tip;
+    contact_tip.position = contact_root.position;
+    contact_tip.target = {8, 0, 0};
+    contact_tip.role = VesselBranchRole::outward;
+    contact_tip.max_length_voxels = 20.0F;
+    contact_state.tips.push_back(contact_tip);
+    contact_state.next_vessel_id = 2;
+    contact_state.next_node_uid = 2;
+    contact_state.next_tip_uid = 2;
+    Simulation3D contact(contact_config);
+    contact.restore(contact_cells, 6002, {}, {}, {}, contact_state);
+    assert(contact.step());
+    assert(contact.vessel_tips().role(0) == VesselBranchRole::inward);
+    assert(contact.vessel_nodes().role(1) == VesselBranchRole::inward);
+    assert(contact.vessel_tips().speed_voxels_per_hour(0) ==
+           static_cast<float>(
+               contact_config.angiogenesis.inward_speed_voxels_per_hour));
+    assert(contact.vessel_tips().max_length_voxels(0) >=
+           contact_config.angiogenesis.inward_max_length_voxels);
+    assert(contact.vessel_tips().position(0) == (Vec3i{5, 0, 0}));
+    assert(contact.cells().alive_count() == 1);
+    assert(contact.stats().vascular_displacements == 1);
+
+    // A temporarily blocked branch remains event-driven: its wakeup performs
+    // no fake growth attempt, rechecks geometry, and schedules exactly one
+    // later retry instead of becoming permanently terminal.
+    Model3DConfig retry_config = test_config(1);
+    retry_config.initial_r_cells = 0;
+    retry_config.initial_K_cells = 0;
+    retry_config.thin_layer = true;
+    retry_config.bounded_domain = true;
+    retry_config.domain_policy = "bounded";
+    retry_config.domain_min = {0, 0, 0};
+    retry_config.domain_max = {0, 0, 0};
+    retry_config.end_time_hours = 1.5;
+    retry_config.max_events = 1;
+    retry_config.angiogenesis.trigger_activation_volume_voxels3 = 1.0e9;
+    retry_config.angiogenesis.vessel_blocked_policy = "retry";
+    retry_config.angiogenesis.vessel_blocked_retry_interval_hours = 1.0;
+    retry_config.validate();
+    VasculatureState3D retry_state;
+    VesselNodeInit3D retry_root;
+    retry_root.position = {0, 0, 0};
+    retry_root.uid = 1;
+    retry_root.vessel_id = 1;
+    retry_root.role = VesselBranchRole::root;
+    retry_root.diameter_voxels = 1.0F;
+    retry_state.nodes.push_back(retry_root);
+    VesselTipInit3D retry_tip = through_tip;
+    retry_tip.position = retry_root.position;
+    retry_tip.target = {8, 0, 0};
+    retry_tip.role = VesselBranchRole::outward;
+    retry_tip.pending_direction = kStayDirection;
+    retry_tip.next_growth_time = 1.0;
+    retry_state.tips.push_back(retry_tip);
+    retry_state.next_vessel_id = 2;
+    retry_state.next_node_uid = 2;
+    retry_state.next_tip_uid = 2;
+    Simulation3D retry(retry_config);
+    retry.restore({}, 1, {}, {}, {}, retry_state);
+    assert(retry.step());
+    assert(retry.stats().vessel_growth_attempts == 0);
+    assert(retry.vessel_tips().status(0) == VesselTipStatus::active);
+    assert(retry.vessel_tips().pending_direction(0) == kStayDirection);
+    assert(retry.vessel_tips().next_growth_time(0) == 2.0);
 
     return 0;
 }

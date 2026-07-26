@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ATCG3D Studio</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="workspace">
+      <header class="topbar">
+        <div class="run-identity">
+          <strong>ATCG3D Studio</strong>
+          <span id="run-name" data-i18n="run.notSelected">No run directory selected</span>
+        </div>
+        <div class="topbar-actions">
+          <div class="language-switcher">
+            <label for="language-select" data-i18n="language.label">Language</label>
+            <select id="language-select" aria-label="Language">
+              <option value="en">English</option>
+              <option value="zh-CN">简体中文</option>
+            </select>
+          </div>
+          <div class="progress-wrap">
+            <progress id="progress" max="1" value="0"></progress>
+            <span id="progress-label" data-i18n="run.notRunning">Not running</span>
+          </div>
+        </div>
+      </header>
+      <section id="viewport" class="viewport">
+        <div id="empty-view">
+          <h2 id="empty-view-title" data-i18n="viewport.title">3D simulation and visualization</h2>
+          <p id="empty-view-hint" data-i18n="viewport.hint">Load a YAML configuration or open an existing run from the panel on the right.</p>
+        </div>
+        <iframe id="viewer" title="ATCG3D 3D viewer" data-i18n-title="viewport.frameTitle"></iframe>
+      </section>
+      <footer class="statusbar">
+        <span id="state">state: idle</span>
+        <span id="time">t=0 h</span>
+        <span id="cells">cells=0</span>
+        <span id="vessels">vessels=0</span>
+        <span id="speed">speed=0 sim h/wall h</span>
+        <span id="eta">ETA=—</span>
+      </footer>
+    </section>
+
+    <aside class="right-panel">
+      <nav class="tabs">
+        <button data-tab="run" class="active" data-i18n="tabs.run">Run</button>
+        <button data-tab="parameters" data-i18n="tabs.parameters">Parameters</button>
+        <button data-tab="effective" data-i18n="tabs.effective">Effective</button>
+        <button data-tab="diagnostics" data-i18n="tabs.diagnostics">Diagnostics</button>
+      </nav>
+
+      <section id="tab-run" class="tab active">
+        <h3 data-i18n="run.filesAndPrograms">Files and programs</h3>
+        <label data-i18n="run.configYaml">Configuration YAML</label>
+        <div class="path-row">
+          <input id="config-path" />
+          <button id="choose-config" data-i18n="common.choose">Choose</button>
+        </div>
+        <label data-i18n="run.runDirectory">Run directory</label>
+        <div class="path-row">
+          <input id="run-directory" />
+          <button id="choose-run" data-i18n="common.open">Open</button>
+        </div>
+        <details>
+          <summary data-i18n="run.programPaths">Program paths</summary>
+          <label>atcg3d</label>
+          <input id="binary-path" />
+          <label data-i18n="run.launcherScript">Detached launcher script</label>
+          <input id="launcher-path" />
+          <label>pvpython</label>
+          <input id="pvpython-path" />
+          <label data-i18n="run.viewerScript">Viewer script</label>
+          <input id="viewer-path" />
+          <label>trame PYTHONPATH</label>
+          <input id="pythonpath" />
+        </details>
+        <div class="button-grid">
+          <button id="load-config" data-i18n="run.loadParameters">Load parameters</button>
+          <button id="validate" data-i18n="run.validateParameters">Validate parameters</button>
+          <button id="save-config" data-i18n="run.saveYaml">Save YAML</button>
+          <button id="start" class="primary" data-i18n="run.startSimulation">Start simulation</button>
+          <button id="pause" data-i18n="run.pauseSimulation">Pause simulation</button>
+          <button id="resume" data-i18n="run.resumeSimulation">Resume simulation</button>
+          <button id="checkpoint-stop" data-i18n="run.checkpointStop">Checkpoint and stop</button>
+          <button id="terminate" class="danger" data-i18n="run.terminate">Stop (no new checkpoint)</button>
+          <button id="open-viewer" data-i18n="run.openViewer">Open 3D view</button>
+        </div>
+        <h3 data-i18n="run.log">Run log</h3>
+        <pre id="message" data-i18n="message.waiting">Waiting for an action.</pre>
+      </section>
+
+      <section id="tab-parameters" class="tab">
+        <div class="panel-heading">
+          <h3 data-i18n="parameters.edit">Edit parameters</h3>
+          <input id="parameter-filter" placeholder="Filter parameters…" data-i18n-placeholder="parameters.filter" />
+        </div>
+        <p class="hint" data-i18n="parameters.hint">All simulation parameters remain in YAML. Objects and arrays can be expanded, and values retain their original types.</p>
+        <div id="parameter-tree"></div>
+      </section>
+
+      <section id="tab-effective" class="tab">
+        <h3 data-i18n="effective.title">Effective configuration</h3>
+        <p class="hint" data-i18n="effective.hint">The configuration strictly validated by C++ is shown here after validation or startup.</p>
+        <pre id="effective-config" data-i18n="effective.notValidated">Not validated yet.</pre>
+      </section>
+
+      <section id="tab-diagnostics" class="tab">
+        <h3 data-i18n="diagnostics.title">Run diagnostics</h3>
+        <pre id="diagnostics" data-i18n="diagnostics.noStatus">No status available.</pre>
+      </section>
+    </aside>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

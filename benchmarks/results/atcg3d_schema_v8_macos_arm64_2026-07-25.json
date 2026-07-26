@@ -1,0 +1,138 @@
+{
+  "schema": "atcg3d.validation_report.v8",
+  "measured_at": "2026-07-25",
+  "platform": {
+    "model": "Mac Studio",
+    "chip": "Apple M1 Ultra",
+    "cpu_cores": 20,
+    "memory_bytes": 137438953472,
+    "os": "macOS 26.5.2 arm64",
+    "compiler": "AppleClang 21.0.0",
+    "build_type": "Release",
+    "hdf5": "2.1.1",
+    "vtk": "9.6.2",
+    "paraview": "6.1.1",
+    "rust": "1.97.1",
+    "tauri": "2.11.5"
+  },
+  "build_matrix": [
+    {
+      "name": "legacy_2d_release",
+      "tests_passed": 2,
+      "tests_total": 2
+    },
+    {
+      "name": "vtk_hdf5_3d_release",
+      "tests_passed": 24,
+      "tests_total": 24
+    },
+    {
+      "name": "studio_rust_release",
+      "tests_passed": 1,
+      "tests_total": 1
+    }
+  ],
+  "strict_yaml_profiles": {
+    "validated": 5,
+    "failed": 0,
+    "config_ui_schema_json_valid": true
+  },
+  "smoke_biology_progression": {
+    "initial_cells": 64,
+    "final_cells": 104,
+    "completed_events": 381,
+    "simulated_hours": 24,
+    "migration_attempts": 338,
+    "migration_commits": 329,
+    "divisions": 40,
+    "deaths": 0,
+    "checksum": 17545974612379368536
+  },
+  "synthetic_core_scale": {
+    "cells": 10000000,
+    "cell_store_logical_bytes_per_slot": 99,
+    "cell_store_bytes": 1067108864,
+    "grid_bytes": 44982824,
+    "density_index_bytes": 172481624,
+    "core_bytes_per_cell": 128.4573312,
+    "peak_rss_bytes": 3776200704,
+    "build_seconds": 14.482317166,
+    "preview_sample_seconds": 0.151373708,
+    "preview_cells": 1000000,
+    "vtk_written": false,
+    "checkpoint_written": false
+  },
+  "synthetic_io_round_trip": {
+    "cells": 1000000,
+    "compression_level": 1,
+    "cell_store_logical_bytes_per_slot": 99,
+    "core_bytes_per_cell": 129.661716,
+    "peak_rss_bytes": 645267456,
+    "build_seconds": 1.341771166,
+    "preview_sample_seconds": 0.002169542,
+    "preview_cells": 1000000,
+    "vtk_full_write_seconds": 0.190849542,
+    "vtk_full_read_seconds": 0.040898917,
+    "vtk_full_bytes": 7411635,
+    "vtk_preview_bytes": 7411635,
+    "checkpoint_write_seconds": 0.516438209,
+    "checkpoint_read_restore_seconds": 3.570082708,
+    "checkpoint_bytes": 754304
+  },
+  "evolving_events_10m": [
+    {
+      "threads": 1,
+      "initial_cells": 10000000,
+      "final_cells": 10000000,
+      "completed_events": 10000,
+      "simulated_hours": 0.010990586131811142,
+      "maximum_workers": 1,
+      "proposal_windows": 2,
+      "prefetched_migration_proposals": 12798,
+      "proposal_cache_hits": 7959,
+      "proposal_cache_invalidations": 183,
+      "proposal_cache_misses": 1858,
+      "build_seconds": 16.188573625,
+      "run_seconds": 0.987474917,
+      "events_per_second": 10126.839505331962,
+      "pending_events": 30000000,
+      "event_queue_rebuilds": 0,
+      "peak_rss_bytes": 6737838080,
+      "checksum": 10612870120539738236
+    },
+    {
+      "threads": 18,
+      "initial_cells": 10000000,
+      "final_cells": 10000000,
+      "completed_events": 10000,
+      "simulated_hours": 0.010990586131811142,
+      "maximum_workers": 18,
+      "proposal_windows": 2,
+      "prefetched_migration_proposals": 12798,
+      "proposal_cache_hits": 7959,
+      "proposal_cache_invalidations": 183,
+      "proposal_cache_misses": 1858,
+      "build_seconds": 8.05031725,
+      "run_seconds": 0.907227125,
+      "events_per_second": 11022.598117312686,
+      "pending_events": 30000000,
+      "event_queue_rebuilds": 0,
+      "peak_rss_bytes": 6737756160,
+      "checksum": 10612870120539738236
+    }
+  ],
+  "studio": {
+    "bundle": "visualization/studio/desktop/src-tauri/target/release/bundle/macos/ATCG3D Studio.app",
+    "bundle_size_human": "14M",
+    "codesign_deep_strict": "passed",
+    "signing": "ad_hoc",
+    "notarized": false
+  },
+  "limitations": {
+    "current_10m_full_vtk_checkpoint_round_trip_run": false,
+    "current_10m_core_and_event_paths_run": true,
+    "100m_cells_run": false,
+    "linux_run": false,
+    "macos_x86_64_run": false
+  }
+}

@@ -151,6 +151,7 @@ if(ATCG_BUILD_3D)
         ATCG/common/density_growth_rule.cpp
         ATCG3D/config/model_config.cpp
         ATCG3D/config/yaml_loader.cpp
+        ATCG3D/app/run_controller.cpp
         ATCG3D/core/cell_store.cpp
         ATCG3D/engine/parallelism.cpp
         ATCG3D/engine/simulation.cpp
@@ -164,6 +165,7 @@ if(ATCG_BUILD_3D)
         ATCG3D/rules/migration.cpp
         ATCG3D/space/chunk_grid.cpp
         ATCG3D/space/density_index.cpp
+        ATCG3D/space/quantized_box_count_index.cpp
         ATCG3D/vasculature/angiogenesis_process.cpp
         ATCG3D/vasculature/geometry.cpp
         ATCG3D/vasculature/growth_rules.cpp
@@ -200,7 +202,11 @@ if(ATCG_BUILD_3D)
         ${CMAKE_CURRENT_BINARY_DIR}/configs/atcg3d_legacy_2d_mapped_v2.yaml
         ${CMAKE_CURRENT_BINARY_DIR}/configs/atcg3d_smoke_test_v2.yaml
     )
-    foreach(config_name IN ITEMS atcg3d_legacy_2d_mapped_v3.yaml atcg3d_smoke_test_v3.yaml)
+    foreach(config_name IN ITEMS
+            atcg3d_legacy_2d_mapped_v3.yaml
+            atcg3d_smoke_test_v3.yaml
+            single_r_stage0_2160h_density_vascular_v5.yaml
+            single_r_stage0_2160h_seed1.yaml)
         configure_file(
             ${CMAKE_CURRENT_SOURCE_DIR}/configs/${config_name}
             ${CMAKE_CURRENT_BINARY_DIR}/configs/${config_name}
@@ -270,7 +276,7 @@ if(BUILD_TESTING)
         foreach(test_name IN ITEMS
                 geometry config storage density migration lifecycle initialization initial_rates simulation io_core
                 angiogenesis_geometry angiogenesis_process angiogenesis_direction parallelism
-                angiogenesis_simulation lesion_index vascular_density)
+                angiogenesis_simulation lesion_index vascular_density run_controller)
             add_executable(atcg3d_${test_name}_test tests/3d/${test_name}_test.cpp)
             target_link_libraries(atcg3d_${test_name}_test PRIVATE atcg3d_core)
             target_compile_options(atcg3d_${test_name}_test PRIVATE -UNDEBUG)

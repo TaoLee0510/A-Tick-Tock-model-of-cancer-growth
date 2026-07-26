@@ -91,6 +91,34 @@ int main() {
     }
     assert(rejected_invalid);
 
+    // A density refresh changes the slope of the integrated hazard, not the
+    // sampled unit-exponential target. This permits a genuinely dynamic
+    // Poisson process without inventing a new random wait at every refresh.
+    AngiogenesisProcess3D modulated(41, 9001);
+    assert(modulated.update_volume(0.0, 1.0, 1.0, 0.0, 0.0, 2.0));
+    const auto rate_two = modulated.state();
+    const double first_wait = rate_two.next_seed_time_hours;
+    const double first_hazard = rate_two.remaining_hazard;
+    assert(first_wait == first_hazard / AngiogenesisProcess3D::rate_per_hour(2.0));
+    const double refresh_time = first_wait * 0.25;
+    assert(modulated.update_rate(refresh_time, 4.0, 0.75));
+    const auto rate_four = modulated.state();
+    assert(std::abs(rate_four.remaining_hazard - first_hazard * 0.75) < 1e-12);
+    assert(std::abs(rate_four.next_seed_time_hours - first_wait * 0.625) < 1e-10);
+    assert(rate_four.current_density_stress == 0.75);
+    const double unchanged_time = rate_four.next_seed_time_hours;
+    const std::uint32_t unchanged_generation = rate_four.schedule_generation;
+    assert(!modulated.update_rate(refresh_time + 0.01, 4.0, 0.70));
+    assert(modulated.state().next_seed_time_hours == unchanged_time);
+    assert(modulated.state().schedule_generation == unchanged_generation);
+    assert(modulated.state().current_density_stress == 0.70);
+    assert(modulated.update_rate(refresh_time + 0.02, 0.0, 0.0));
+    assert(modulated.state().next_seed_time_hours == 0.0);
+    const double paused_hazard = modulated.state().remaining_hazard;
+    assert(modulated.update_rate(refresh_time + 100.0, 2.0, 0.5));
+    assert(modulated.state().remaining_hazard == paused_hazard);
+    assert(modulated.state().next_seed_time_hours > refresh_time + 100.0);
+
     // The compatibility aggregate is a deterministic snapshot, not a second
     // scheduler. Input order must not change any bit, and every active
     // process contributes its elapsed interval through the snapshot time.
@@ -100,6 +128,11 @@ int main() {
     lesion_ten.process.next_seed_time_hours = 20.0;
     lesion_ten.process.eligibility_started_hours = 2.0;
     lesion_ten.process.accumulated_eligible_hours = 4.0;
+    lesion_ten.process.remaining_hazard = 18.0;
+    lesion_ten.process.hazard_last_update_hours = 2.0;
+    lesion_ten.process.hazard_not_before_hours = 2.0;
+    lesion_ten.process.current_rate_sites_per_30_days = 720.0;
+    lesion_ten.process.current_density_stress = 0.8;
     lesion_ten.process.event_sequence = 10;
     lesion_ten.process.schedule_generation = 3;
     lesion_ten.process.attempted_events = 3;
@@ -112,6 +145,11 @@ int main() {
     lesion_twenty.process.next_seed_time_hours = 18.0;
     lesion_twenty.process.eligibility_started_hours = 6.0;
     lesion_twenty.process.accumulated_eligible_hours = 8.0;
+    lesion_twenty.process.remaining_hazard = 12.0;
+    lesion_twenty.process.hazard_last_update_hours = 6.0;
+    lesion_twenty.process.hazard_not_before_hours = 6.0;
+    lesion_twenty.process.current_rate_sites_per_30_days = 720.0;
+    lesion_twenty.process.current_density_stress = 0.6;
     lesion_twenty.process.event_sequence = 20;
     lesion_twenty.process.schedule_generation = 7;
     lesion_twenty.process.attempted_events = 5;
@@ -139,6 +177,11 @@ int main() {
     assert(aggregate.eligible);
     assert(aggregate.next_seed_time_hours == 18.0);
     assert(aggregate.eligibility_started_hours == 10.0);
+    assert(aggregate.remaining_hazard == 8.0);
+    assert(aggregate.hazard_last_update_hours == 10.0);
+    assert(aggregate.hazard_not_before_hours == 10.0);
+    assert(aggregate.current_rate_sites_per_30_days == 720.0);
+    assert(aggregate.current_density_stress == 0.6);
     assert(aggregate.accumulated_eligible_hours == 1.0e16 + 24.0);
     assert(aggregate.event_sequence == 100);
     assert(aggregate.schedule_generation == 9);

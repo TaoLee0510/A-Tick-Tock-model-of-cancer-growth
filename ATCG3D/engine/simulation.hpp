@@ -1,8 +1,10 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <functional>
-#include <queue>
+#include <limits>
+#include <optional>
 #include <span>
 #include <unordered_map>
 #include <unordered_set>
@@ -11,8 +13,10 @@
 #include "config/model_config.hpp"
 #include "core/cell_store.hpp"
 #include "rules/lifecycle.hpp"
+#include "rules/migration.hpp"
 #include "space/chunk_grid.hpp"
 #include "space/density_index.hpp"
+#include "space/quantized_box_count_index.hpp"
 #include "vasculature/angiogenesis_process.hpp"
 #include "vasculature/influence_field.hpp"
 #include "vasculature/lesion_index.hpp"
@@ -41,6 +45,10 @@ struct SimulationClock3D {
 struct SimulationStats3D {
     std::uint64_t migration_attempts{};
     std::uint64_t migration_commits{};
+    std::uint64_t migration_swap_waits{};
+    std::uint64_t migration_swap_attempts{};
+    std::uint64_t migration_swap_commits{};
+    std::uint64_t migration_swap_rejections{};
     std::uint64_t divisions{};
     std::uint64_t deaths{};
     std::uint64_t conflict_rejections{};
@@ -60,6 +68,17 @@ struct VascularRefreshDiagnostics3D {
     std::uint64_t queried_density_blocks{};
     std::uint64_t visited_density_slots{};
     std::uint64_t refreshed_cell_slots{};
+};
+
+// Execution-only diagnostics. These counters are excluded from checkpoints
+// and biological checksums.
+struct ProposalWindowDiagnostics3D {
+    std::uint64_t windows{};
+    std::uint64_t migration_proposals{};
+    std::uint64_t migration_cache_hits{};
+    std::uint64_t migration_cache_invalidations{};
+    std::uint64_t migration_cache_misses{};
+    int maximum_workers{};
 };
 
 struct LesionAngiogenesisState3D {
@@ -125,6 +144,8 @@ public:
                  const std::vector<Slot>& cell_slots = {},
                  const std::vector<Slot>& cell_free_slots = {});
     void run(const std::function<void(const Simulation3D&)>& observer = {});
+    void request_stop() noexcept { stop_requested_ = true; }
+    bool stop_requested() const noexcept { return stop_requested_; }
     bool step();
 
     const Model3DConfig& config() const noexcept { return config_; }
@@ -154,6 +175,9 @@ public:
     }
     const VascularRefreshDiagnostics3D& vascular_refresh_diagnostics() const noexcept {
         return vascular_refresh_diagnostics_;
+    }
+    const ProposalWindowDiagnostics3D& proposal_window_diagnostics() const noexcept {
+        return proposal_window_diagnostics_;
     }
 
     const VesselNodeStore3D& vessel_nodes() const noexcept { return vessel_nodes_; }
@@ -191,6 +215,44 @@ private:
         }
     };
 
+    // Mutable indexed min-heap. Each biological actor/event-kind pair has at
+    // most one queued record, so rescheduling replaces the old key in O(log N)
+    // instead of accumulating generation-invalid entries and periodically
+    // stopping for an O(N) full-queue rebuild.
+    class IndexedEventQueue {
+    public:
+        bool empty() const noexcept { return heap_.empty(); }
+        std::size_t size() const noexcept { return heap_.size(); }
+        const Event& top() const;
+        void pop();
+        void push(const Event& event);
+        void schedule(const Event& event, bool active);
+        void cancel(EventKind kind, std::uint32_t slot,
+                    std::uint64_t uid = 0);
+        void cancel_cell(std::uint32_t slot);
+
+    private:
+        using Position = std::uint32_t;
+        static constexpr Position kNoPosition =
+            std::numeric_limits<Position>::max();
+
+        static int cell_position_class(EventKind kind) noexcept;
+        Position position(const Event& event) const noexcept;
+        void set_position(const Event& event, Position position);
+        void clear_position(const Event& event);
+        bool earlier(const Event& lhs, const Event& rhs) const noexcept;
+        void swap_entries(Position lhs, Position rhs);
+        Position sift_up(Position position);
+        void sift_down(Position position);
+        void erase_at(Position position);
+
+        std::vector<Event> heap_;
+        std::array<std::vector<Position>, 4> cell_positions_;
+        std::vector<Position> vessel_positions_;
+        std::unordered_map<std::uint64_t, Position> seed_positions_;
+        Position lesion_refresh_position_{kNoPosition};
+    };
+
     struct VesselGrowthProposal {
         Event event;
         Vec3i from{};
@@ -199,7 +261,34 @@ private:
         std::vector<Vec3i> capsule;
         std::uint64_t priority{};
         bool anastomosis{};
+        bool contacts_cells{};
+        bool contacts_source_lesion{};
+        LesionId contacted_lesion{kNoLesionId};
+        bool retry_wakeup{};
         bool valid{};
+    };
+
+    struct ProposalCacheKey {
+        std::uint64_t time_bits{};
+        std::uint64_t uid{};
+        std::uint32_t generation{};
+        EventKind kind{EventKind::migration};
+
+        bool operator==(const ProposalCacheKey&) const = default;
+    };
+
+    struct ProposalCacheKeyHash {
+        std::size_t operator()(const ProposalCacheKey& key) const noexcept;
+    };
+
+    struct SpatialVersionStamp {
+        std::vector<std::pair<Vec3i, std::uint64_t>> chunks;
+    };
+
+    struct CachedMigrationProposal {
+        std::uint64_t event_sequence{};
+        MoveProposal proposal;
+        SpatialVersionStamp read_stamp;
     };
 
     bool current(const Event& event) const;
@@ -215,18 +304,29 @@ private:
                   double time, std::uint32_t generation);
     void reset_event_queue_rebuild_threshold();
     void maybe_compact_event_queue();
+    void prefetch_proposal_window();
+    ProposalCacheKey proposal_cache_key(const Event& event) const noexcept;
+    SpatialVersionStamp capture_spatial_stamp(Vec3i anchor, int radius) const;
+    bool spatial_stamp_current(const SpatialVersionStamp& stamp) const;
+    void mark_spatial_changes(std::span<const Vec3i> changed_sites);
+    std::optional<MoveProposal> take_cached_migration_proposal(
+        const Event& event, std::uint64_t event_sequence);
     void process_non_migration(const Event& event);
     void process_deaths(const std::vector<Event>& events);
     void process_divisions(const std::vector<Event>& events);
     void process_migrations(const std::vector<Event>& events);
 
     void rebuild_tumor_surface();
+    void flush_tumor_surface_dirty();
     void refresh_tumor_surface(std::span<const Vec3i> changed_sites);
     void rebuild_lesion_index();
     void mark_lesion_dirty(std::span<const Vec3i> changed_sites);
     bool refresh_lesion_index(bool force);
     void schedule_lesion_refresh_event();
     void sync_angiogenesis_eligibility(bool force_refresh = false);
+    double lesion_density_stress(const LesionSummary3D& lesion) const;
+    double lesion_seed_rate(const LesionSummary3D& lesion,
+                            double density_stress) const;
     void recompute_aggregate_angiogenesis_state();
     LesionId current_lesion_for_source(LesionId source_lesion_id) const noexcept;
     void update_lesion_source_ownership(
@@ -238,10 +338,14 @@ private:
                             const ExposedFace3D& face,
                             Vec3i inward_target,
                             std::uint64_t seed_event_sequence);
+    float inward_length_budget(Vec3i start,
+                               const LesionSummary3D& lesion) const;
     bool root_has_local_support(LesionId source_lesion_id,
                                 std::span<const Vec3i> root_capsule) const;
 
     std::vector<DirectionId> feasible_vessel_directions(VesselTipSlot slot) const;
+    std::vector<LesionId> vessel_contact_lesions(
+        std::span<const Vec3i> capsule) const;
     void schedule_vessel_tip(VesselTipSlot slot);
     void restore_vessel_tip_event(VesselTipSlot slot);
     VesselGrowthProposal make_vessel_growth_proposal(const Event& event) const;
@@ -256,11 +360,11 @@ private:
     Vec3i migration_activation_query_block(Vec3i anchor) const noexcept;
     std::uint8_t migration_activation_class(Vec3i query_block) const;
     void rebuild_migration_activation_class_cache();
-    void apply_migration_activation_class(Slot slot, std::uint8_t classes);
+    bool apply_migration_activation_class(Slot slot, std::uint8_t classes);
     void refresh_migration_activation_near(
         const std::vector<Vec3i>& changed_sites);
     void recover_neighborhood(std::vector<Vec3i>& changed_sites);
-    std::vector<Slot> nearby_slots(const std::vector<Vec3i>& sites, int radius) const;
+    std::vector<Slot> nearby_slots(std::span<const Vec3i> sites, int radius);
 
     Model3DConfig config_;
     CellStore3D cells_;
@@ -268,10 +372,12 @@ private:
     SparseVesselGrid3D vessel_grid_;
     SparseChunkGrid3D grid_;
     BlockDensityIndex3D density_;
+    QuantizedBoxCountIndex3D migration_activation_counts_;
     VesselNodeStore3D vessel_nodes_;
     VesselTipStore3D vessel_tips_;
     VascularInfluenceField3D vascular_influence_;
     TumorSurfaceIndex3D tumor_surface_;
+    std::unordered_set<Vec3i, Vec3iHash> tumor_surface_dirty_blocks_;
     LesionIndex3D lesion_index_;
     std::unordered_map<LesionId, AngiogenesisProcess3D>
         lesion_angiogenesis_processes_;
@@ -289,7 +395,7 @@ private:
     VesselTipUid next_vessel_tip_uid_{1};
     SimulationClock3D clock_;
     SimulationStats3D stats_;
-    std::priority_queue<Event, std::vector<Event>, EventLater> events_;
+    IndexedEventQueue events_;
     // Derived, deterministic state. Bit 0 is the small/ultrasmall activation
     // class and bit 1 is the large-cell class for a quantized query block.
     // It is rebuilt from CellStore+density after initialization/resume and is
@@ -299,10 +405,20 @@ private:
     std::uint64_t migration_activation_bulk_slot_visits_{};
     std::uint64_t migration_activation_direct_slot_visits_{};
     std::uint64_t migration_activation_class_recomputes_{};
+    std::vector<std::uint32_t> slot_visit_marks_;
+    std::uint32_t slot_visit_epoch_{};
     VascularRefreshDiagnostics3D vascular_refresh_diagnostics_;
+    ProposalWindowDiagnostics3D proposal_window_diagnostics_;
+    std::unordered_map<ProposalCacheKey, CachedMigrationProposal,
+                       ProposalCacheKeyHash>
+        migration_proposal_cache_;
+    std::unordered_map<Vec3i, std::uint64_t, Vec3iHash> spatial_versions_;
+    std::uint64_t next_spatial_version_{1};
+    double proposal_cache_horizon_{-1.0};
     std::size_t event_queue_rebuild_threshold_{256};
     std::uint64_t event_queue_rebuild_count_{};
     bool initialized_{};
+    bool stop_requested_{};
 };
 
 }  // namespace atcg3d

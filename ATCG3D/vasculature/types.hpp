@@ -36,6 +36,9 @@ enum class VesselTipStatus : std::uint8_t {
     max_length = 5,
     boundary_stop = 6,
     complete = 7,
+    // Inward tip has passed its centroid target and is traversing toward the
+    // far tumour surface.
+    transiting = 8,
 };
 
 enum VesselVoxelBits : std::uint8_t {
@@ -57,7 +60,14 @@ constexpr std::uint8_t vessel_role_bit(VesselBranchRole role) noexcept {
 }
 
 constexpr bool vessel_tip_terminal(VesselTipStatus status) noexcept {
-    return status != VesselTipStatus::dormant && status != VesselTipStatus::active;
+    return status != VesselTipStatus::dormant &&
+           status != VesselTipStatus::active &&
+           status != VesselTipStatus::transiting;
+}
+
+constexpr bool vessel_tip_growing(VesselTipStatus status) noexcept {
+    return status == VesselTipStatus::active ||
+           status == VesselTipStatus::transiting;
 }
 
 }  // namespace atcg3d

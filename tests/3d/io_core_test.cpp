@@ -103,14 +103,14 @@ int main() {
     std::ifstream manifest_stream(directory / "run.json");
     const std::string manifest((std::istreambuf_iterator<char>(manifest_stream)),
                                std::istreambuf_iterator<char>());
-    assert(manifest.find("\"schema_version\": 3") != std::string::npos);
+    assert(manifest.find("\"schema_version\": 4") != std::string::npos);
     assert(manifest.find("\"vessel_series\": \"vessels.vtkhdf.series\"") !=
            std::string::npos);
     assert(manifest.find("\"vessel_frames\": 2") != std::string::npos);
-    assert(manifest.find("\"cell_field_arrays\": [\"total_cell_count\"]") !=
+    assert(manifest.find("\"cell_field_arrays\": [\"total_cell_count\",\"total_slot_count\"]") !=
            std::string::npos);
     assert(manifest.find(
-        "\"cell_point_arrays\": [\"cell_id\",\"lesion_id\",\"clone_id\",\"cell_type\",\"stage\",\"viability\",\"display_radius\"]") !=
+        "\"cell_point_arrays\": [\"cell_id\",\"cell_slot\",\"lesion_id\",\"clone_id\",\"cell_type\",\"stage\",\"viability\",\"display_radius\"]") !=
            std::string::npos);
     assert(manifest.find(
         "\"vessel_point_arrays\": [\"node_id\",\"vessel_id\",\"source_lesion_id\",\"branch_role\",\"perfused\",\"diameter_voxels\",\"radius_voxels\"]") !=
@@ -300,6 +300,12 @@ int main() {
         std::filesystem::remove_all(crash_directory);
         Model3DConfig crash_fresh = vtk_fresh;
         crash_fresh.output_directory = crash_directory;
+        // Exercise resume recovery with the production asynchronous path. The
+        // output catalogs are loaded before validation trims artifacts newer
+        // than the selected checkpoint, so the scheduled-time de-duplication
+        // markers must be rolled back with the catalogs.
+        crash_fresh.output_async_enabled = true;
+        crash_fresh.output_async_queue_depth = 1;
 
         LineageEdge future_edge;
         future_edge.birth_time = 2.0;
@@ -323,15 +329,18 @@ int main() {
             OutputManager3D output(crash_fresh);
             output.observe(crash_at_zero);
             output.observe(crash_at_checkpoint);
-#ifdef ATCG3D_HAS_HDF5_CHECKPOINT
-            write_hdf5_checkpoint(selected_checkpoint, crash_at_checkpoint);
-#endif
             output.observe(crash_ahead);
             output.finalize(crash_ahead);
             assert(output.preview_entries().size() == 3);
             assert(output.full_entries().size() == 2);
             assert(output.vessel_entries().size() == 3);
         }
+#ifdef ATCG3D_HAS_HDF5_CHECKPOINT
+        // Homebrew HDF5 is not built thread-safe. Production serializes VTK-HDF
+        // and checkpoint writes through the same output worker, so construct
+        // this synthetic selected checkpoint only after that worker has joined.
+        write_hdf5_checkpoint(selected_checkpoint, crash_at_checkpoint);
+#endif
 
         touch_frame(crash_directory / "viz" / "preview" /
                     "frame_00000003.vtkhdf");
@@ -398,6 +407,7 @@ int main() {
         continued.restore({restored_cell}, 3, {20, 2.0}, {},
                           {restored_edge, future_edge});
         recovered.observe(continued);
+        recovered.finalize(continued);
         assert(recovered.preview_entries().size() == 3);
         assert(recovered.full_entries().size() == 2);
         assert(recovered.vessel_entries().size() == 3);

@@ -1,0 +1,309 @@
+# Fresh single-cell production run using dynamic density-modulated angiogenesis
+# with activated-r migration Beta(0.01, 0.0566666667) * 3.
+# and checkpoint base-v6/field-delta-v7. All model and run parameters are explicit.
+# Density count parameters are converted exactly once
+# from the legacy 6x6 2D window to the 6x6x6 3D window (factor 216/36 = 6).
+schema:
+  name: atcg3d.model_config
+  version: 3
+profile: single_r_stage0_2160h_density_vascular_v5
+
+calibration:
+  source_profile: legacy_2d_default_no_ultrasmall
+  conversion: density_window_volume_ratio_v1
+  density_count_scale_2d_to_3d: 6.0
+  scaled_down_initialization: false
+  source_2d:
+    r_limit: 15.5
+    K_limit: 18.0
+    carrying_capacity_r: 31.0
+    carrying_capacity_K: 36.0
+    outer_radius: 60
+    inner_radius: 50
+
+rng:
+  seed: 1
+
+run:
+  mode: new
+  resume_checkpoint: null
+
+space:
+  domain_policy: expandable_sparse
+  chunk_edge: 32
+  thin_layer: false
+  minimum: [-1000000, -1000000, -1000000]
+  maximum: [1000000, 1000000, 1000000]
+
+direction:
+  set: fixed_26_v1
+  continue_probability: 0.90
+  turn_half_angle_deg: 45.0
+  density_radius: 5
+  density_half_angle_deg: 45.0
+  density_threshold: 0.60
+  persistence_uses_density: false
+  distance_weight_exponent: 0.0
+
+migration:
+  activation_enabled: true
+  activation_window_edge: 70
+  activation_block_edge: 32
+  activation_threshold: 0.90
+  normal_r_rate:
+    model: beta
+    alpha: 5.0
+    beta: 5.0
+    scale: 0.5
+  # Profile v5 raises the independently configurable multiplier from 1.0 to
+  # 3.0. This is a moves/hour rate multiplier, not a fixed speed per cell.
+  activated_r_rate:
+    model: beta
+    alpha: 0.01
+    beta: 0.0566666667
+    scale: 3.0
+    lower_clamp:
+      enabled: true
+      threshold: 0.5
+      value: 0.25
+  activation_duration:
+    model: beta_remaining_division_cycle
+    alpha: 0.005
+    mean_fraction: 0.30
+    beta: 0.011666666666666667
+  crowding_exchange:
+    enabled: true
+    stage_policy: stage1_singleton_v1
+    wait_fraction: 0.20
+    post_exchange_cooldown_fraction: 0.20
+
+density:
+  backend: block_anchor_v1
+  block_edge: 4
+  growth_window_edge: 6
+
+biology:
+  alpha: 2.2
+  beta: 0.0
+  death_delay_model: legacy_geometric_mean_v1
+  death_growth_rate_threshold: 0.005
+  r_death_delay_hours: 48.0
+  K_death_delay_hours: 120.0
+  r_to_K_conversion:
+    enabled: true
+    density_window_edge: 70
+    query_block_edge: 32
+    density_threshold: 0.50
+    probability_per_division: 0.05
+
+stage:
+  large_footprint_edge: 2
+  small_footprint_voxels: 1
+  ultrasmall_enabled: false
+
+division:
+  shell_radius: 2
+  allow_shape_reduction: true
+  timing:
+    base_cycle_hours: 24.0
+    minimum_fraction: 0.90
+    stochastic_tail_fraction: 0.10
+    stochastic_time_quantum_hours: 1.0
+    retry_delay_hours: 1.0
+    inherited_growth_multiplier_min: 0.95
+    inherited_growth_multiplier_max: 1.05
+    r_max_inherent_growth_rate: 1.3171805
+    K_max_inherent_growth_rate: 0.99505180
+
+initial:
+  mode: explicit_counts
+  explicit_counts:
+    r_cells: 1
+    K_cells: 0
+  geometry:
+    outer_radius: 1
+    shell_inner_radius: 0
+    inner_small_radius: 0
+  r_fraction: 1.0
+  large_fraction: 1.0
+  growth_rate:
+    model: legacy_truncated_normal_v1
+    truncated_normal:
+      r:
+        mean: 1.1832
+        standard_deviation: 0.2441
+        minimum: 1.0722619
+        maximum: 1.3171805
+      K:
+        mean: 0.6832
+        standard_deviation: 0.3764
+        minimum: 0.33963482
+        maximum: 0.99505180
+  migration_rate:
+    K:
+      model: legacy_beta_v1
+      beta:
+        alpha: 5.0
+        beta: 5.0
+        scale: 0.25
+        lower_clamp:
+          enabled: false
+
+simulation:
+  end_time_hours: 2160.0
+  max_events: 10000000000
+  threads: 18
+
+parallel:
+  mode: adaptive_cells_and_events_v1
+  min_threads: 1
+  min_events_per_thread: 1024
+  min_refresh_items_per_thread: 128
+  cell_thresholds:
+    - minimum_cells: 0
+      max_thread_fraction: 0.50
+    - minimum_cells: 5000
+      max_thread_fraction: 0.60
+    - minimum_cells: 10000
+      max_thread_fraction: 0.70
+    - minimum_cells: 15000
+      max_thread_fraction: 0.80
+    - minimum_cells: 20000
+      max_thread_fraction: 0.90
+    - minimum_cells: 25000
+      max_thread_fraction: 1.00
+
+scheduler:
+  backend: event_queue_v1
+  conflict_bucket_hours: 0.0
+  proposal_window_hours: 0.25
+  proposal_window_max_events: 8192
+  proposal_min_events_per_thread: 32
+  proposal_dependency_block_edge: 8
+
+angiogenesis:
+  enabled: true
+  lesion_detection:
+    backend: sparse_coarse_blocks_v1
+    block_edge: 8
+    connectivity: 26
+    core_activation_occupied_fraction: 0.15
+    core_deactivation_occupied_fraction: 0.10
+    minimum_cells_per_core_block: 8
+    minimum_biological_volume_per_core_block: 0.0
+    halo_blocks: 1
+    refresh_interval_hours: 1.0
+  trigger:
+    metric: per_lesion_biological_cell_volume_voxels3
+    activation_volume_voxels3: 100000.0
+    deactivation_volume_voxels3: 80000.0
+    delay_hours: 0.0
+    minimum_core_blocks: 4
+    stage_biological_volume_voxels3:
+      stage0: 8.0
+      stage1: 1.0
+      stage2: 0.5
+  seed_process:
+    model: density_modulated_poisson_v1
+    scope: per_eligible_lesion
+    rate_sites_per_30_days: 10.0
+    density_stress_on_fraction: 0.15
+    density_stress_full_fraction: 0.60
+    density_stress_exponent: 1.0
+    volume_reference_voxels3: 100000.0
+    volume_exponent: 0.6666666667
+    minimum_rate_multiplier: 0.25
+    maximum_rate_multiplier: 4.0
+    roots_per_event: 1
+    surface_min_separation_voxels: 8
+    surface_max_sampling_attempts: 4096
+    surface_min_local_cells: 1
+    root_position_policy: inside_surface_voxel
+    max_total_roots: 64
+    max_active_tips: 128
+    max_roots_per_lesion: 64
+    max_active_tips_per_lesion: 128
+  vessel:
+    diameter_voxels: 3.0
+    inward:
+      speed_voxels_per_hour: 0.50
+      max_length_voxels: 128
+      length_tortuosity_factor: 1.50
+      exit_margin_voxels: 16.0
+      hard_max_length_voxels: 4096
+      target_tolerance_voxels: 2.0
+      replacement_policy: remove_whole_cells
+      path_policy: through_lesion_v1
+      far_surface_policy: continue_to_budget
+    outward:
+      # Strictly above sqrt(3) * activated_r_rate.scale = 5.196...
+      speed_voxels_per_hour: 6.0
+      max_length_voxels: 128
+      external_connection_distance_voxels: 64.0
+      occupancy_policy: permanent_reserved_placeholder
+    contact:
+      outward_same_lesion: avoid
+      outward_other_lesion: convert_to_inward
+      inward_other_lesion: penetrate_and_displace
+    blocked_policy: retry
+    blocked_retry_interval_hours: 1.0
+    collision_policy: anastomose_and_stop
+    boundary_policy: stop
+  direction:
+    model: forward_biased_26_v1
+    forward_bias: 1.0
+    forward_half_angle_deg: 45.0
+    turn_half_angle_deg: 45.0
+    persistence_probability: 0.90
+    distance_weight_exponent: 0.0
+  influence:
+    profile: linear_cutoff
+    max_relief_fraction: 0.50
+    decay_length_voxels: 4.0
+    cutoff_radius_voxels: 12.0
+    scope: growth_density
+    activation: immediate
+
+output:
+  enabled: true
+  sampling_preset: phase3_default_v1
+  preview_mode: stable_uid_hash_v1
+  full_format: vtkhdf_points_v1
+  checkpoint_format: hdf5_base_v6_slot_journal_v8
+  directory: /Volumes/Work_Active/simulation/ver7/run_single_r_stage0_2160h_seed1_density_vascular_v5
+  preview_every_hours: 1.0
+  full_every_hours: 24.0
+  checkpoint_every_hours: 1.0
+  storage:
+    mode: journal_delta_hdf5_v2
+    vtkhdf_compression_level: 1
+    hdf5_compression_level: 1
+    hdf5_chunk_elements: 262144
+    preview_keyframe_every_hours: 1.0
+    full_keyframe_every_hours: 24.0
+    checkpoint_base_every_hours: 168.0
+    checkpoint_max_delta_chain: 168
+    delta_full_ratio: 0.70
+  async_enabled: true
+  async_queue_depth: 1
+  async_max_pending_bytes: 2147483648
+  preview_overflow_policy: coalesce_latest
+  on_demand:
+    preview: true
+    checkpoint: true
+    full: true
+  live_preview:
+    enabled_when_viewer_attached: true
+    wall_interval_seconds: 30.0
+    persist: false
+  preview_max_cells: 1000000
+  preview_seed: 0
+  display_radius:
+    large: 1.0
+    small: 0.5
+    ultrasmall: 0.25
+
+control:
+  enabled: true
+  status_wall_interval_seconds: 1.0
+  poll_wall_interval_seconds: 0.25

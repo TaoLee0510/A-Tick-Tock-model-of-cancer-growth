@@ -69,6 +69,11 @@ migration:
     alpha: 0.005
     mean_fraction: 0.30
     beta: 0.011666666666666667
+  crowding_exchange:
+    enabled: false
+    stage_policy: stage1_singleton_v1
+    wait_fraction: 0.20
+    post_exchange_cooldown_fraction: 0.20
 
 density:
   backend: block_anchor_v1
@@ -151,6 +156,7 @@ parallel:
   mode: adaptive_cells_and_events_v1
   min_threads: 1
   min_events_per_thread: 1024
+  min_refresh_items_per_thread: 16
   cell_thresholds:
     - minimum_cells: 0
       max_thread_fraction: 0.50
@@ -168,6 +174,10 @@ parallel:
 scheduler:
   backend: event_queue_v1
   conflict_bucket_hours: 0.0
+  proposal_window_hours: 0.25
+  proposal_window_max_events: 8192
+  proposal_min_events_per_thread: 32
+  proposal_dependency_block_edge: 8
 
 angiogenesis:
   enabled: true
@@ -192,9 +202,16 @@ angiogenesis:
       stage1: 1.0
       stage2: 0.5
   seed_process:
-    model: homogeneous_poisson
+    model: density_modulated_poisson_v1
     scope: per_eligible_lesion
     rate_sites_per_30_days: 10.0
+    density_stress_on_fraction: 0.15
+    density_stress_full_fraction: 0.60
+    density_stress_exponent: 1.0
+    volume_reference_voxels3: 100000.0
+    volume_exponent: 0.0
+    minimum_rate_multiplier: 0.0
+    maximum_rate_multiplier: 4.0
     roots_per_event: 1
     surface_min_separation_voxels: 8
     surface_max_sampling_attempts: 4096
@@ -209,8 +226,13 @@ angiogenesis:
     inward:
       speed_voxels_per_hour: 0.50
       max_length_voxels: 128
+      length_tortuosity_factor: 1.50
+      exit_margin_voxels: 16.0
+      hard_max_length_voxels: 4096
       target_tolerance_voxels: 2.0
       replacement_policy: remove_whole_cells
+      path_policy: through_lesion_v1
+      far_surface_policy: continue_to_budget
     outward:
       # Activated-r is at most 1 move/hour and a 3D step is at most sqrt(3)
       # voxels, so 2.0 is strictly faster than its maximum path speed.
@@ -218,6 +240,12 @@ angiogenesis:
       max_length_voxels: 128
       external_connection_distance_voxels: 64.0
       occupancy_policy: permanent_reserved_placeholder
+    contact:
+      outward_same_lesion: avoid
+      outward_other_lesion: convert_to_inward
+      inward_other_lesion: penetrate_and_displace
+    blocked_policy: retry
+    blocked_retry_interval_hours: 1.0
     collision_policy: anastomose_and_stop
     boundary_policy: stop
   direction:
@@ -237,16 +265,44 @@ angiogenesis:
 
 output:
   enabled: false
+  sampling_preset: phase3_default_v1
   preview_mode: stable_uid_hash_v1
   full_format: vtkhdf_points_v1
-  checkpoint_format: hdf5_v3
+  checkpoint_format: hdf5_base_v6_slot_journal_v8
   directory: atcg3d_run
   preview_every_hours: 1.0
-  full_every_hours: 6.0
-  checkpoint_every_hours: 24.0
+  full_every_hours: 24.0
+  checkpoint_every_hours: 1.0
+  storage:
+    mode: journal_delta_hdf5_v2
+    vtkhdf_compression_level: 1
+    hdf5_compression_level: 1
+    hdf5_chunk_elements: 262144
+    preview_keyframe_every_hours: 1.0
+    full_keyframe_every_hours: 24.0
+    checkpoint_base_every_hours: 168.0
+    checkpoint_max_delta_chain: 168
+    delta_full_ratio: 0.70
+  async_enabled: false
+  async_queue_depth: 1
+  async_max_pending_bytes: 2147483648
+  preview_overflow_policy: coalesce_latest
+  on_demand:
+    preview: true
+    checkpoint: true
+    full: true
+  live_preview:
+    enabled_when_viewer_attached: true
+    wall_interval_seconds: 30.0
+    persist: false
   preview_max_cells: 1000000
   preview_seed: 0
   display_radius:
     large: 1.0
     small: 0.5
     ultrasmall: 0.25
+
+control:
+  enabled: true
+  status_wall_interval_seconds: 1.0
+  poll_wall_interval_seconds: 0.25

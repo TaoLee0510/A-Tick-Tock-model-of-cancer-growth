@@ -159,4 +159,60 @@ int main() {
     assert(blocked.direction == kStayDirection);
     assert(!commit_move(blocked, symmetric_cells, symmetric_grid, symmetric_density));
     assert(symmetric_cells.last_direction(r_slot) == kStayDirection);
+
+    // A crowding exchange is an atomic two-cell transaction. It is available
+    // only for two singleton stage-1 cells and swaps both the spatial grid and
+    // density-index anchors without changing either stable UID/slot.
+    Model3DConfig swap_config;
+    swap_config.output_enabled = false;
+    swap_config.direction_density_threshold = 1.0;
+    DomainPolicy swap_domain(swap_config);
+    SparseChunkGrid3D swap_grid(8, swap_domain);
+    BlockDensityIndex3D swap_density(2);
+    CellStore3D swap_cells;
+    CellInit swap_actor;
+    swap_actor.uid = 5001;
+    swap_actor.type = CellType::r;
+    swap_actor.stage = CellStage::small;
+    swap_actor.anchor = {0, 0, 0};
+    CellInit swap_partner = swap_actor;
+    swap_partner.uid = 5002;
+    swap_partner.type = CellType::K;
+    swap_partner.anchor = {1, 0, 0};
+    const Slot swap_actor_slot = swap_cells.create(swap_actor);
+    const Slot swap_partner_slot = swap_cells.create(swap_partner);
+    assert(swap_grid.place_single(swap_actor.anchor, swap_actor_slot));
+    assert(swap_grid.place_single(swap_partner.anchor, swap_partner_slot));
+    swap_density.add(swap_actor.anchor, swap_actor.type, swap_actor_slot);
+    swap_density.add(swap_partner.anchor, swap_partner.type, swap_partner_slot);
+    const auto swap_directions =
+        feasible_crowding_swap_directions(
+            swap_actor_slot, swap_cells, swap_grid, false);
+    assert(swap_directions.size() == 1 && swap_directions.front() == 6);
+    const MoveProposal exchange = make_crowding_swap_proposal(
+        swap_actor_slot, 6, swap_cells, swap_grid, swap_config, 7);
+    assert(exchange.swaps_anchors);
+    assert(exchange.swap_partner == swap_partner_slot);
+    assert(commit_crowding_swap(
+        exchange, swap_cells, swap_grid, swap_density));
+    assert(swap_cells.anchor(swap_actor_slot) == Vec3i(1, 0, 0));
+    assert(swap_cells.anchor(swap_partner_slot) == Vec3i(0, 0, 0));
+    assert(swap_grid.owner({1, 0, 0}) == swap_actor_slot);
+    assert(swap_grid.owner({0, 0, 0}) == swap_partner_slot);
+    assert(swap_cells.last_direction(swap_actor_slot) == 6);
+    assert(swap_cells.last_direction(swap_partner_slot) == 2);
+    assert(!commit_crowding_swap(
+        exchange, swap_cells, swap_grid, swap_density));
+
+    // Co-location groups are explicitly excluded: exchanging one member would
+    // otherwise silently split a many-cell occupancy transaction.
+    CellInit colocated = swap_partner;
+    colocated.uid = 5003;
+    colocated.anchor = {0, 0, 0};
+    colocated.stage = CellStage::ultrasmall;
+    const Slot colocated_slot = swap_cells.create(colocated);
+    assert(swap_grid.add_colocated({0, 0, 0}, colocated_slot));
+    swap_cells.set_stage(swap_partner_slot, CellStage::ultrasmall);
+    assert(feasible_crowding_swap_directions(
+               swap_actor_slot, swap_cells, swap_grid, false).empty());
 }

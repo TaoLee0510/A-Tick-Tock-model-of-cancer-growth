@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ATCG3D Studio",
+  "version": "0.1.0",
+  "identifier": "org.atcg.atcg3d-studio",
+  "build": {
+    "frontendDist": "../../web"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "ATCG3D Studio",
+        "width": 1600,
+        "height": 1000,
+        "minWidth": 1100,
+        "minHeight": 720,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "icon": ["icons/icon.icns"],
+    "category": "DeveloperTool",
+    "shortDescription": "Control and visualize ATCG3D simulations",
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "signingIdentity": "-"
+    }
+  }
+}

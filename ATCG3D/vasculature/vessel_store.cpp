@@ -21,7 +21,9 @@ bool valid_status(VesselTipStatus status) noexcept {
            status == VesselTipStatus::blocked || status == VesselTipStatus::merged ||
            status == VesselTipStatus::reached_target ||
            status == VesselTipStatus::max_length ||
-           status == VesselTipStatus::boundary_stop || status == VesselTipStatus::complete;
+           status == VesselTipStatus::boundary_stop ||
+           status == VesselTipStatus::complete ||
+           status == VesselTipStatus::transiting;
 }
 
 void validate_node(const VesselNodeInit3D& node) {
@@ -67,7 +69,7 @@ void validate_tip(const VesselTipInit3D& tip) {
         tip.pending_direction > 26) {
         throw std::invalid_argument("invalid vessel tip enum or direction");
     }
-    if (tip.status == VesselTipStatus::active &&
+    if (vessel_tip_growing(tip.status) &&
         (!(tip.speed_voxels_per_hour > 0.0F) || !(tip.max_length_voxels > 0.0F) ||
          tip.grown_length_voxels >= tip.max_length_voxels)) {
         throw std::invalid_argument("an active vessel tip must have positive speed and remaining length");

@@ -1,11 +1,14 @@
 #include <cassert>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <stdexcept>
 #include <vector>
 
 #include "config/model_config.hpp"
 #include "core/stateless_rng.hpp"
 #include "engine/simulation.hpp"
+#include "engine/parallelism.hpp"
 #include "geometry/directions.hpp"
 #include "rules/lifecycle.hpp"
 #include "rules/migration.hpp"
@@ -14,26 +17,81 @@ int main() {
     using namespace atcg3d;
     Model3DConfig config;
     config.output_enabled = false;
-    config.initial_r_cells = 6;
-    config.initial_K_cells = 6;
-    config.initial_radius = 8;
+    config.initial_r_cells = 24;
+    config.initial_K_cells = 24;
+    config.initial_radius = 12;
     config.end_time_hours = 8.0;
     config.max_events = 100000;
     config.density_block_edge = 2;
     config.threads = 1;
+    config.proposal_window_hours = 8.0;
 
     Simulation3D first(config);
     first.run();
     assert(first.cells().alive_count() > 0);
     const auto checksum = first.state_checksum();
 
-    config.threads = 4;
+    config.threads = 18;
     config.parallel_min_events_per_thread = 1;
     config.parallel_thread_thresholds = {{0, 1.0}};
     Simulation3D second(config);
     second.run();
     assert(second.state_checksum() == checksum);
     assert(second.cells().alive_count() == first.cells().alive_count());
+
+    // The production scheduler computes proposals in a bounded look-ahead
+    // window but commits them at their original exact event times.
+    Model3DConfig windowed_config = config;
+    windowed_config.scheduler_backend = "deterministic_exact_window_v3";
+    windowed_config.proposal_window_hours = 1.0;
+    windowed_config.threads = 1;
+    Simulation3D windowed_single(windowed_config);
+    windowed_single.run();
+    const std::uint64_t windowed_checksum =
+        windowed_single.state_checksum();
+    windowed_config.threads = 18;
+    Simulation3D windowed_parallel(windowed_config);
+    windowed_parallel.run();
+    assert(windowed_parallel.state_checksum() == windowed_checksum);
+    assert(windowed_parallel.proposal_window_diagnostics()
+               .migration_proposals > 1);
+    if (available_worker_threads() > 1) {
+        assert(windowed_parallel.proposal_window_diagnostics()
+                   .maximum_workers > 1);
+    }
+
+    // The look-ahead window must not rewrite the biological event time. A
+    // five-moves/hour cell scheduled at 1.0 next moves at the upward-float
+    // representation of 1.2, never at a scheduler bucket such as 1.21.
+    Model3DConfig exact_time_config;
+    exact_time_config.output_enabled = false;
+    exact_time_config.migration_activation_enabled = false;
+    exact_time_config.scheduler_backend = "deterministic_exact_window_v3";
+    exact_time_config.proposal_window_hours = 1.0;
+    exact_time_config.domain_policy = "bounded";
+    exact_time_config.bounded_domain = true;
+    exact_time_config.domain_min = {0, 0, 0};
+    exact_time_config.domain_max = {0, 0, 0};
+    exact_time_config.density_block_edge = 1;
+    exact_time_config.end_time_hours = 2.0;
+    exact_time_config.max_events = 10;
+    CellInit exact_time_cell;
+    exact_time_cell.uid = 900;
+    exact_time_cell.inherent_growth_rate = 0.0F;
+    exact_time_cell.density_growth_rate = 0.0F;
+    exact_time_cell.migration_rate = 5.0F;
+    exact_time_cell.normal_migration_rate = 5.0F;
+    exact_time_cell.next_migration_time = 1.0;
+    exact_time_cell.next_division_time = 0.0;
+    exact_time_cell.death_deadline = 10.0;
+    Simulation3D exact_time(exact_time_config);
+    exact_time.restore({exact_time_cell}, 901, {}, {}, {});
+    assert(exact_time.step());
+    assert(std::abs(
+               exact_time.cells().next_migration_time(0) - 1.2) <
+           1.0e-5);
+    assert(exact_time.step());
+    assert(std::abs(exact_time.clock().time_hours - 1.2) < 1.0e-5);
 
     // Periodic output boundaries are clock observations, not biological
     // events. A quiet interval must still expose exact whole-hour states while
@@ -172,6 +230,62 @@ int main() {
         assert(crossing.cells().next_migration_time(slot) > 0.0);
     }
     assert(crossing.migration_activation_class_recomputes() > 0);
+
+    // A division can be the transition that first activates the mother. The
+    // mother (not only the newly scheduled daughter) must own one exact
+    // activation-end event and return to normal state at that time.
+    Model3DConfig division_activation_config;
+    division_activation_config.output_enabled = false;
+    division_activation_config.migration_activation_enabled = true;
+    division_activation_config.migration_activation_window_edge = 3;
+    division_activation_config.migration_activation_block_edge = 1;
+    division_activation_config.migration_activation_threshold = 0.15;
+    division_activation_config.density_block_edge = 1;
+    division_activation_config.domain_policy = "bounded";
+    division_activation_config.bounded_domain = true;
+    division_activation_config.domain_min = {0, 0, 0};
+    division_activation_config.domain_max = {1, 0, 0};
+    division_activation_config.thin_layer = true;
+    division_activation_config.end_time_hours = 100.0;
+    division_activation_config.max_events = 10000;
+    CellInit division_activation_mother;
+    division_activation_mother.uid = 12;
+    division_activation_mother.type = CellType::K;
+    division_activation_mother.stage = CellStage::small;
+    division_activation_mother.anchor = {0, 0, 0};
+    division_activation_mother.migration_rate = 0.0F;
+    division_activation_mother.normal_migration_rate = 0.0F;
+    division_activation_mother.division_work_remaining = 0.0F;
+    division_activation_mother.next_migration_time = 0.0;
+    division_activation_mother.next_division_time = 1.0;
+    Simulation3D division_activation(division_activation_config);
+    division_activation.restore(
+        {division_activation_mother}, 13, {}, {}, {});
+    assert(division_activation.step());
+    assert(division_activation.stats().divisions == 1);
+    Slot activated_mother_slot = kEmptySlot;
+    for (const Slot slot : division_activation.cells().alive_slots()) {
+        if (division_activation.cells().uid(slot) == 12) {
+            activated_mother_slot = slot;
+        }
+    }
+    assert(activated_mother_slot != kEmptySlot);
+    assert((division_activation.cells().flags(activated_mother_slot) &
+            kMigrationActive) != 0);
+    const double mother_activation_end =
+        division_activation.cells().migration_activation_end_time(
+            activated_mother_slot);
+    assert(mother_activation_end > division_activation.clock().time_hours);
+    while (division_activation.clock().time_hours < mother_activation_end) {
+        assert(division_activation.step());
+    }
+    assert(std::abs(
+               division_activation.clock().time_hours -
+               mother_activation_end) < 1.0e-5);
+    assert((division_activation.cells().flags(activated_mother_slot) &
+            kMigrationActive) == 0);
+    assert(division_activation.cells().migration_activation_end_time(
+               activated_mother_slot) == 0.0);
 
     // End-to-end activation lifecycle: falling density does not terminate an
     // active interval. Its exact end event returns the survivor to ordinary
@@ -382,9 +496,9 @@ int main() {
     assert(progressing.stats().divisions >= 1);
     assert(progressing.pending_event_count() < 20);
 
-    // Repeated local density changes can move many future division times. Old
-    // generation entries are inert, and deterministic threshold compaction
-    // keeps their heap storage bounded during a long migration-heavy run.
+    // Repeated local density changes can move many future division times. The
+    // indexed event heap replaces each actor/kind key in place, so no stale
+    // generations accumulate and no full-queue rebuild is required.
     Model3DConfig queue_config;
     queue_config.output_enabled = false;
     queue_config.domain_policy = "bounded";
@@ -419,7 +533,7 @@ int main() {
     bounded_queue.restore(queue_cells, 1100, {}, {}, {});
     bounded_queue.run();
     assert(bounded_queue.clock().completed_events >= 20000);
-    assert(bounded_queue.event_queue_rebuild_count() > 0);
+    assert(bounded_queue.event_queue_rebuild_count() == 0);
     assert(bounded_queue.pending_event_count() < 500);
 
     // Same-time divisions propose against one occupancy snapshot. Both K
@@ -626,6 +740,87 @@ int main() {
     const std::uint64_t recovery_conflict_checksum =
         run_recovery_conflict(1);
     assert(run_recovery_conflict(4) == recovery_conflict_checksum);
+
+    // A fully surrounded stage-1 singleton first waits for 20% of its own
+    // movement interval, then atomically exchanges anchors with one singleton
+    // neighbor. The forced partner receives the same configured fractional
+    // cooldown based on its own rate.
+    const auto run_crowding_exchange = [](int threads) {
+        Model3DConfig local;
+        local.output_enabled = false;
+        local.migration_activation_enabled = false;
+        local.migration_swap_enabled = true;
+        local.seed = 4;
+        local.domain_policy = "bounded";
+        local.bounded_domain = true;
+        local.domain_min = {-1, -1, -1};
+        local.domain_max = {1, 1, 1};
+        local.migration_swap_wait_fraction = 0.20;
+        local.migration_swap_post_cooldown_fraction = 0.35;
+        local.scheduler_backend = "deterministic_exact_window_v3";
+        local.proposal_window_hours = 0.25;
+        local.parallel_mode = "fixed";
+        local.parallel_min_events_per_thread = 1;
+        local.threads = threads;
+        local.end_time_hours = 2.5;
+        local.max_events = 64;
+        local.density_block_edge = 1;
+        std::vector<CellInit> crowded;
+        CellInit actor;
+        actor.uid = 4000;
+        actor.type = CellType::r;
+        actor.stage = CellStage::small;
+        actor.anchor = {0, 0, 0};
+        actor.migration_rate = 0.5F;
+        actor.normal_migration_rate = 0.5F;
+        actor.next_migration_time = 1.0;
+        actor.next_division_time = 100.0;
+        crowded.push_back(actor);
+        CellUid next_uid = 4001;
+        for (DirectionId direction = 1; direction <= 26; ++direction) {
+            CellInit neighbor = actor;
+            neighbor.uid = next_uid++;
+            neighbor.type = CellType::K;
+            neighbor.anchor = direction_vector(direction);
+            // The eventual passive partner also has an event in the exact
+            // swap-ready batch. Its stale proposal must not overwrite the
+            // cooldown installed by the earlier atomic swap.
+            neighbor.next_migration_time = 1.4;
+            crowded.push_back(neighbor);
+        }
+        Simulation3D simulation(local);
+        simulation.restore(crowded, next_uid, {}, {}, {});
+        assert(simulation.step());
+        assert(simulation.clock().time_hours == 1.0);
+        assert(simulation.stats().migration_swap_waits == 1);
+        assert(simulation.stats().migration_swap_commits == 0);
+        assert(simulation.cells().swap_wait_state(0) == 1);
+        assert(std::abs(simulation.cells().swap_ready_time(0) - 1.4) <
+               1.0e-5);
+        const DirectionId chosen =
+            simulation.cells().pending_swap_direction(0);
+        assert(chosen >= 1 && chosen <= 26);
+        const Slot partner = simulation.grid().owner(
+            direction_vector(chosen));
+        assert(partner != kEmptySlot && partner != 0);
+        assert(simulation.step());
+        assert(std::abs(simulation.clock().time_hours - 1.4) < 1.0e-5);
+        assert(simulation.stats().migration_swap_attempts == 1);
+        assert(simulation.stats().migration_swap_commits == 1);
+        assert(simulation.cells().anchor(0) == direction_vector(chosen));
+        assert(simulation.cells().anchor(partner) == Vec3i(0, 0, 0));
+        assert(simulation.cells().swap_wait_state(0) == 0);
+        assert(simulation.cells().swap_wait_state(partner) == 0);
+        assert(std::abs(simulation.cells().next_migration_time(0) - 2.1) <
+               1.0e-5);
+        assert(std::abs(
+                   simulation.cells().next_migration_time(partner) - 2.1) <
+               1.0e-5);
+        return simulation.state_checksum();
+    };
+    const std::uint64_t crowded_single_checksum =
+        run_crowding_exchange(1);
+    assert(run_crowding_exchange(18) == crowded_single_checksum);
 
     // A same-time proposal batch is atomic with respect to max_events: if the
     // complete conflict set does not fit, step stops before the batch rather

@@ -237,7 +237,7 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     check_map(root, "$", {"schema", "profile", "calibration", "rng", "run", "space",
                            "direction", "migration", "density", "biology", "stage",
                            "division", "initial", "simulation", "parallel", "scheduler",
-                           "angiogenesis", "output"});
+                           "angiogenesis", "output", "control"});
 
     Model3DConfig config;
     const YAML::Node schema = checked_section(root, "schema", "$", {"name", "version"});
@@ -345,7 +345,8 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
         root, "migration", "$", {"activation_enabled", "activation_window_edge",
                                    "activation_block_edge", "activation_threshold",
                                    "normal_r_rate", "activated_r_rate",
-                                   "activation_duration"});
+                                   "activation_duration",
+                                   "crowding_exchange"});
     config.migration_activation_enabled = strict_bool(
         required(migration, "activation_enabled", "$.migration"),
         "migration.activation_enabled");
@@ -414,6 +415,26 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     config.migration_activation_duration_beta = strict_double(
         required(activation_duration, "beta", "$.migration.activation_duration"),
         "migration.activation_duration.beta");
+    const YAML::Node crowding_exchange = checked_section(
+        migration, "crowding_exchange", "$.migration",
+        {"enabled", "stage_policy", "wait_fraction",
+         "post_exchange_cooldown_fraction"});
+    config.migration_swap_enabled = strict_bool(
+        required(crowding_exchange, "enabled",
+                 "$.migration.crowding_exchange"),
+        "migration.crowding_exchange.enabled");
+    config.migration_swap_stage_policy = strict_string(
+        required(crowding_exchange, "stage_policy",
+                 "$.migration.crowding_exchange"),
+        "migration.crowding_exchange.stage_policy");
+    config.migration_swap_wait_fraction = strict_double(
+        required(crowding_exchange, "wait_fraction",
+                 "$.migration.crowding_exchange"),
+        "migration.crowding_exchange.wait_fraction");
+    config.migration_swap_post_cooldown_fraction = strict_double(
+        required(crowding_exchange, "post_exchange_cooldown_fraction",
+                 "$.migration.crowding_exchange"),
+        "migration.crowding_exchange.post_exchange_cooldown_fraction");
 
     const YAML::Node density = checked_section(
         root, "density", "$", {"backend", "block_edge", "growth_window_edge"});
@@ -618,7 +639,8 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     const YAML::Node parallel = root["parallel"];
     if (parallel && parallel.IsDefined()) {
         check_map(parallel, "$.parallel",
-                  {"mode", "min_threads", "min_events_per_thread", "cell_thresholds"});
+                  {"mode", "min_threads", "min_events_per_thread",
+                   "min_refresh_items_per_thread", "cell_thresholds"});
         config.parallel_mode = strict_string(
             required(parallel, "mode", "$.parallel"), "parallel.mode");
         config.parallel_min_threads = strict_integer<int>(
@@ -627,6 +649,10 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
         config.parallel_min_events_per_thread = strict_integer<std::uint64_t>(
             required(parallel, "min_events_per_thread", "$.parallel"),
             "parallel.min_events_per_thread");
+        config.parallel_min_refresh_items_per_thread =
+            strict_integer<std::uint64_t>(
+                required(parallel, "min_refresh_items_per_thread", "$.parallel"),
+                "parallel.min_refresh_items_per_thread");
         const YAML::Node thresholds = required(
             parallel, "cell_thresholds", "$.parallel");
         if (!thresholds.IsSequence() || thresholds.size() == 0) {
@@ -650,12 +676,29 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     }
 
     const YAML::Node scheduler = checked_section(
-        root, "scheduler", "$", {"backend", "conflict_bucket_hours"});
+        root, "scheduler", "$", {"backend",
+                                   "conflict_bucket_hours",
+                                   "proposal_window_hours",
+                                   "proposal_window_max_events",
+                                   "proposal_min_events_per_thread",
+                                   "proposal_dependency_block_edge"});
     config.scheduler_backend = strict_string(
         required(scheduler, "backend", "$.scheduler"), "scheduler.backend");
     config.conflict_bucket_hours = strict_double(
         required(scheduler, "conflict_bucket_hours", "$.scheduler"),
         "scheduler.conflict_bucket_hours");
+    config.proposal_window_hours = strict_double(
+        required(scheduler, "proposal_window_hours", "$.scheduler"),
+        "scheduler.proposal_window_hours");
+    config.proposal_window_max_events = strict_integer<std::uint64_t>(
+        required(scheduler, "proposal_window_max_events", "$.scheduler"),
+        "scheduler.proposal_window_max_events");
+    config.proposal_min_events_per_thread = strict_integer<std::uint64_t>(
+        required(scheduler, "proposal_min_events_per_thread", "$.scheduler"),
+        "scheduler.proposal_min_events_per_thread");
+    config.proposal_dependency_block_edge = strict_integer<int>(
+        required(scheduler, "proposal_dependency_block_edge", "$.scheduler"),
+        "scheduler.proposal_dependency_block_edge");
 
     const YAML::Node angiogenesis = checked_section(
         root, "angiogenesis", "$", {"enabled", "lesion_detection", "trigger",
@@ -742,6 +785,10 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     const YAML::Node seed_process = checked_section(
         angiogenesis, "seed_process", "$.angiogenesis",
         {"model", "scope", "rate_sites_per_30_days", "roots_per_event",
+         "density_stress_on_fraction", "density_stress_full_fraction",
+         "density_stress_exponent", "volume_reference_voxels3",
+         "volume_exponent", "minimum_rate_multiplier",
+         "maximum_rate_multiplier",
          "surface_min_separation_voxels", "surface_max_sampling_attempts",
          "surface_min_local_cells", "root_position_policy",
          "max_total_roots", "max_active_tips", "max_roots_per_lesion",
@@ -757,6 +804,33 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
         "angiogenesis.seed_process.rate_sites_per_30_days");
     config.angiogenesis.seed_rate_sites_per_hour =
         config.angiogenesis.seed_rate_sites_per_30_days / 720.0;
+    config.angiogenesis.seed_density_stress_on_fraction = strict_double(
+        required(seed_process, "density_stress_on_fraction",
+                 "$.angiogenesis.seed_process"),
+        "angiogenesis.seed_process.density_stress_on_fraction");
+    config.angiogenesis.seed_density_stress_full_fraction = strict_double(
+        required(seed_process, "density_stress_full_fraction",
+                 "$.angiogenesis.seed_process"),
+        "angiogenesis.seed_process.density_stress_full_fraction");
+    config.angiogenesis.seed_density_stress_exponent = strict_double(
+        required(seed_process, "density_stress_exponent",
+                 "$.angiogenesis.seed_process"),
+        "angiogenesis.seed_process.density_stress_exponent");
+    config.angiogenesis.seed_volume_reference_voxels3 = strict_double(
+        required(seed_process, "volume_reference_voxels3",
+                 "$.angiogenesis.seed_process"),
+        "angiogenesis.seed_process.volume_reference_voxels3");
+    config.angiogenesis.seed_volume_exponent = strict_double(
+        required(seed_process, "volume_exponent", "$.angiogenesis.seed_process"),
+        "angiogenesis.seed_process.volume_exponent");
+    config.angiogenesis.seed_minimum_rate_multiplier = strict_double(
+        required(seed_process, "minimum_rate_multiplier",
+                 "$.angiogenesis.seed_process"),
+        "angiogenesis.seed_process.minimum_rate_multiplier");
+    config.angiogenesis.seed_maximum_rate_multiplier = strict_double(
+        required(seed_process, "maximum_rate_multiplier",
+                 "$.angiogenesis.seed_process"),
+        "angiogenesis.seed_process.maximum_rate_multiplier");
     config.angiogenesis.roots_per_event = strict_integer<std::uint32_t>(
         required(seed_process, "roots_per_event", "$.angiogenesis.seed_process"),
         "angiogenesis.seed_process.roots_per_event");
@@ -788,26 +862,48 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
 
     const YAML::Node vessel = checked_section(
         angiogenesis, "vessel", "$.angiogenesis",
-        {"diameter_voxels", "inward", "outward", "collision_policy", "boundary_policy"});
+        {"diameter_voxels", "inward", "outward", "contact",
+         "blocked_policy", "blocked_retry_interval_hours",
+         "collision_policy", "boundary_policy"});
     config.angiogenesis.diameter_voxels = strict_double(
         required(vessel, "diameter_voxels", "$.angiogenesis.vessel"),
         "angiogenesis.vessel.diameter_voxels");
     const YAML::Node inward = checked_section(
         vessel, "inward", "$.angiogenesis.vessel",
-        {"speed_voxels_per_hour", "max_length_voxels", "target_tolerance_voxels",
-         "replacement_policy"});
+        {"speed_voxels_per_hour", "max_length_voxels",
+         "length_tortuosity_factor", "exit_margin_voxels",
+         "hard_max_length_voxels", "target_tolerance_voxels",
+         "replacement_policy", "path_policy", "far_surface_policy"});
     config.angiogenesis.inward_speed_voxels_per_hour = strict_double(
         required(inward, "speed_voxels_per_hour", "$.angiogenesis.vessel.inward"),
         "angiogenesis.vessel.inward.speed_voxels_per_hour");
     config.angiogenesis.inward_max_length_voxels = strict_integer<int>(
         required(inward, "max_length_voxels", "$.angiogenesis.vessel.inward"),
         "angiogenesis.vessel.inward.max_length_voxels");
+    config.angiogenesis.inward_length_tortuosity_factor = strict_double(
+        required(inward, "length_tortuosity_factor",
+                 "$.angiogenesis.vessel.inward"),
+        "angiogenesis.vessel.inward.length_tortuosity_factor");
+    config.angiogenesis.inward_exit_margin_voxels = strict_double(
+        required(inward, "exit_margin_voxels", "$.angiogenesis.vessel.inward"),
+        "angiogenesis.vessel.inward.exit_margin_voxels");
+    config.angiogenesis.inward_hard_max_length_voxels =
+        strict_integer<int>(
+            required(inward, "hard_max_length_voxels",
+                     "$.angiogenesis.vessel.inward"),
+            "angiogenesis.vessel.inward.hard_max_length_voxels");
     config.angiogenesis.inward_target_tolerance_voxels = strict_double(
         required(inward, "target_tolerance_voxels", "$.angiogenesis.vessel.inward"),
         "angiogenesis.vessel.inward.target_tolerance_voxels");
     config.angiogenesis.inward_replacement_policy = strict_string(
         required(inward, "replacement_policy", "$.angiogenesis.vessel.inward"),
         "angiogenesis.vessel.inward.replacement_policy");
+    config.angiogenesis.inward_path_policy = strict_string(
+        required(inward, "path_policy", "$.angiogenesis.vessel.inward"),
+        "angiogenesis.vessel.inward.path_policy");
+    config.angiogenesis.inward_far_surface_policy = strict_string(
+        required(inward, "far_surface_policy", "$.angiogenesis.vessel.inward"),
+        "angiogenesis.vessel.inward.far_surface_policy");
     const YAML::Node outward = checked_section(
         vessel, "outward", "$.angiogenesis.vessel",
         {"speed_voxels_per_hour", "max_length_voxels",
@@ -824,6 +920,25 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     config.angiogenesis.outward_occupancy_policy = strict_string(
         required(outward, "occupancy_policy", "$.angiogenesis.vessel.outward"),
         "angiogenesis.vessel.outward.occupancy_policy");
+    const YAML::Node contact = checked_section(
+        vessel, "contact", "$.angiogenesis.vessel",
+        {"outward_same_lesion", "outward_other_lesion",
+         "inward_other_lesion"});
+    config.angiogenesis.outward_same_lesion_contact_policy = strict_string(
+        required(contact, "outward_same_lesion", "$.angiogenesis.vessel.contact"),
+        "angiogenesis.vessel.contact.outward_same_lesion");
+    config.angiogenesis.outward_other_lesion_contact_policy = strict_string(
+        required(contact, "outward_other_lesion", "$.angiogenesis.vessel.contact"),
+        "angiogenesis.vessel.contact.outward_other_lesion");
+    config.angiogenesis.inward_other_lesion_contact_policy = strict_string(
+        required(contact, "inward_other_lesion", "$.angiogenesis.vessel.contact"),
+        "angiogenesis.vessel.contact.inward_other_lesion");
+    config.angiogenesis.vessel_blocked_policy = strict_string(
+        required(vessel, "blocked_policy", "$.angiogenesis.vessel"),
+        "angiogenesis.vessel.blocked_policy");
+    config.angiogenesis.vessel_blocked_retry_interval_hours = strict_double(
+        required(vessel, "blocked_retry_interval_hours", "$.angiogenesis.vessel"),
+        "angiogenesis.vessel.blocked_retry_interval_hours");
     config.angiogenesis.vessel_collision_policy = strict_string(
         required(vessel, "collision_policy", "$.angiogenesis.vessel"),
         "angiogenesis.vessel.collision_policy");
@@ -880,9 +995,17 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     const YAML::Node output = checked_section(
         root, "output", "$", {"enabled", "preview_mode", "full_format", "checkpoint_format",
                                 "directory", "preview_every_hours", "full_every_hours",
-                                "checkpoint_every_hours", "preview_max_cells", "preview_seed",
-                                "display_radius"});
+                                "checkpoint_every_hours", "storage", "async_enabled",
+                                "async_queue_depth", "async_max_pending_bytes",
+                                "preview_overflow_policy", "preview_max_cells",
+                                "preview_seed", "display_radius", "sampling_preset",
+                                "on_demand", "live_preview"});
     config.output_enabled = strict_bool(required(output, "enabled", "$.output"), "output.enabled");
+    if (const YAML::Node value = output["sampling_preset"];
+        value && value.IsDefined()) {
+        config.output_sampling_preset =
+            strict_string(value, "output.sampling_preset");
+    }
     config.preview_mode = strict_string(required(output, "preview_mode", "$.output"),
                                         "output.preview_mode");
     config.full_format = strict_string(required(output, "full_format", "$.output"),
@@ -898,6 +1021,86 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     config.checkpoint_every_hours = strict_double(
         required(output, "checkpoint_every_hours", "$.output"),
         "output.checkpoint_every_hours");
+    const YAML::Node storage = checked_section(
+        output, "storage", "$.output",
+        {"mode", "vtkhdf_compression_level", "hdf5_compression_level",
+         "hdf5_chunk_elements", "preview_keyframe_every_hours",
+         "full_keyframe_every_hours", "checkpoint_base_every_hours",
+         "checkpoint_max_delta_chain", "delta_full_ratio"});
+    config.storage_mode = strict_string(
+        required(storage, "mode", "$.output.storage"), "output.storage.mode");
+    config.vtkhdf_compression_level = strict_integer<int>(
+        required(storage, "vtkhdf_compression_level", "$.output.storage"),
+        "output.storage.vtkhdf_compression_level");
+    config.hdf5_compression_level = strict_integer<int>(
+        required(storage, "hdf5_compression_level", "$.output.storage"),
+        "output.storage.hdf5_compression_level");
+    config.hdf5_chunk_elements = strict_integer<std::uint64_t>(
+        required(storage, "hdf5_chunk_elements", "$.output.storage"),
+        "output.storage.hdf5_chunk_elements");
+    config.preview_keyframe_every_hours = strict_double(
+        required(storage, "preview_keyframe_every_hours", "$.output.storage"),
+        "output.storage.preview_keyframe_every_hours");
+    config.full_keyframe_every_hours = strict_double(
+        required(storage, "full_keyframe_every_hours", "$.output.storage"),
+        "output.storage.full_keyframe_every_hours");
+    config.checkpoint_base_every_hours = strict_double(
+        required(storage, "checkpoint_base_every_hours", "$.output.storage"),
+        "output.storage.checkpoint_base_every_hours");
+    config.checkpoint_max_delta_chain = strict_integer<std::uint64_t>(
+        required(storage, "checkpoint_max_delta_chain", "$.output.storage"),
+        "output.storage.checkpoint_max_delta_chain");
+    config.delta_full_ratio = strict_double(
+        required(storage, "delta_full_ratio", "$.output.storage"),
+        "output.storage.delta_full_ratio");
+    config.output_async_enabled = strict_bool(
+        required(output, "async_enabled", "$.output"),
+        "output.async_enabled");
+    config.output_async_queue_depth = strict_integer<std::uint64_t>(
+        required(output, "async_queue_depth", "$.output"),
+        "output.async_queue_depth");
+    if (const YAML::Node value = output["async_max_pending_bytes"];
+        value && value.IsDefined()) {
+        config.output_async_max_pending_bytes =
+            strict_integer<std::uint64_t>(
+                value, "output.async_max_pending_bytes");
+    }
+    if (const YAML::Node value = output["preview_overflow_policy"];
+        value && value.IsDefined()) {
+        config.preview_overflow_policy =
+            strict_string(value, "output.preview_overflow_policy");
+    }
+    if (const YAML::Node on_demand = output["on_demand"];
+        on_demand && on_demand.IsDefined()) {
+        check_map(on_demand, "$.output.on_demand",
+                  {"preview", "checkpoint", "full"});
+        config.output_on_demand_preview = strict_bool(
+            required(on_demand, "preview", "$.output.on_demand"),
+            "output.on_demand.preview");
+        config.output_on_demand_checkpoint = strict_bool(
+            required(on_demand, "checkpoint", "$.output.on_demand"),
+            "output.on_demand.checkpoint");
+        config.output_on_demand_full = strict_bool(
+            required(on_demand, "full", "$.output.on_demand"),
+            "output.on_demand.full");
+    }
+    if (const YAML::Node live = output["live_preview"];
+        live && live.IsDefined()) {
+        check_map(live, "$.output.live_preview",
+                  {"enabled_when_viewer_attached",
+                   "wall_interval_seconds", "persist"});
+        config.live_preview_when_attached = strict_bool(
+            required(live, "enabled_when_viewer_attached",
+                     "$.output.live_preview"),
+            "output.live_preview.enabled_when_viewer_attached");
+        config.live_preview_wall_interval_seconds = strict_double(
+            required(live, "wall_interval_seconds",
+                     "$.output.live_preview"),
+            "output.live_preview.wall_interval_seconds");
+        config.live_preview_persist = strict_bool(
+            required(live, "persist", "$.output.live_preview"),
+            "output.live_preview.persist");
+    }
     config.preview_max_cells = strict_integer<std::uint64_t>(
         required(output, "preview_max_cells", "$.output"), "output.preview_max_cells");
     config.preview_seed = strict_integer<std::uint64_t>(
@@ -913,6 +1116,24 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     config.display_radius.ultrasmall = strict_float(
         required(display_radius, "ultrasmall", "$.output.display_radius"),
         "output.display_radius.ultrasmall");
+
+    if (const YAML::Node control = root["control"];
+        control && control.IsDefined()) {
+        check_map(control, "$.control",
+                  {"enabled", "status_wall_interval_seconds",
+                   "poll_wall_interval_seconds"});
+        config.control_enabled = strict_bool(
+            required(control, "enabled", "$.control"),
+            "control.enabled");
+        config.control_status_wall_interval_seconds = strict_double(
+            required(control, "status_wall_interval_seconds",
+                     "$.control"),
+            "control.status_wall_interval_seconds");
+        config.control_poll_wall_interval_seconds = strict_double(
+            required(control, "poll_wall_interval_seconds",
+                     "$.control"),
+            "control.poll_wall_interval_seconds");
+    }
 
     config.validate();
     return config;

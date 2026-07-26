@@ -91,10 +91,20 @@ struct AngiogenesisConfig {
     double stage1_biological_volume_voxels3{1.0};
     double stage2_biological_volume_voxels3{0.5};
 
-    std::string seed_process_model{"homogeneous_poisson"};
+    std::string seed_process_model{"density_modulated_poisson_v1"};
     std::string seed_process_scope{"per_eligible_lesion"};
     double seed_rate_sites_per_30_days{10.0};
     double seed_rate_sites_per_hour{10.0 / 720.0};
+    // The configured rate is attained at density stress 1.0. Stress is the
+    // mean normalized effective occupied fraction across a lesion's core
+    // blocks; perfused-vessel relief therefore feeds back into future roots.
+    double seed_density_stress_on_fraction{0.15};
+    double seed_density_stress_full_fraction{0.60};
+    double seed_density_stress_exponent{1.0};
+    double seed_volume_reference_voxels3{100000.0};
+    double seed_volume_exponent{0.0};
+    double seed_minimum_rate_multiplier{0.0};
+    double seed_maximum_rate_multiplier{4.0};
     // Schema-v3 invariant: one Poisson site arrival attempts at most one root.
     // Multiple roots arise from multiple arrivals, so this must remain 1.
     std::uint32_t roots_per_event{1};
@@ -113,10 +123,23 @@ struct AngiogenesisConfig {
     // migration rates are moves/hour and one fixed-26 step can span sqrt(3)
     // voxels, whereas vessel speed is already expressed in voxels/hour.
     double outward_speed_voxels_per_hour{2.0};
+    // Lower bound for the inward path budget.  Production roots expand this
+    // budget from the source-lesion scale so a large lesion cannot strand a
+    // tip merely because it outgrew this legacy fixed value.
     int inward_max_length_voxels{128};
+    double inward_length_tortuosity_factor{1.50};
+    double inward_exit_margin_voxels{16.0};
+    int inward_hard_max_length_voxels{4096};
     int outward_max_length_voxels{128};
     double inward_target_tolerance_voxels{2.0};
     double outward_external_connection_distance_voxels{64.0};
+    std::string inward_path_policy{"through_lesion_v1"};
+    std::string inward_far_surface_policy{"continue_to_budget"};
+    std::string vessel_blocked_policy{"retry"};
+    double vessel_blocked_retry_interval_hours{1.0};
+    std::string outward_same_lesion_contact_policy{"avoid"};
+    std::string outward_other_lesion_contact_policy{"convert_to_inward"};
+    std::string inward_other_lesion_contact_policy{"penetrate_and_displace"};
 
     std::string direction_model{"forward_biased_26_v1"};
     double direction_forward_bias{1.0};
@@ -180,6 +203,10 @@ struct Model3DConfig {
     double migration_activation_duration_alpha{0.005};
     double migration_activation_duration_mean_fraction{0.30};
     double migration_activation_duration_beta{0.011666666666666667};
+    bool migration_swap_enabled{false};
+    std::string migration_swap_stage_policy{"stage1_singleton_v1"};
+    double migration_swap_wait_fraction{0.20};
+    double migration_swap_post_cooldown_fraction{0.20};
 
     std::string density_backend{"block_anchor_v1"};
     int density_block_edge{4};
@@ -237,23 +264,59 @@ struct Model3DConfig {
     std::string parallel_mode{"adaptive_cells_and_events_v1"};
     int parallel_min_threads{1};
     std::uint64_t parallel_min_events_per_thread{1024};
+    std::uint64_t parallel_min_refresh_items_per_thread{16};
     std::vector<ParallelThreadThresholdConfig> parallel_thread_thresholds{
         {0, 0.50}, {5000, 0.60}, {10000, 0.70},
         {15000, 0.80}, {20000, 0.90}, {25000, 1.00}};
     std::string scheduler_backend{"event_queue_v1"};
     double conflict_bucket_hours{0.0};
+    // Read-only proposals for events in this look-ahead interval are computed
+    // in parallel. Commits remain strictly ordered by exact event time.
+    double proposal_window_hours{0.25};
+    std::uint64_t proposal_window_max_events{8192};
+    std::uint64_t proposal_min_events_per_thread{32};
+    int proposal_dependency_block_edge{8};
 
     bool output_enabled{false};
+    // Human-readable preset metadata. Individual intervals below remain the
+    // authoritative values and may be set to sub-hour sampling.
+    std::string output_sampling_preset{"phase3_default_v1"};
     std::string preview_mode{"stable_uid_hash_v1"};
     std::string full_format{"vtkhdf_points_v1"};
-    std::string checkpoint_format{"hdf5_v3"};
+    std::string checkpoint_format{"hdf5_base_v6_slot_journal_v8"};
     std::filesystem::path output_directory{"atcg3d_run"};
     double preview_every_hours{1.0};
-    double full_every_hours{6.0};
-    double checkpoint_every_hours{24.0};
+    double full_every_hours{24.0};
+    double checkpoint_every_hours{1.0};
+    // Storage is deliberately independent from biological time sampling.
+    // Logical frames/checkpoints remain available at the intervals above,
+    // while periodic self-contained bases bound incremental replay cost.
+    std::string storage_mode{"journal_delta_hdf5_v2"};
+    int vtkhdf_compression_level{1};
+    int hdf5_compression_level{1};
+    std::uint64_t hdf5_chunk_elements{262144};
+    double preview_keyframe_every_hours{1.0};
+    double full_keyframe_every_hours{24.0};
+    double checkpoint_base_every_hours{168.0};
+    std::uint64_t checkpoint_max_delta_chain{168};
+    double delta_full_ratio{0.70};
+    bool output_async_enabled{false};
+    std::uint64_t output_async_queue_depth{1};
+    std::uint64_t output_async_max_pending_bytes{2ULL * 1024ULL * 1024ULL * 1024ULL};
+    std::string preview_overflow_policy{"coalesce_latest"};
+    bool output_on_demand_preview{true};
+    bool output_on_demand_checkpoint{true};
+    bool output_on_demand_full{true};
+    bool live_preview_when_attached{true};
+    double live_preview_wall_interval_seconds{30.0};
+    bool live_preview_persist{false};
     std::uint64_t preview_max_cells{1000000};
     std::uint64_t preview_seed{0};
     DisplayRadiusConfig display_radius{};
+
+    bool control_enabled{true};
+    double control_status_wall_interval_seconds{1.0};
+    double control_poll_wall_interval_seconds{0.25};
 
     AngiogenesisConfig angiogenesis{};
 

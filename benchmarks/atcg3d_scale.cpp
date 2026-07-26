@@ -49,6 +49,7 @@ struct Options {
     bool write_checkpoint{true};
     bool require_vtk{};
     bool require_checkpoint{};
+    int compression_level{1};
 };
 
 std::uint64_t parse_u64(const std::string& value, const char* name) {
@@ -80,6 +81,15 @@ Options parse_options(int argc, char** argv) {
             options.require_vtk = true;
         } else if (argument == "--require-checkpoint") {
             options.require_checkpoint = true;
+        } else if (argument == "--compression-level" && index + 1 < argc) {
+            const std::string value = argv[++index];
+            std::size_t consumed = 0;
+            options.compression_level = std::stoi(value, &consumed);
+            if (consumed != value.size() || options.compression_level < 0 ||
+                options.compression_level > 9) {
+                throw std::invalid_argument(
+                    "--compression-level must be an integer in [0,9]");
+            }
         } else {
             throw std::invalid_argument("unknown or incomplete argument: " + argument);
         }
@@ -125,6 +135,8 @@ int main(int argc, char** argv) {
         config.end_time_hours = 0.0;
         config.chunk_edge = 32;
         config.density_block_edge = 4;
+        config.vtkhdf_compression_level = options.compression_level;
+        config.hdf5_compression_level = options.compression_level;
 
         const auto build_start = Clock::now();
         std::vector<CellInit> records;
@@ -165,13 +177,15 @@ int main(int argc, char** argv) {
                 simulation.cells(), all, simulation.lesion_index(), {}};
             const auto full_start = Clock::now();
             const auto full_path = options.directory / "full.vtkhdf";
-            write_vtkhdf_points_atomic(full_path, full_view);
+            write_vtkhdf_points_atomic(full_path, full_view,
+                                        options.compression_level);
             vtk_write_seconds = seconds_since(full_start);
             full_bytes = std::filesystem::file_size(full_path);
             const SimulationSnapshotView3D preview_view{
                 simulation.cells(), preview, simulation.lesion_index(), {}};
             const auto preview_path = options.directory / "preview.vtkhdf";
-            write_vtkhdf_points_atomic(preview_path, preview_view);
+            write_vtkhdf_points_atomic(preview_path, preview_view,
+                                        options.compression_level);
             preview_bytes = std::filesystem::file_size(preview_path);
             vtk_written = true;
             const auto read_start = Clock::now();
@@ -226,6 +240,8 @@ int main(int argc, char** argv) {
              << "{\n"
              << "  \"schema\": \"atcg3d.synthetic_scale.v1\",\n"
              << "  \"cells\": " << options.cells << ",\n"
+             << "  \"compression_level\": "
+             << options.compression_level << ",\n"
              << "  \"cell_store_logical_bytes_per_slot\": "
              << CellStore3D::logical_bytes_per_slot() << ",\n"
              << "  \"cell_store_bytes\": " << cell_store_bytes << ",\n"

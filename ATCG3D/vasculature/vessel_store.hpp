@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 #include <vector>
 
 #include "vasculature/types.hpp"
@@ -155,12 +156,25 @@ public:
     void set_status(VesselTipSlot slot, VesselTipStatus value) {
         status_.at(slot) = static_cast<std::uint8_t>(value);
     }
+    void set_role(VesselTipSlot slot, VesselBranchRole value) {
+        role_.at(slot) = static_cast<std::uint8_t>(value);
+    }
     void set_perfused(VesselTipSlot slot, bool value) { perfused_.at(slot) = value ? 1U : 0U; }
     void set_last_direction(VesselTipSlot slot, DirectionId value) { last_direction_.at(slot) = value; }
     void set_pending_direction(VesselTipSlot slot, DirectionId value) {
         pending_direction_.at(slot) = value;
     }
     void set_grown_length_voxels(VesselTipSlot slot, float value);
+    void set_speed_voxels_per_hour(VesselTipSlot slot, float value) {
+        if (!(value > 0.0F)) throw std::invalid_argument("invalid vessel tip speed");
+        speed_voxels_per_hour_.at(slot) = value;
+    }
+    void set_max_length_voxels(VesselTipSlot slot, float value) {
+        if (!(value > 0.0F) || value < grown_length_voxels_.at(slot)) {
+            throw std::invalid_argument("invalid vessel tip maximum length");
+        }
+        max_length_voxels_.at(slot) = value;
+    }
     void set_next_growth_time(VesselTipSlot slot, double value);
     void set_event_sequence(VesselTipSlot slot, std::uint64_t value) {
         event_sequence_.at(slot) = value;

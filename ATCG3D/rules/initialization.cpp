@@ -381,6 +381,7 @@ InitializationResult initialize_sphere_and_shell(CellStore3D& cells,
     } else {
         throw std::invalid_argument("unsupported initial initialization mode");
     }
+    density.finish_local_window_bulk_load(cells.slot_count(), config.threads);
     initialize_schedules(cells, density, config);
     return {next_uid, {}};
 }

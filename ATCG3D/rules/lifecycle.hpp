@@ -105,7 +105,8 @@ GrowthRefreshResult refresh_growth_state(
     CellStore3D& cells,
     const BlockDensityIndex3D& density,
     const Model3DConfig& config,
-    const VascularInfluenceField3D* vascular_influence = nullptr);
+    const VascularInfluenceField3D* vascular_influence = nullptr,
+    bool refresh_migration_activation = true);
 
 // Draw exactly one new cell-cycle work requirement. Call only for an initial
 // cell or for mother/daughter cells after a successful biological division.
@@ -121,6 +122,14 @@ bool refresh_migration_activation_state(Slot slot,
                                         CellStore3D& cells,
                                         const BlockDensityIndex3D& density,
                                         const Model3DConfig& config);
+
+// Activate a cell after an exact external density index has already established
+// that its stage-specific threshold is met. This preserves the same eligibility,
+// RNG, and timing rules without repeating the 70^3 density query.
+bool activate_migration_state_if_density_high(Slot slot,
+                                              double now,
+                                              CellStore3D& cells,
+                                              const Model3DConfig& config);
 
 // Transition an active cell back to ordinary migration at its exact scheduled
 // end time. A fresh event-keyed r-cell normal rate is drawn on every expiry.
@@ -194,7 +203,8 @@ DivisionResult commit_division_proposal(
     BlockDensityIndex3D& density,
     const Model3DConfig& config,
     std::vector<LineageEdge>& lineage,
-    const VascularInfluenceField3D* vascular_influence = nullptr);
+    const VascularInfluenceField3D* vascular_influence = nullptr,
+    bool refresh_migration_activation = true);
 
 DivisionResult divide_cell(Slot mother,
                            double now,

@@ -6,6 +6,7 @@
 #include <limits>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
 
 namespace atcg3d {
 namespace {
@@ -215,6 +216,17 @@ void Model3DConfig::validate() const {
         throw std::invalid_argument(
             "migration normal-rate or activation-duration beta configuration is contradictory");
     }
+    require_probability(migration_swap_wait_fraction,
+                        "migration.crowding_exchange.wait_fraction");
+    require_probability(
+        migration_swap_post_cooldown_fraction,
+        "migration.crowding_exchange.post_exchange_cooldown_fraction");
+    if (migration_swap_stage_policy != "stage1_singleton_v1" ||
+        migration_swap_wait_fraction <= 0.0 ||
+        migration_swap_post_cooldown_fraction <= 0.0) {
+        throw std::invalid_argument(
+            "migration crowding-exchange configuration is invalid");
+    }
 
     if (density_backend != "block_anchor_v1") throw std::invalid_argument("unsupported density.backend");
     if (density_block_edge <= 0 || density_block_edge > chunk_edge ||
@@ -319,13 +331,19 @@ void Model3DConfig::validate() const {
     }
 
     if (end_time_hours < 0.0 || max_events == 0 || threads <= 0 ||
-        scheduler_backend != "event_queue_v1" || conflict_bucket_hours < 0.0) {
+        (scheduler_backend != "event_queue_v1" &&
+         scheduler_backend != "deterministic_exact_window_v3") ||
+        conflict_bucket_hours < 0.0 ||
+        proposal_window_hours < 0.0 || proposal_window_max_events == 0 ||
+        proposal_min_events_per_thread == 0 ||
+        proposal_dependency_block_edge <= 0) {
         throw std::invalid_argument("simulation or scheduler configuration is invalid");
     }
     if ((parallel_mode != "fixed" &&
          parallel_mode != "adaptive_cells_and_events_v1") ||
         parallel_min_threads <= 0 || parallel_min_threads > threads ||
         parallel_min_events_per_thread == 0 ||
+        parallel_min_refresh_items_per_thread == 0 ||
         parallel_thread_thresholds.empty()) {
         throw std::invalid_argument("parallel configuration is invalid");
     }
@@ -346,16 +364,66 @@ void Model3DConfig::validate() const {
         previous_minimum = threshold.minimum_cells;
         previous_fraction = threshold.max_thread_fraction;
     }
-    if (preview_mode != "stable_uid_hash_v1" || full_format != "vtkhdf_points_v1" ||
-        checkpoint_format != "hdf5_v3") {
+    if (output_sampling_preset != "phase3_default_v1" &&
+        output_sampling_preset != "custom") {
+        throw std::invalid_argument("unsupported output sampling preset");
+    }
+    if (preview_mode != "stable_uid_hash_v1" ||
+        full_format != "vtkhdf_points_v1" ||
+        (checkpoint_format != "hdf5_v6" &&
+         checkpoint_format != "hdf5_base_v6_field_delta_v7" &&
+         checkpoint_format != "hdf5_base_v6_slot_journal_v8") ||
+        (storage_mode == "self_contained_v1" &&
+         checkpoint_format != "hdf5_v6") ||
+        (storage_mode == "keyframe_delta_hdf5_v1" &&
+         checkpoint_format != "hdf5_base_v6_field_delta_v7") ||
+        (storage_mode == "journal_delta_hdf5_v2" &&
+         checkpoint_format != "hdf5_base_v6_slot_journal_v8")) {
         throw std::invalid_argument("unsupported output strategy");
     }
     if (output_enabled && output_directory.empty()) {
         throw std::invalid_argument("output directory must not be empty");
     }
     if (preview_every_hours < 0.0 || full_every_hours < 0.0 ||
-        checkpoint_every_hours < 0.0 || preview_max_cells == 0) {
+        checkpoint_every_hours < 0.0 || preview_max_cells == 0 ||
+        output_async_queue_depth == 0 || output_async_queue_depth > 16) {
         throw std::invalid_argument("output intervals or preview size are invalid");
+    }
+    if ((storage_mode != "self_contained_v1" &&
+         storage_mode != "keyframe_delta_hdf5_v1" &&
+         storage_mode != "journal_delta_hdf5_v2") ||
+        vtkhdf_compression_level < 0 || vtkhdf_compression_level > 9 ||
+        hdf5_compression_level < 0 || hdf5_compression_level > 9 ||
+        hdf5_chunk_elements == 0 || hdf5_chunk_elements > (1ULL << 30U) ||
+        preview_keyframe_every_hours <= 0.0 ||
+        full_keyframe_every_hours <= 0.0 ||
+        checkpoint_base_every_hours <= 0.0 ||
+        checkpoint_max_delta_chain == 0 || checkpoint_max_delta_chain > 4096 ||
+        !(delta_full_ratio > 0.0 && delta_full_ratio <= 1.0) ||
+        (preview_every_hours > 0.0 &&
+         preview_keyframe_every_hours < preview_every_hours) ||
+        (full_every_hours > 0.0 && full_keyframe_every_hours < full_every_hours) ||
+        (checkpoint_every_hours > 0.0 &&
+         checkpoint_base_every_hours < checkpoint_every_hours) ||
+        ((storage_mode == "keyframe_delta_hdf5_v1" ||
+          storage_mode == "journal_delta_hdf5_v2") &&
+         preview_every_hours > 0.0 &&
+         std::abs(preview_keyframe_every_hours - preview_every_hours) >
+             1e-10 * std::max({1.0, preview_keyframe_every_hours,
+                               preview_every_hours}))) {
+        throw std::invalid_argument("incremental output storage configuration is invalid");
+    }
+    if (output_async_max_pending_bytes < (1ULL << 20U) ||
+        output_async_max_pending_bytes > (1ULL << 50U) ||
+        preview_overflow_policy != "coalesce_latest" ||
+        !(live_preview_wall_interval_seconds > 0.0) ||
+        live_preview_persist ||
+        !(control_status_wall_interval_seconds > 0.0) ||
+        !(control_poll_wall_interval_seconds > 0.0) ||
+        control_poll_wall_interval_seconds >
+            control_status_wall_interval_seconds) {
+        throw std::invalid_argument(
+            "output queue, non-persistent live preview, or control timing is invalid");
     }
     if (!(display_radius.large > 0.0F && display_radius.small > 0.0F &&
           display_radius.ultrasmall > 0.0F)) {
@@ -400,7 +468,8 @@ void Model3DConfig::validate() const {
         angiogenesis.stage2_biological_volume_voxels3 <= 0.0) {
         throw std::invalid_argument("angiogenesis trigger/biological volume configuration is invalid");
     }
-    if (angiogenesis.seed_process_model != "homogeneous_poisson" ||
+    if ((angiogenesis.seed_process_model != "homogeneous_poisson" &&
+         angiogenesis.seed_process_model != "density_modulated_poisson_v1") ||
         angiogenesis.seed_process_scope != "per_eligible_lesion" ||
         angiogenesis.seed_rate_sites_per_30_days <= 0.0 ||
         !approximately_equal(angiogenesis.seed_rate_sites_per_hour,
@@ -415,10 +484,27 @@ void Model3DConfig::validate() const {
         angiogenesis.surface_min_local_cells == 0) {
         throw std::invalid_argument("angiogenesis homogeneous Poisson seed process is invalid");
     }
+    if (angiogenesis.seed_density_stress_on_fraction < 0.0 ||
+        angiogenesis.seed_density_stress_full_fraction <=
+            angiogenesis.seed_density_stress_on_fraction ||
+        angiogenesis.seed_density_stress_full_fraction > 1.0 ||
+        angiogenesis.seed_density_stress_exponent <= 0.0 ||
+        angiogenesis.seed_volume_reference_voxels3 <= 0.0 ||
+        angiogenesis.seed_volume_exponent < 0.0 ||
+        angiogenesis.seed_minimum_rate_multiplier < 0.0 ||
+        angiogenesis.seed_maximum_rate_multiplier <
+            angiogenesis.seed_minimum_rate_multiplier) {
+        throw std::invalid_argument(
+            "angiogenesis density-modulated seed process is invalid");
+    }
     if (angiogenesis.diameter_voxels <= 0.0 ||
         angiogenesis.inward_speed_voxels_per_hour <= 0.0 ||
         angiogenesis.outward_speed_voxels_per_hour <= 0.0 ||
         angiogenesis.inward_max_length_voxels <= 0 ||
+        angiogenesis.inward_length_tortuosity_factor < 1.0 ||
+        angiogenesis.inward_exit_margin_voxels < 0.0 ||
+        angiogenesis.inward_hard_max_length_voxels <
+            angiogenesis.inward_max_length_voxels ||
         angiogenesis.outward_max_length_voxels <= 0 ||
         angiogenesis.inward_target_tolerance_voxels < 0.0 ||
         angiogenesis.outward_external_connection_distance_voxels <= 0.0) {
@@ -436,11 +522,13 @@ void Model3DConfig::validate() const {
     const double activated_r_path_speed_upper_bound =
         std::sqrt(3.0) * activated_r_rate_upper_bound;
     if (angiogenesis.enabled &&
-        !(angiogenesis.outward_speed_voxels_per_hour >
-          activated_r_path_speed_upper_bound)) {
+        (!(angiogenesis.outward_speed_voxels_per_hour >
+           angiogenesis.inward_speed_voxels_per_hour) ||
+         !(angiogenesis.outward_speed_voxels_per_hour >
+           activated_r_path_speed_upper_bound))) {
         throw std::invalid_argument(
-            "angiogenesis outward vessel speed must exceed the maximum "
-            "activated-r 3D path speed");
+            "angiogenesis outward vessel speed must exceed both inward "
+            "vessel speed and the maximum activated-r 3D path speed");
     }
     if (angiogenesis.direction_model != "forward_biased_26_v1" ||
         angiogenesis.direction_forward_bias < 0.0 ||
@@ -456,7 +544,20 @@ void Model3DConfig::validate() const {
     if (angiogenesis.inward_replacement_policy != "remove_whole_cells" ||
         angiogenesis.outward_occupancy_policy != "permanent_reserved_placeholder" ||
         angiogenesis.vessel_collision_policy != "anastomose_and_stop" ||
-        angiogenesis.boundary_policy != "stop") {
+        angiogenesis.boundary_policy != "stop" ||
+        (angiogenesis.inward_path_policy != "stop_at_centroid" &&
+         angiogenesis.inward_path_policy != "through_lesion_v1") ||
+        (angiogenesis.inward_far_surface_policy != "stop_complete" &&
+         angiogenesis.inward_far_surface_policy != "continue_to_budget") ||
+        (angiogenesis.vessel_blocked_policy != "stop" &&
+         angiogenesis.vessel_blocked_policy != "retry") ||
+        angiogenesis.vessel_blocked_retry_interval_hours <= 0.0 ||
+        angiogenesis.outward_same_lesion_contact_policy != "avoid" ||
+        (angiogenesis.outward_other_lesion_contact_policy != "stop" &&
+         angiogenesis.outward_other_lesion_contact_policy !=
+             "convert_to_inward") ||
+        angiogenesis.inward_other_lesion_contact_policy !=
+            "penetrate_and_displace") {
         throw std::invalid_argument("unsupported angiogenesis occupancy/collision policy");
     }
     if (angiogenesis.influence_profile != "linear_cutoff" &&
@@ -506,8 +607,15 @@ void Model3DConfig::validate() const {
         division_timing.inherited_growth_multiplier_max,
         division_timing.r_max_inherent_growth_rate,
         division_timing.K_max_inherent_growth_rate, end_time_hours,
-        conflict_bucket_hours, preview_every_hours, full_every_hours,
-        checkpoint_every_hours, migration_activation_threshold,
+        conflict_bucket_hours,
+        proposal_window_hours,
+        preview_every_hours, full_every_hours,
+        checkpoint_every_hours, preview_keyframe_every_hours,
+        full_keyframe_every_hours, checkpoint_base_every_hours,
+        live_preview_wall_interval_seconds,
+        control_status_wall_interval_seconds,
+        control_poll_wall_interval_seconds,
+        delta_full_ratio, migration_activation_threshold,
         normal_r_migration_beta.alpha, normal_r_migration_beta.beta,
         normal_r_migration_beta.scale,
         activated_r_migration_beta.alpha,
@@ -518,6 +626,8 @@ void Model3DConfig::validate() const {
         migration_activation_duration_alpha,
         migration_activation_duration_mean_fraction,
         migration_activation_duration_beta,
+        migration_swap_wait_fraction,
+        migration_swap_post_cooldown_fraction,
         angiogenesis.trigger_activation_volume_voxels3,
         angiogenesis.trigger_deactivation_volume_voxels3,
         angiogenesis.trigger_delay_hours,
@@ -529,11 +639,22 @@ void Model3DConfig::validate() const {
         angiogenesis.stage1_biological_volume_voxels3,
         angiogenesis.stage2_biological_volume_voxels3,
         angiogenesis.seed_rate_sites_per_30_days,
-        angiogenesis.seed_rate_sites_per_hour, angiogenesis.diameter_voxels,
+        angiogenesis.seed_rate_sites_per_hour,
+        angiogenesis.seed_density_stress_on_fraction,
+        angiogenesis.seed_density_stress_full_fraction,
+        angiogenesis.seed_density_stress_exponent,
+        angiogenesis.seed_volume_reference_voxels3,
+        angiogenesis.seed_volume_exponent,
+        angiogenesis.seed_minimum_rate_multiplier,
+        angiogenesis.seed_maximum_rate_multiplier,
+        angiogenesis.diameter_voxels,
         angiogenesis.inward_speed_voxels_per_hour,
         angiogenesis.outward_speed_voxels_per_hour,
+        angiogenesis.inward_length_tortuosity_factor,
+        angiogenesis.inward_exit_margin_voxels,
         angiogenesis.inward_target_tolerance_voxels,
         angiogenesis.outward_external_connection_distance_voxels,
+        angiogenesis.vessel_blocked_retry_interval_hours,
         angiogenesis.direction_forward_bias,
         angiogenesis.direction_half_angle_degrees,
         angiogenesis.direction_turn_half_angle_degrees,
@@ -604,6 +725,12 @@ std::string Model3DConfig::to_json() const {
         << "\"migration_activation_duration_alpha\":" << migration_activation_duration_alpha << ','
         << "\"migration_activation_duration_mean_fraction\":" << migration_activation_duration_mean_fraction << ','
         << "\"migration_activation_duration_beta\":" << migration_activation_duration_beta << ','
+        << "\"migration_swap_enabled\":" << json_bool(migration_swap_enabled) << ','
+        << "\"migration_swap_stage_policy\":\""
+        << json_escape(migration_swap_stage_policy) << "\","
+        << "\"migration_swap_wait_fraction\":" << migration_swap_wait_fraction << ','
+        << "\"migration_swap_post_cooldown_fraction\":"
+        << migration_swap_post_cooldown_fraction << ','
         << "\"density_backend\":\"" << json_escape(density_backend) << "\","
         << "\"density_block_edge\":" << density_block_edge << ','
         << "\"growth_density_window_edge\":" << growth_density_window_edge << ','
@@ -672,6 +799,8 @@ std::string Model3DConfig::to_json() const {
         << "\"parallel_min_threads\":" << parallel_min_threads << ','
         << "\"parallel_min_events_per_thread\":"
         << parallel_min_events_per_thread << ','
+        << "\"parallel_min_refresh_items_per_thread\":"
+        << parallel_min_refresh_items_per_thread << ','
         << "\"parallel_thread_thresholds\":[";
     for (std::size_t index = 0; index < parallel_thread_thresholds.size(); ++index) {
         if (index != 0) out << ',';
@@ -683,7 +812,15 @@ std::string Model3DConfig::to_json() const {
     out << "],"
         << "\"scheduler_backend\":\"" << json_escape(scheduler_backend) << "\","
         << "\"conflict_bucket_hours\":" << conflict_bucket_hours << ','
+        << "\"proposal_window_hours\":" << proposal_window_hours << ','
+        << "\"proposal_window_max_events\":" << proposal_window_max_events << ','
+        << "\"proposal_min_events_per_thread\":"
+        << proposal_min_events_per_thread << ','
+        << "\"proposal_dependency_block_edge\":"
+        << proposal_dependency_block_edge << ','
         << "\"output_enabled\":" << json_bool(output_enabled) << ','
+        << "\"output_sampling_preset\":\""
+        << json_escape(output_sampling_preset) << "\","
         << "\"preview_mode\":\"" << json_escape(preview_mode) << "\","
         << "\"full_format\":\"" << json_escape(full_format) << "\","
         << "\"checkpoint_format\":\"" << json_escape(checkpoint_format) << "\","
@@ -691,11 +828,43 @@ std::string Model3DConfig::to_json() const {
         << "\"preview_every_hours\":" << preview_every_hours << ','
         << "\"full_every_hours\":" << full_every_hours << ','
         << "\"checkpoint_every_hours\":" << checkpoint_every_hours << ','
+        << "\"storage_mode\":\"" << json_escape(storage_mode) << "\","
+        << "\"vtkhdf_compression_level\":" << vtkhdf_compression_level << ','
+        << "\"hdf5_compression_level\":" << hdf5_compression_level << ','
+        << "\"hdf5_chunk_elements\":" << hdf5_chunk_elements << ','
+        << "\"preview_keyframe_every_hours\":" << preview_keyframe_every_hours << ','
+        << "\"full_keyframe_every_hours\":" << full_keyframe_every_hours << ','
+        << "\"checkpoint_base_every_hours\":" << checkpoint_base_every_hours << ','
+        << "\"checkpoint_max_delta_chain\":" << checkpoint_max_delta_chain << ','
+        << "\"delta_full_ratio\":" << delta_full_ratio << ','
+        << "\"output_async_enabled\":" << json_bool(output_async_enabled) << ','
+        << "\"output_async_queue_depth\":" << output_async_queue_depth << ','
+        << "\"output_async_max_pending_bytes\":"
+        << output_async_max_pending_bytes << ','
+        << "\"preview_overflow_policy\":\""
+        << json_escape(preview_overflow_policy) << "\","
+        << "\"output_on_demand_preview\":"
+        << json_bool(output_on_demand_preview) << ','
+        << "\"output_on_demand_checkpoint\":"
+        << json_bool(output_on_demand_checkpoint) << ','
+        << "\"output_on_demand_full\":"
+        << json_bool(output_on_demand_full) << ','
+        << "\"live_preview_when_attached\":"
+        << json_bool(live_preview_when_attached) << ','
+        << "\"live_preview_wall_interval_seconds\":"
+        << live_preview_wall_interval_seconds << ','
+        << "\"live_preview_persist\":"
+        << json_bool(live_preview_persist) << ','
         << "\"preview_max_cells\":" << preview_max_cells << ','
         << "\"preview_seed\":" << preview_seed << ','
         << "\"display_radius_large\":" << display_radius.large << ','
         << "\"display_radius_small\":" << display_radius.small << ','
         << "\"display_radius_ultrasmall\":" << display_radius.ultrasmall << ','
+        << "\"control_enabled\":" << json_bool(control_enabled) << ','
+        << "\"control_status_wall_interval_seconds\":"
+        << control_status_wall_interval_seconds << ','
+        << "\"control_poll_wall_interval_seconds\":"
+        << control_poll_wall_interval_seconds << ','
         << "\"angiogenesis_enabled\":" << json_bool(angiogenesis.enabled) << ','
         << "\"angiogenesis_lesion_detection_backend\":\"" << json_escape(angiogenesis.lesion_detection_backend) << "\","
         << "\"angiogenesis_lesion_block_edge\":" << angiogenesis.lesion_block_edge << ','
@@ -718,6 +887,13 @@ std::string Model3DConfig::to_json() const {
         << "\"angiogenesis_seed_process_scope\":\"" << json_escape(angiogenesis.seed_process_scope) << "\","
         << "\"angiogenesis_seed_rate_sites_per_30_days\":" << angiogenesis.seed_rate_sites_per_30_days << ','
         << "\"angiogenesis_seed_rate_sites_per_hour\":" << angiogenesis.seed_rate_sites_per_hour << ','
+        << "\"angiogenesis_seed_density_stress_on_fraction\":" << angiogenesis.seed_density_stress_on_fraction << ','
+        << "\"angiogenesis_seed_density_stress_full_fraction\":" << angiogenesis.seed_density_stress_full_fraction << ','
+        << "\"angiogenesis_seed_density_stress_exponent\":" << angiogenesis.seed_density_stress_exponent << ','
+        << "\"angiogenesis_seed_volume_reference_voxels3\":" << angiogenesis.seed_volume_reference_voxels3 << ','
+        << "\"angiogenesis_seed_volume_exponent\":" << angiogenesis.seed_volume_exponent << ','
+        << "\"angiogenesis_seed_minimum_rate_multiplier\":" << angiogenesis.seed_minimum_rate_multiplier << ','
+        << "\"angiogenesis_seed_maximum_rate_multiplier\":" << angiogenesis.seed_maximum_rate_multiplier << ','
         << "\"angiogenesis_roots_per_event\":" << angiogenesis.roots_per_event << ','
         << "\"angiogenesis_surface_min_separation_voxels\":" << angiogenesis.surface_min_separation_voxels << ','
         << "\"angiogenesis_surface_max_sampling_attempts\":" << angiogenesis.surface_max_sampling_attempts << ','
@@ -731,9 +907,22 @@ std::string Model3DConfig::to_json() const {
         << "\"angiogenesis_inward_speed_voxels_per_hour\":" << angiogenesis.inward_speed_voxels_per_hour << ','
         << "\"angiogenesis_outward_speed_voxels_per_hour\":" << angiogenesis.outward_speed_voxels_per_hour << ','
         << "\"angiogenesis_inward_max_length_voxels\":" << angiogenesis.inward_max_length_voxels << ','
+        << "\"angiogenesis_inward_length_tortuosity_factor\":"
+        << angiogenesis.inward_length_tortuosity_factor << ','
+        << "\"angiogenesis_inward_exit_margin_voxels\":"
+        << angiogenesis.inward_exit_margin_voxels << ','
+        << "\"angiogenesis_inward_hard_max_length_voxels\":"
+        << angiogenesis.inward_hard_max_length_voxels << ','
         << "\"angiogenesis_outward_max_length_voxels\":" << angiogenesis.outward_max_length_voxels << ','
         << "\"angiogenesis_inward_target_tolerance_voxels\":" << angiogenesis.inward_target_tolerance_voxels << ','
         << "\"angiogenesis_outward_external_connection_distance_voxels\":" << angiogenesis.outward_external_connection_distance_voxels << ','
+        << "\"angiogenesis_inward_path_policy\":\"" << json_escape(angiogenesis.inward_path_policy) << "\","
+        << "\"angiogenesis_inward_far_surface_policy\":\"" << json_escape(angiogenesis.inward_far_surface_policy) << "\","
+        << "\"angiogenesis_vessel_blocked_policy\":\"" << json_escape(angiogenesis.vessel_blocked_policy) << "\","
+        << "\"angiogenesis_vessel_blocked_retry_interval_hours\":" << angiogenesis.vessel_blocked_retry_interval_hours << ','
+        << "\"angiogenesis_outward_same_lesion_contact_policy\":\"" << json_escape(angiogenesis.outward_same_lesion_contact_policy) << "\","
+        << "\"angiogenesis_outward_other_lesion_contact_policy\":\"" << json_escape(angiogenesis.outward_other_lesion_contact_policy) << "\","
+        << "\"angiogenesis_inward_other_lesion_contact_policy\":\"" << json_escape(angiogenesis.inward_other_lesion_contact_policy) << "\","
         << "\"angiogenesis_direction_model\":\"" << json_escape(angiogenesis.direction_model) << "\","
         << "\"angiogenesis_direction_forward_bias\":" << angiogenesis.direction_forward_bias << ','
         << "\"angiogenesis_direction_half_angle_degrees\":" << angiogenesis.direction_half_angle_degrees << ','
@@ -764,19 +953,90 @@ std::string Model3DConfig::dynamics_json() const {
     normalized.parallel_mode = "fixed";
     normalized.parallel_min_threads = 1;
     normalized.parallel_min_events_per_thread = 1;
+    normalized.parallel_min_refresh_items_per_thread = 1;
     normalized.parallel_thread_thresholds = {{0, 1.0}};
+    normalized.proposal_window_hours = 0.0;
+    normalized.proposal_window_max_events = 1;
+    normalized.proposal_dependency_block_edge = 1;
     normalized.output_enabled = false;
     normalized.preview_mode = "stable_uid_hash_v1";
     normalized.full_format = "vtkhdf_points_v1";
-    normalized.checkpoint_format = "hdf5_v3";
+    normalized.output_sampling_preset = "phase3_default_v1";
+    normalized.checkpoint_format = "hdf5_v6";
     normalized.output_directory.clear();
     normalized.preview_every_hours = 0.0;
     normalized.full_every_hours = 0.0;
     normalized.checkpoint_every_hours = 0.0;
+    normalized.storage_mode = "self_contained_v1";
+    normalized.vtkhdf_compression_level = 1;
+    normalized.hdf5_compression_level = 1;
+    normalized.hdf5_chunk_elements = 262144;
+    normalized.preview_keyframe_every_hours = 1.0;
+    normalized.full_keyframe_every_hours = 24.0;
+    normalized.checkpoint_base_every_hours = 168.0;
+    normalized.checkpoint_max_delta_chain = 168;
+    normalized.delta_full_ratio = 0.70;
+    normalized.output_async_enabled = false;
+    normalized.output_async_queue_depth = 1;
+    normalized.output_async_max_pending_bytes = 1ULL << 20U;
+    normalized.preview_overflow_policy = "coalesce_latest";
+    normalized.output_on_demand_preview = true;
+    normalized.output_on_demand_checkpoint = true;
+    normalized.output_on_demand_full = true;
+    normalized.live_preview_when_attached = false;
+    normalized.live_preview_wall_interval_seconds = 30.0;
+    normalized.live_preview_persist = false;
     normalized.preview_max_cells = 1;
     normalized.preview_seed = 0;
     normalized.display_radius = {};
-    return normalized.to_json();
+    normalized.control_enabled = false;
+    normalized.control_status_wall_interval_seconds = 1.0;
+    normalized.control_poll_wall_interval_seconds = 0.25;
+    std::string json = normalized.to_json();
+    // Execution-only fields were added after checkpoint schema v3 shipped.
+    // Keep them in the effective run metadata, but omit them from the
+    // biological/numerical identity string so existing v3 checkpoints remain
+    // resumable and changing worker/I/O strategy cannot masquerade as a
+    // biology change.
+    const auto erase_member = [&json](std::string_view name) {
+        const std::string token = "\"" + std::string(name) + "\":";
+        const std::size_t begin = json.find(token);
+        if (begin == std::string::npos) return;
+        const std::size_t comma = json.find(',', begin);
+        if (comma == std::string::npos) {
+            throw std::logic_error("execution-only JSON member is not comma terminated");
+        }
+        json.erase(begin, comma - begin + 1);
+    };
+    erase_member("proposal_window_hours");
+    erase_member("proposal_window_max_events");
+    erase_member("proposal_min_events_per_thread");
+    erase_member("proposal_dependency_block_edge");
+    erase_member("output_async_enabled");
+    erase_member("output_async_queue_depth");
+    erase_member("output_async_max_pending_bytes");
+    erase_member("preview_overflow_policy");
+    erase_member("output_on_demand_preview");
+    erase_member("output_on_demand_checkpoint");
+    erase_member("output_on_demand_full");
+    erase_member("live_preview_when_attached");
+    erase_member("live_preview_wall_interval_seconds");
+    erase_member("live_preview_persist");
+    erase_member("output_sampling_preset");
+    erase_member("storage_mode");
+    erase_member("vtkhdf_compression_level");
+    erase_member("hdf5_compression_level");
+    erase_member("hdf5_chunk_elements");
+    erase_member("preview_keyframe_every_hours");
+    erase_member("full_keyframe_every_hours");
+    erase_member("checkpoint_base_every_hours");
+    erase_member("checkpoint_max_delta_chain");
+    erase_member("delta_full_ratio");
+    erase_member("parallel_min_refresh_items_per_thread");
+    erase_member("control_enabled");
+    erase_member("control_status_wall_interval_seconds");
+    erase_member("control_poll_wall_interval_seconds");
+    return json;
 }
 
 }  // namespace atcg3d
