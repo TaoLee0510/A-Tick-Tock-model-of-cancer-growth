@@ -24,6 +24,19 @@ slots, exact free-list operations, global/vascular state, and new lineage
 edges instead of freezing every live cell. All three sampling intervals remain
 ordinary YAML values and may be set below one hour.
 
+An isolated hybrid PDMP-PDE target is available as `atcg3d_nutrient`. It keeps
+every cell and vessel as a discrete actor while solving a sparse quasi-steady
+effective-nutrient reaction-diffusion field supplied by perfused vessel voxels
+and consumed by individual cell footprints. Its source, strict wrapper
+configuration, checkpoint-sidecar contract, and build instructions are in
+[`ATCG3D_Nutrient/`](ATCG3D_Nutrient/README.md).
+
+A separate population-level reduction is available as `atcg3d_continuum`. It
+coarse-grains the ABM or one of its HDF5 checkpoints into four size/type density
+fields and couples them to the same effective-nutrient concept. Spatial fields,
+radial profiles, exact continuum restarts, equations, and build instructions
+are in [`ATCG3D_Continuum/`](ATCG3D_Continuum/README.md).
+
 ```sh
 cmake -S . -B build-3d -DCMAKE_BUILD_TYPE=Release \
   -DATCG_BUILD_LEGACY_2D=OFF -DATCG_BUILD_3D=ON \

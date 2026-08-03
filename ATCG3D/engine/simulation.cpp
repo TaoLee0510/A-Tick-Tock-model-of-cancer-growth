@@ -294,6 +294,9 @@ Simulation3D::IndexedEventQueue::position(
     if (event.kind == EventKind::lesion_refresh) {
         return lesion_refresh_position_;
     }
+    if (event.kind == EventKind::environment_refresh) {
+        return environment_refresh_position_;
+    }
     return kNoPosition;
 }
 
@@ -324,6 +327,10 @@ void Simulation3D::IndexedEventQueue::set_position(
     }
     if (event.kind == EventKind::lesion_refresh) {
         lesion_refresh_position_ = value;
+        return;
+    }
+    if (event.kind == EventKind::environment_refresh) {
+        environment_refresh_position_ = value;
     }
 }
 
@@ -350,6 +357,10 @@ void Simulation3D::IndexedEventQueue::clear_position(
     }
     if (event.kind == EventKind::lesion_refresh) {
         lesion_refresh_position_ = kNoPosition;
+        return;
+    }
+    if (event.kind == EventKind::environment_refresh) {
+        environment_refresh_position_ = kNoPosition;
     }
 }
 
@@ -587,7 +598,13 @@ AngiogenesisProcessState3D aggregate_angiogenesis_process_states(
 }
 
 Simulation3D::Simulation3D(Model3DConfig config)
+    : Simulation3D(std::move(config), nullptr) {}
+
+Simulation3D::Simulation3D(
+    Model3DConfig config,
+    std::unique_ptr<EnvironmentCoupling3D> environment)
     : config_(std::move(config)),
+      environment_(std::move(environment)),
       domain_(config_),
       vessel_grid_(config_.chunk_edge, domain_),
       grid_(config_.chunk_edge, domain_),
@@ -625,6 +642,7 @@ void Simulation3D::initialize() {
         rebuild_tumor_surface();
         rebuild_lesion_index();
     }
+    initialize_environment();
     for (const Slot slot : cells_.alive_slots()) schedule_cell(slot);
     initialized_ = true;
     sync_angiogenesis_eligibility(true);
@@ -865,6 +883,7 @@ void Simulation3D::restore(const std::vector<CellInit>& restored_cells,
         }
         recompute_aggregate_angiogenesis_state();
     }
+    initialize_environment();
     initialized_ = true;
 
     for (const Slot slot : cells_.alive_slots()) {
@@ -897,6 +916,63 @@ void Simulation3D::restore(const std::vector<CellInit>& restored_cells,
     // Restored state is the checkpoint baseline, not a set of post-checkpoint
     // mutations. Subsequent writes begin a fresh slot-journal epoch.
     cells_.reset_checkpoint_journal();
+}
+
+const LocalDensityModifier3D* Simulation3D::density_modifier() const noexcept {
+    if (environment_) return environment_.get();
+    return config_.angiogenesis.enabled ? &vascular_influence_ : nullptr;
+}
+
+void Simulation3D::initialize_environment() {
+    if (!environment_) return;
+    const EnvironmentInitializationResult3D result = environment_->initialize(
+        clock_.time_hours, cells_, vessel_grid_);
+    if (result.refresh_cell_rates) {
+        std::vector<Slot> slots = cells_.alive_slots();
+        std::sort(slots.begin(), slots.end(), [this](Slot lhs, Slot rhs) {
+            return cells_.uid(lhs) < cells_.uid(rhs);
+        });
+        for (const Slot slot : slots) {
+            (void)refresh_growth_state(
+                slot, clock_.time_hours, cells_, density_, config_,
+                environment_.get(), false);
+        }
+    }
+    schedule_environment_refresh();
+}
+
+void Simulation3D::schedule_environment_refresh() {
+    if (!environment_) return;
+    schedule(EventKind::environment_refresh, kEmptySlot, 0,
+             environment_->next_refresh_time_hours(),
+             environment_->schedule_generation());
+}
+
+void Simulation3D::process_environment_refresh(const Event& event) {
+    if (!environment_ || !current(event)) return;
+    environment_->refresh(clock_.time_hours, cells_, vessel_grid_);
+    std::vector<Slot> slots = cells_.alive_slots();
+    std::sort(slots.begin(), slots.end(), [this](Slot lhs, Slot rhs) {
+        return cells_.uid(lhs) < cells_.uid(rhs);
+    });
+    std::vector<GrowthRefreshResult> refreshes(slots.size());
+    const int workers = select_worker_count(
+        cells_.alive_count(), slots.size(), config_, available_worker_threads(),
+        config_.parallel_min_refresh_items_per_thread);
+    deterministic_parallel_for(slots.size(), workers, [&](std::size_t index) {
+        refreshes[index] = refresh_growth_state(
+            slots[index], clock_.time_hours, cells_, density_, config_,
+            environment_.get(), false);
+    });
+    for (std::size_t index = 0; index < slots.size(); ++index) {
+        refreshes[index].migration_activation_changed =
+            apply_migration_activation_class(
+                slots[index], migration_activation_class(
+                                  migration_activation_query_block(
+                                      cells_.anchor(slots[index]))));
+        apply_growth_refresh(slots[index], refreshes[index]);
+    }
+    schedule_environment_refresh();
 }
 
 void Simulation3D::run(const std::function<void(const Simulation3D&)>& observer) {
@@ -975,6 +1051,7 @@ bool Simulation3D::step() {
     for (const EventKind kind : {EventKind::death, EventKind::lesion_refresh,
                                  EventKind::angiogenesis_seed,
                                  EventKind::vessel_growth,
+                                 EventKind::environment_refresh,
                                  EventKind::migration_activation_end,
                                  EventKind::division, EventKind::migration}) {
         for (const Event& event : batch) {
@@ -989,6 +1066,8 @@ bool Simulation3D::step() {
                 (void)process_seed_event(event);
             } else if (kind == EventKind::vessel_growth) {
                 vessel_events.push_back(event);
+            } else if (kind == EventKind::environment_refresh) {
+                process_environment_refresh(event);
             } else if (kind == EventKind::division) {
                 division_events.push_back(event);
             } else {
@@ -996,6 +1075,7 @@ bool Simulation3D::step() {
             }
             if (kind != EventKind::death &&
                 kind != EventKind::vessel_growth &&
+                kind != EventKind::environment_refresh &&
                 kind != EventKind::division &&
                 kind != EventKind::migration) {
                 ++clock_.completed_events;
@@ -1008,6 +1088,11 @@ bool Simulation3D::step() {
         if (kind == EventKind::vessel_growth && !vessel_events.empty()) {
             process_vessel_growth(vessel_events);
             clock_.completed_events += vessel_events.size();
+        }
+        if (kind == EventKind::environment_refresh) {
+            for (const Event& event : batch) {
+                if (event.kind == kind) ++clock_.completed_events;
+            }
         }
         if (kind == EventKind::division && !division_events.empty()) {
             process_divisions(division_events);
@@ -1029,6 +1114,13 @@ bool Simulation3D::current(const Event& event) const {
                next_lesion_refresh_time_hours_ > 0.0 &&
                event.generation == lesion_refresh_schedule_generation_ &&
                same_time(event.time, next_lesion_refresh_time_hours_);
+    }
+    if (event.kind == EventKind::environment_refresh) {
+        return environment_ != nullptr &&
+               event.generation == environment_->schedule_generation() &&
+               environment_->next_refresh_time_hours() > 0.0 &&
+               same_time(event.time,
+                         environment_->next_refresh_time_hours());
     }
     if (event.kind == EventKind::angiogenesis_seed) {
         if (!config_.angiogenesis.enabled) return false;
@@ -1419,8 +1511,7 @@ void Simulation3D::process_deaths(const std::vector<Event>& events) {
     std::vector<DeathDecision> decisions(pending.size());
     std::vector<Event> removals;
     removals.reserve(events.size());
-    const VascularInfluenceField3D* influence = config_.angiogenesis.enabled
-        ? &vascular_influence_ : nullptr;
+    const LocalDensityModifier3D* influence = density_modifier();
 
     // Decide every same-time death against the same occupancy/density
     // snapshot. No removal is visible while another death is being judged.
@@ -1487,8 +1578,7 @@ void Simulation3D::process_divisions(const std::vector<Event>& events) {
 
     std::vector<EligibleDivision> eligible;
     eligible.reserve(events.size());
-    const VascularInfluenceField3D* influence = config_.angiogenesis.enabled
-        ? &vascular_influence_ : nullptr;
+    const LocalDensityModifier3D* influence = density_modifier();
     for (const Event& event : events) {
         if (!current(event)) continue;
         GrowthRefreshResult event_refresh = refresh_growth_state(
@@ -2209,9 +2299,10 @@ double Simulation3D::lesion_density_stress(
                         static_cast<std::int32_t>(minimum_y + dy),
                         static_cast<std::int32_t>(minimum_z + dz)};
                     if (grid_.owner(site) == kEmptySlot) continue;
-                    effective_occupied +=
-                        1.0L - static_cast<long double>(
-                                   vascular_influence_.relief(site));
+                    effective_occupied += static_cast<long double>(
+                        density_modifier() == nullptr
+                            ? 1.0
+                            : density_modifier()->retained_density(site));
                 }
             }
         }
@@ -3105,7 +3196,7 @@ std::vector<Vec3i> Simulation3D::displace_cells_for_vessel(
 }
 
 void Simulation3D::refresh_growth_near_vessel(std::span<const Vec3i> vessel_sites) {
-    if (vessel_sites.empty()) return;
+    if (vessel_sites.empty() || environment_) return;
 
     std::vector<Vec3i> sources(vessel_sites.begin(), vessel_sites.end());
     std::sort(sources.begin(), sources.end());
@@ -3289,8 +3380,7 @@ void Simulation3D::refresh_neighborhood(const std::vector<Vec3i>& changed_sites)
     std::sort(slots.begin(), slots.end(), [this](Slot lhs, Slot rhs) {
         return cells_.uid(lhs) < cells_.uid(rhs);
     });
-    const VascularInfluenceField3D* influence = config_.angiogenesis.enabled
-        ? &vascular_influence_ : nullptr;
+    const LocalDensityModifier3D* influence = density_modifier();
     std::vector<GrowthRefreshResult> refreshes(slots.size());
     const int workers = select_worker_count(
         cells_.alive_count(), slots.size(), config_, available_worker_threads(),

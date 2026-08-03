@@ -1,0 +1,29 @@
+schema:
+  name: atcg3d.nutrient_model_config
+  version: 1
+profile: nutrient_legacy_v1
+base_config: ../../configs/atcg3d_legacy_2d_mapped_v3.yaml
+
+nutrient:
+  model: effective_resource_surplus_v1
+  solver: deterministic_quasi_steady_jacobi_v1
+  block_edge: 4
+  halo_voxels: 16
+  diffusion_voxels2_per_hour: 1.0
+  decay_per_hour: 0.006944444444444444
+  vessel_exchange_per_hour: 10.0
+  vessel_value: 1.0
+  consumption:
+    r_per_voxel_hour: 0.01
+    K_per_voxel_hour: 0.01
+    r_half_saturation: 0.25
+    K_half_saturation: 0.25
+  capacity:
+    half_saturation: 0.25
+    maximum_multiplier: 2.0
+  refresh_every_hours: 0.25
+  solver_iterations: 128
+  relaxation: 0.8
+  output:
+    metrics_every_hours: 1.0
+    field_snapshot_every_hours: 0.0

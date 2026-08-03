@@ -8,6 +8,8 @@ set(CMAKE_CXX_EXTENSIONS ON)
 
 option(ATCG_BUILD_LEGACY_2D "Build the existing 2D ATCG executable" ON)
 option(ATCG_BUILD_3D "Build the sparse event-driven 3D executable" ON)
+option(ATCG_BUILD_3D_NUTRIENT "Build the nutrient-coupled 3D executable" ON)
+option(ATCG_BUILD_3D_CONTINUUM "Build the population-density continuum executable" ON)
 option(ATCG3D_ENABLE_VTKHDF "Build VTK-HDF visualization output" OFF)
 option(ATCG3D_ENABLE_HDF5_CHECKPOINT "Build HDF5 checkpoint support" OFF)
 option(ATCG3D_ENABLE_LARGE_TESTS "Enable opt-in million/ten-million-cell tests" OFF)
@@ -185,6 +187,60 @@ if(ATCG_BUILD_3D)
     add_executable(atcg3d ATCG3D/app/main.cpp)
     target_link_libraries(atcg3d PRIVATE atcg3d_core)
 
+    if(ATCG_BUILD_3D_NUTRIENT)
+        add_library(atcg3d_nutrient_core
+            ATCG3D_Nutrient/config/nutrient_config.cpp
+            ATCG3D_Nutrient/field/nutrient_field.cpp
+            ATCG3D_Nutrient/io/nutrient_output.cpp
+        )
+        target_include_directories(atcg3d_nutrient_core PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_Nutrient
+        )
+        target_link_libraries(atcg3d_nutrient_core
+            PUBLIC atcg3d_core
+            PRIVATE ${ATCG3D_YAML_TARGET})
+
+        add_executable(atcg3d_nutrient ATCG3D_Nutrient/app/main.cpp)
+        target_link_libraries(atcg3d_nutrient PRIVATE atcg3d_nutrient_core)
+
+        foreach(nutrient_config_name IN ITEMS
+                nutrient_smoke_v1.yaml
+                nutrient_legacy_v1.yaml)
+            configure_file(
+                ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_Nutrient/config/${nutrient_config_name}
+                ${CMAKE_CURRENT_BINARY_DIR}/configs/${nutrient_config_name}
+                COPYONLY
+            )
+        endforeach()
+    endif()
+
+    if(ATCG_BUILD_3D_CONTINUUM)
+        add_library(atcg3d_continuum_core
+            ATCG3D_Continuum/config/continuum_config.cpp
+            ATCG3D_Continuum/model/continuum_model.cpp
+            ATCG3D_Continuum/io/continuum_output.cpp
+        )
+        target_include_directories(atcg3d_continuum_core PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_Continuum
+        )
+        target_link_libraries(atcg3d_continuum_core
+            PUBLIC atcg3d_core
+            PRIVATE ${ATCG3D_YAML_TARGET})
+
+        add_executable(atcg3d_continuum ATCG3D_Continuum/app/main.cpp)
+        target_link_libraries(atcg3d_continuum PRIVATE atcg3d_continuum_core)
+
+        foreach(continuum_config_name IN ITEMS
+                continuum_smoke_v1.yaml
+                continuum_legacy_v1.yaml)
+            configure_file(
+                ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_Continuum/config/${continuum_config_name}
+                ${CMAKE_CURRENT_BINARY_DIR}/configs/${continuum_config_name}
+                COPYONLY
+            )
+        endforeach()
+    endif()
+
     add_executable(atcg3d_scale_benchmark benchmarks/atcg3d_scale.cpp)
     target_link_libraries(atcg3d_scale_benchmark PRIVATE atcg3d_core)
     add_executable(atcg3d_event_benchmark benchmarks/atcg3d_events.cpp)
@@ -233,6 +289,18 @@ if(ATCG_BUILD_3D)
                 atcg3d_angiogenesis_scale_benchmark
             MODULES VTK::CommonCore VTK::CommonDataModel VTK::IOHDF
         )
+        if(ATCG_BUILD_3D_NUTRIENT)
+            vtk_module_autoinit(
+                TARGETS atcg3d_nutrient
+                MODULES VTK::CommonCore VTK::CommonDataModel VTK::IOHDF
+            )
+        endif()
+        if(ATCG_BUILD_3D_CONTINUUM)
+            vtk_module_autoinit(
+                TARGETS atcg3d_continuum
+                MODULES VTK::CommonCore VTK::CommonDataModel VTK::IOHDF
+            )
+        endif()
         message(STATUS "VTK-HDF visualization output enabled")
     else()
         target_sources(atcg3d_core PRIVATE ATCG3D/io/vtkhdf_writer_unavailable.cpp)
@@ -282,6 +350,26 @@ if(BUILD_TESTING)
             target_compile_options(atcg3d_${test_name}_test PRIVATE -UNDEBUG)
             add_test(NAME atcg3d_${test_name}_test COMMAND atcg3d_${test_name}_test)
         endforeach()
+        if(ATCG_BUILD_3D_NUTRIENT)
+            add_executable(atcg3d_nutrient_test
+                tests/3d/nutrient_test.cpp)
+            target_link_libraries(atcg3d_nutrient_test PRIVATE
+                atcg3d_nutrient_core)
+            target_compile_options(atcg3d_nutrient_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_nutrient_test PRIVATE
+                ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME atcg3d_nutrient_test COMMAND atcg3d_nutrient_test)
+        endif()
+        if(ATCG_BUILD_3D_CONTINUUM)
+            add_executable(atcg3d_continuum_test
+                tests/3d/continuum_test.cpp)
+            target_link_libraries(atcg3d_continuum_test PRIVATE
+                atcg3d_continuum_core)
+            target_compile_options(atcg3d_continuum_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_continuum_test PRIVATE
+                ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME atcg3d_continuum_test COMMAND atcg3d_continuum_test)
+        endif()
         if(ATCG3D_ENABLE_HDF5_CHECKPOINT)
             add_executable(atcg3d_checkpoint_test tests/3d/checkpoint_test.cpp)
             target_link_libraries(atcg3d_checkpoint_test PRIVATE atcg3d_core)

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <span>
 #include <unordered_map>
@@ -12,6 +13,7 @@
 
 #include "config/model_config.hpp"
 #include "core/cell_store.hpp"
+#include "engine/environment.hpp"
 #include "rules/lifecycle.hpp"
 #include "rules/migration.hpp"
 #include "space/chunk_grid.hpp"
@@ -35,6 +37,7 @@ enum class EventKind : std::uint8_t {
     migration_activation_end = 4,
     division = 5,
     migration = 6,
+    environment_refresh = 7,
 };
 
 struct SimulationClock3D {
@@ -132,6 +135,8 @@ AngiogenesisProcessState3D aggregate_angiogenesis_process_states(
 class Simulation3D {
 public:
     explicit Simulation3D(Model3DConfig config);
+    Simulation3D(Model3DConfig config,
+                 std::unique_ptr<EnvironmentCoupling3D> environment);
 
     void initialize();
     void restore(const std::vector<CellInit>& cells,
@@ -178,6 +183,12 @@ public:
     }
     const ProposalWindowDiagnostics3D& proposal_window_diagnostics() const noexcept {
         return proposal_window_diagnostics_;
+    }
+    const EnvironmentCoupling3D* environment() const noexcept {
+        return environment_.get();
+    }
+    EnvironmentCoupling3D* environment() noexcept {
+        return environment_.get();
     }
 
     const VesselNodeStore3D& vessel_nodes() const noexcept { return vessel_nodes_; }
@@ -251,6 +262,7 @@ private:
         std::vector<Position> vessel_positions_;
         std::unordered_map<std::uint64_t, Position> seed_positions_;
         Position lesion_refresh_position_{kNoPosition};
+        Position environment_refresh_position_{kNoPosition};
     };
 
     struct VesselGrowthProposal {
@@ -315,6 +327,10 @@ private:
     void process_deaths(const std::vector<Event>& events);
     void process_divisions(const std::vector<Event>& events);
     void process_migrations(const std::vector<Event>& events);
+    void initialize_environment();
+    void schedule_environment_refresh();
+    void process_environment_refresh(const Event& event);
+    const LocalDensityModifier3D* density_modifier() const noexcept;
 
     void rebuild_tumor_surface();
     void flush_tumor_surface_dirty();
@@ -367,6 +383,7 @@ private:
     std::vector<Slot> nearby_slots(std::span<const Vec3i> sites, int radius);
 
     Model3DConfig config_;
+    std::unique_ptr<EnvironmentCoupling3D> environment_;
     CellStore3D cells_;
     DomainPolicy domain_;
     SparseVesselGrid3D vessel_grid_;

@@ -5,12 +5,11 @@
 
 #include "config/model_config.hpp"
 #include "core/cell_store.hpp"
+#include "engine/environment.hpp"
 #include "space/chunk_grid.hpp"
 #include "space/density_index.hpp"
 
 namespace atcg3d {
-
-class VascularInfluenceField3D;
 
 struct LineageEdge {
     double birth_time{};
@@ -105,7 +104,7 @@ GrowthRefreshResult refresh_growth_state(
     CellStore3D& cells,
     const BlockDensityIndex3D& density,
     const Model3DConfig& config,
-    const VascularInfluenceField3D* vascular_influence = nullptr,
+    const LocalDensityModifier3D* density_modifier = nullptr,
     bool refresh_migration_activation = true);
 
 // Draw exactly one new cell-cycle work requirement. Call only for an initial
@@ -203,7 +202,7 @@ DivisionResult commit_division_proposal(
     BlockDensityIndex3D& density,
     const Model3DConfig& config,
     std::vector<LineageEdge>& lineage,
-    const VascularInfluenceField3D* vascular_influence = nullptr,
+    const LocalDensityModifier3D* density_modifier = nullptr,
     bool refresh_migration_activation = true);
 
 DivisionResult divide_cell(Slot mother,
@@ -214,6 +213,6 @@ DivisionResult divide_cell(Slot mother,
                            BlockDensityIndex3D& density,
                            const Model3DConfig& config,
                            std::vector<LineageEdge>& lineage,
-                           const VascularInfluenceField3D* vascular_influence = nullptr);
+                           const LocalDensityModifier3D* density_modifier = nullptr);
 
 }  // namespace atcg3d

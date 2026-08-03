@@ -80,11 +80,15 @@ float VascularInfluenceField3D::relief(Vec3i site) const {
     return block == nullptr ? 0.0F : block->relief[location.local_index];
 }
 
+double VascularInfluenceField3D::retained_density(Vec3i site) const noexcept {
+    return 1.0 - static_cast<double>(relief(site));
+}
+
 double VascularInfluenceField3D::effective_density(double raw_density, Vec3i site) const {
     if (!std::isfinite(raw_density) || raw_density < 0.0) {
         throw std::invalid_argument("raw density must be finite and nonnegative");
     }
-    return raw_density * (1.0 - static_cast<double>(relief(site)));
+    return raw_density * retained_density(site);
 }
 
 double VascularInfluenceField3D::local_capacity_multiplier(Vec3i site) const {

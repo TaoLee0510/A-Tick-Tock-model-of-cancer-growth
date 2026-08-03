@@ -400,7 +400,7 @@ GrowthRefreshResult refresh_growth_state(
     CellStore3D& cells,
     const BlockDensityIndex3D& density,
     const Model3DConfig& config,
-    const VascularInfluenceField3D* vascular_influence,
+    const LocalDensityModifier3D* density_modifier,
     bool refresh_migration_activation) {
     GrowthRefreshResult result;
     if (!cells.valid(slot)) {
@@ -430,7 +430,7 @@ GrowthRefreshResult refresh_growth_state(
         slot, remaining <= kDivisionWorkTolerance ? 0.0F : remaining);
 
     const double rate = density_growth_rate_for_cell(
-        cells, slot, density, config, vascular_influence);
+        cells, slot, density, config, density_modifier);
     if (!std::isfinite(rate)) {
         throw std::runtime_error("density growth rate is not finite");
     }
@@ -730,7 +730,7 @@ DivisionResult commit_division_proposal(
     BlockDensityIndex3D& density,
     const Model3DConfig& config,
     std::vector<LineageEdge>& lineage,
-    const VascularInfluenceField3D* vascular_influence,
+    const LocalDensityModifier3D* density_modifier,
     bool refresh_migration_activation) {
     DivisionResult result;
     const Slot mother = proposal.mother;
@@ -797,9 +797,9 @@ DivisionResult commit_division_proposal(
         lineage.push_back({now, cells.uid(daughter), mother_uid, cells.clone_id(daughter), cells.type(daughter)});
         density.add(cells.anchor(daughter), cells.type(daughter), daughter);
         refresh_growth_state(mother, now, cells, density, config,
-                             vascular_influence, false);
+                             density_modifier, false);
         refresh_growth_state(daughter, now, cells, density, config,
-                             vascular_influence, false);
+                             density_modifier, false);
         initialize_division_cycle(mother, now, cells, config);
         initialize_division_cycle(daughter, now, cells, config);
         if (refresh_migration_activation) {
@@ -936,10 +936,10 @@ DivisionResult divide_cell(Slot mother,
                            BlockDensityIndex3D& density,
                            const Model3DConfig& config,
                            std::vector<LineageEdge>& lineage,
-                           const VascularInfluenceField3D* vascular_influence) {
+                           const LocalDensityModifier3D* density_modifier) {
     return commit_division_proposal(
         make_division_proposal(mother, cells, grid, config), now, next_uid,
-        cells, grid, density, config, lineage, vascular_influence);
+        cells, grid, density, config, lineage, density_modifier);
 }
 
 }  // namespace atcg3d

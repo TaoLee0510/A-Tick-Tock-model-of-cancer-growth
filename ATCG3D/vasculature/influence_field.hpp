@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/types.hpp"
+#include "engine/environment.hpp"
 
 namespace atcg3d {
 
@@ -18,7 +19,7 @@ enum class VascularInfluenceProfile3D : std::uint8_t {
 
 // Stores a monotonically increasing relief fraction in sparse dense blocks.
 // Overlapping perfused vessel sources combine by max rather than addition.
-class VascularInfluenceField3D {
+class VascularInfluenceField3D : public LocalDensityModifier3D {
 public:
     VascularInfluenceField3D(int block_edge,
                              float cutoff_radius_voxels,
@@ -37,6 +38,7 @@ public:
     std::size_t allocated_bytes() const noexcept;
 
     float relief(Vec3i site) const;
+    double retained_density(Vec3i site) const noexcept override;
     double effective_density(double raw_density, Vec3i site) const;
     double local_capacity_multiplier(Vec3i site) const;
 

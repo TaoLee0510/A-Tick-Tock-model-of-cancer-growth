@@ -3,12 +3,11 @@
 #include "common/density_growth_rule.hpp"
 #include "config/model_config.hpp"
 #include "core/cell_store.hpp"
+#include "engine/environment.hpp"
 #include "geometry/footprint.hpp"
 #include "space/density_index.hpp"
 
 namespace atcg3d {
-
-class VascularInfluenceField3D;
 
 DensityCounts3D exact_box_counts(const CellStore3D& cells, Vec3i minimum, Vec3i maximum);
 double exact_directional_density(const CellStore3D& cells,
@@ -36,6 +35,6 @@ double density_growth_rate_for_cell(const CellStore3D& cells,
                                     Slot slot,
                                     const BlockDensityIndex3D& density,
                                     const Model3DConfig& config,
-                                    const VascularInfluenceField3D* vascular_influence = nullptr);
+                                    const LocalDensityModifier3D* density_modifier = nullptr);
 
 }  // namespace atcg3d

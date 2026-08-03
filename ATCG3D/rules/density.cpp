@@ -98,13 +98,13 @@ double density_growth_rate_for_cell(const CellStore3D& cells,
                                     Slot slot,
                                     const BlockDensityIndex3D& density,
                                     const Model3DConfig& config,
-                                    const VascularInfluenceField3D* vascular_influence) {
+                                    const LocalDensityModifier3D* density_modifier) {
     const DensityGrowthCounts counts = growth_counts(
         density, slot, cells.anchor(slot), config.growth_density_window_edge,
         config.thin_layer);
-    const double retained_density = vascular_influence == nullptr
+    const double retained_density = density_modifier == nullptr
         ? 1.0
-        : 1.0 - static_cast<double>(vascular_influence->relief(cells.anchor(slot)));
+        : density_modifier->retained_density(cells.anchor(slot));
     const double r_limit = config.thin_layer
         ? config.legacy_mapping.source_r_limit
         : config.r_limit * config.carrying_capacity_scale_2d_to_3d;

@@ -1,0 +1,69 @@
+schema:
+  name: atcg3d.continuum_model_config
+  version: 1
+profile: continuum_smoke_v1
+base_config: ../../configs/atcg3d_smoke_test_v3.yaml
+
+run:
+  mode: new
+  resume_checkpoint: null
+initialization:
+  mode: base_model
+  abm_checkpoint: null
+
+grid:
+  shape: [12, 12, 12]
+  origin: [-12.0, -12.0, -12.0]
+  spacing_voxels: 2.0
+numerics:
+  start_time_hours: 0.0
+  end_time_hours: 24.0
+  time_step_hours: 0.05
+
+migration:
+  mapping: fixed_26_from_base_means_v1
+  diffusion_scale: 1.0
+  large_mobility_multiplier: 0.5
+  activated_r_mobility_multiplier: 4.0
+  crowding_exponent: 1.0
+reaction:
+  model: abm_mean_clock_volume_filling_v1
+  large_daughter_vacancy_exponent: 8.0
+  small_daughter_vacancy_exponent: 1.0
+  failed_r_division_death_fraction: 1.0
+  maximum_occupied_fraction: 1.0
+
+nutrient:
+  model: effective_resource_surplus_v1
+  solver: deterministic_quasi_steady_jacobi_v1
+  diffusion_voxels2_per_hour: 1.0
+  decay_per_hour: 0.006944444444444444
+  vessel_exchange_per_hour: 10.0
+  vessel_value: 1.0
+  consumption:
+    r_per_occupied_voxel_hour: 0.01
+    K_per_occupied_voxel_hour: 0.012
+    r_half_saturation: 0.25
+    K_half_saturation: 0.25
+  capacity:
+    half_saturation: 0.25
+    maximum_multiplier: 2.0
+  refresh_every_hours: 0.5
+  solver_iterations: 32
+  relaxation: 0.8
+
+# An off-centre synthetic vessel makes the smoke run exercise spatially
+# heterogeneous nutrient supply even though the base smoke ABM has no vessels.
+vascular:
+  source_mode: synthetic_central_line
+  synthetic_axis: z
+  synthetic_center: [-5.0, 0.0, 0.0]
+  synthetic_radius_voxels: 1.5
+
+output:
+  enabled: true
+  directory: atcg3d_continuum_smoke_run
+  metrics_every_hours: 1.0
+  field_every_hours: 4.0
+  radial_profile_every_hours: 4.0
+  checkpoint_every_hours: 4.0
