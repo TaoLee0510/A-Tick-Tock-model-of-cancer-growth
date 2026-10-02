@@ -12,6 +12,7 @@
 #include "engine/simulation.hpp"
 #include "io/structured_pde_output.hpp"
 #include "model/structured_pde_model.hpp"
+#include "model/shared_resource_environment.hpp"
 #ifdef ATCG3D_HAS_HDF5_CHECKPOINT
 #include "io/checkpoint_hdf5.hpp"
 #endif
@@ -29,6 +30,15 @@ void help(const char* executable) {
 std::unique_ptr<atcg3d::Simulation3D> source_abm(
     const atcg3d::structured_pde::StructuredPdeConfig3D& config) {
     atcg3d::Model3DConfig base = config.continuum.base;
+    if (base.direction_guidance_model == "nutrient_gradient_shared_resource_v4") {
+        if (config.continuum.initialization_mode != "base_model")
+            throw std::invalid_argument("shared-resource ABM checkpoint import requires the shared-resource executable");
+        auto environment = std::make_unique<atcg3d::shared_rules::SharedResourceEnvironment3D>(config);
+        auto simulation = std::make_unique<atcg3d::Simulation3D>(
+            atcg3d::shared_rules::abm_config(config), std::move(environment));
+        simulation->initialize();
+        return simulation;
+    }
     base.output_enabled = false;
     base.control_enabled = false;
     if(base.angiogenesis.seed_process_model=="hypoxia_modulated_poisson_v2") {

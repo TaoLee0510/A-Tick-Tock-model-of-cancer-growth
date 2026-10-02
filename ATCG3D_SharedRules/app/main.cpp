@@ -22,6 +22,7 @@ namespace {
 struct Summary {
     double r{}, K{}, active{}, time{};
     double vascular_length{}, vascular_path_length{}, perfused_volume{}, lesion_perfused_fraction{};
+    double vascular_roots{}, vascular_anastomoses{}, tip_branching_rate{}, tip_anastomosis_rate{};
     std::vector<double> radial;
     std::uint64_t checksum{}, resource_checksum{};
     explicit Summary(std::size_t bins) : radial(bins, 0.0) {}
@@ -48,6 +49,8 @@ struct Summary {
             << ",\"state_checksum\":" << checksum << ",\"resource_checksum\":" << resource_checksum
             << ",\"vascular_length\":" << vascular_length << ",\"vascular_path_length\":" << vascular_path_length
             << ",\"perfused_volume\":" << perfused_volume << ",\"lesion_perfused_fraction\":" << lesion_perfused_fraction
+            << ",\"vascular_roots\":" << vascular_roots << ",\"vascular_anastomoses\":" << vascular_anastomoses
+            << ",\"tip_branching_rate\":" << tip_branching_rate << ",\"tip_anastomosis_rate\":" << tip_anastomosis_rate
             << ",\"radial_mass\":[";
         for (std::size_t i = 0; i < radial.size(); ++i) { if (i != 0) out << ','; out << radial[i]; }
         out << "]}\n";
@@ -87,6 +90,8 @@ void vascular_abm(Summary& summary,const atcg3d::Simulation3D& simulation,
     }
     for(auto site:simulation.vessel_grid().occupied_sites()) if(geometry.contains(site)&&simulation.vessel_grid().perfused(site)) vessels[index(site)]=1;
     vascular_summary(summary,vessels,occupied,config);
+    summary.vascular_roots = simulation.stats().angiogenesis_roots;
+    summary.vascular_anastomoses = simulation.stats().vessel_anastomoses;
     for(const auto slot:simulation.vessel_nodes().alive_slots()) {
         const auto parent=simulation.vessel_nodes().parent_node_slot(slot);
         if(parent==atcg3d::kEmptyVesselNodeSlot) continue;
@@ -204,6 +209,16 @@ int main(int argc, char** argv) {
             std::vector<double> occupied(pde.voxel_count(),0);
             for(std::size_t i=0;i<pde.voxel_count();++i) occupied[i]=pde.occupied_fraction(i);
             vascular_summary(result,pde.vessel_fraction(),occupied,config.continuum);
+            if (const auto* vascular = pde.angiogenesis()) {
+                const auto& law = config.continuum.angiogenesis;
+                for (std::size_t i = 0; i < pde.voxel_count(); ++i) {
+                    const double tips = vascular->tips()[i];
+                    result.tip_branching_rate += law.tip_branching_per_hour *
+                        vascular->taf()[i] * tips * pde.voxel_measure();
+                    result.tip_anastomosis_rate += law.tip_anastomosis_per_hour *
+                        (pde.vessel_fraction()[i] + tips) * tips * pde.voxel_measure();
+                }
+            }
             const auto diagnostics = pde.diagnostics();
             result.r = diagnostics.r_total; result.K = diagnostics.K_total; result.active = diagnostics.r_active_total;
             result.time = pde.time_hours(); result.checksum = pde.state_checksum();

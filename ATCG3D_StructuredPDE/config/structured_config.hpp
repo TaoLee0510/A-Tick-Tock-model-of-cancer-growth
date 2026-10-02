@@ -12,6 +12,10 @@ struct StructuredMigrationConfig3D {
     std::string model{"abm_activation_clock_discrete_velocity_v1"};
     std::string activation_density{"abm_anchor_box_v1"};
     std::string activation_clock{"beta_mean_remaining_cycle_v1"};
+    double activation_time_bin_width_hours{0.5};
+    double activation_maximum_hours{32.0};
+    std::string activation_rate_model{"phenotype_mean_v1"};
+    int activation_rate_bins{8};
     std::string activation_stop{"clock_expiry_v1"};
     std::string direction_transport{"fixed_direction_jump_v1"};
     int direction_density_window_edge{};

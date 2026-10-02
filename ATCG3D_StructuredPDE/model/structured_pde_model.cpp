@@ -1,4 +1,5 @@
 #include "model/structured_pde_model.hpp"
+#include "model/beta_duration.hpp"
 #include "model/shared_resource.hpp"
 
 #include <algorithm>
@@ -340,6 +341,36 @@ StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
             config_.division_work_bin_width, config_.division_maximum_work,
             std::array<double, 2>{mean_growth_rate(CellType::r), mean_growth_rate(CellType::K)});
     }
+    if (config_.migration.activation_clock == "beta_duration_distribution_v2") {
+        const auto& base = continuum.base;
+        auto kernel = beta_duration_kernel(base.migration_activation_duration_alpha,
+            base.migration_activation_duration_beta, base.division_timing.base_cycle_hours / mean_growth_rate(CellType::r),
+            config_.migration.activation_time_bin_width_hours, config_.migration.activation_maximum_hours);
+        duration_ = std::make_unique<DivisionRenewal3D>(config_.migration.activation_time_bin_width_hours,
+            config_.migration.activation_maximum_hours, std::array<std::vector<double>, 2>{kernel, kernel});
+    }
+    if (config_.migration.activation_rate_model == "beta_rate_distribution_v2") {
+        const auto& law = continuum.base.normal_r_migration_beta;
+        auto kernel = beta_duration_kernel(law.alpha, law.beta, law.scale,
+            law.scale / config_.migration.activation_rate_bins, law.scale);
+        velocity_ = std::make_unique<DivisionRenewal3D>(law.scale / config_.migration.activation_rate_bins,
+            law.scale, std::array<std::vector<double>, 2>{kernel, kernel});
+    }
+}
+
+void StructuredPdeModel3D::finish_duration_transport() {
+    if (duration_) duration_->finish_transport([&](auto location, auto channel) {
+        double mass = 0.0;
+        if (channel < 2) for (const auto& bucket : active_direction_[channel]) mass += bucket[location];
+        return mass;
+    });
+}
+void StructuredPdeModel3D::finish_velocity_transport() {
+    if (velocity_) velocity_->finish_transport([&](auto location, auto channel) {
+        double mass = 0.0;
+        if (channel < 2) for (const auto& bucket : active_direction_[channel]) mass += bucket[location];
+        return mass;
+    });
 }
 
 double StructuredPdeModel3D::division_channel_mass(std::size_t location,
@@ -645,6 +676,8 @@ void StructuredPdeModel3D::initialize_from_abm(
             } else if (!active) {
                 r_normal_[stage][location] += weight;
             } else {
+                if (duration_) duration_->add(location, stage, weight, remaining);
+                if (velocity_) velocity_->add(location, stage, weight, simulation.cells().normal_migration_rate(slot));
                 active_direction_[stage][bucket][location] +=
                     static_cast<float>(weight);
                 active_clock_[stage][bucket][location] +=
@@ -758,6 +791,9 @@ void StructuredPdeModel3D::initialize_from_arrays(
             active_clock_[stage][0][location] =
                 static_cast<float>(active * remaining);
             active_total_[stage][location] = static_cast<float>(active);
+            if (duration_ && active > 0.0) duration_->add(location, stage,
+                active_total_[stage][location], remaining);
+            if (velocity_ && active > 0.0) velocity_->add_fresh(location, stage, active_total_[stage][location]);
             if (active >= config_.migration.minimum_density) {
                 if (config_.schema_version >= 5) {
                     activation_armed_[stage][location] = 0U;
@@ -879,6 +915,8 @@ void StructuredPdeModel3D::clear_cells_from_vessels() {
         if (!vessel_blocks_cells(location)) continue;
         if(config_.schema_version>=9&&occupied_fraction(location)==0)continue;
         if (renewal_) renewal_->erase(location);
+        if (duration_) duration_->erase(location);
+        if (velocity_) velocity_->erase(location);
         if (config_.schema_version >= 7 && !initialized_ && occupied_fraction(location) > 1.0e-10) {
             throw std::invalid_argument("structured initial population overlaps an excluded vessel");
         }
@@ -1459,6 +1497,8 @@ void StructuredPdeModel3D::refresh_activation(double dt) {
                     if (mass < config_.migration.minimum_density ||
                         activation_density_[stage][location] < threshold) continue;
                     r_normal_[stage][location] -= mass;
+                    if (duration_) duration_->add_fresh(location, stage, mass);
+                    if (velocity_) velocity_->add_fresh(location, stage, mass);
                     active_direction_[stage][0][location] +=
                         static_cast<float>(mass);
                     active_clock_[stage][0][location] +=
@@ -1911,7 +1951,8 @@ std::vector<double> StructuredPdeModel3D::guided_direction_weights(
             const double directional_resource =
                 resource / static_cast<double>(resource_sites);
             double gradient = directional_resource - local_resource;
-            if (base.direction_guidance_model == "nutrient_gradient_shared_resource_v3") {
+            if (base.direction_guidance_model == "nutrient_gradient_shared_resource_v3" ||
+                base.direction_guidance_model == "nutrient_gradient_shared_resource_v4") {
                 gradient *= continuum.nutrient.vessel_value;
             }
             if (std::abs(gradient) <
@@ -1950,6 +1991,30 @@ void StructuredPdeModel3D::expire_active(std::size_t stage, double dt) {
     const auto bounds = active_bounds_[stage];
     if (!bounds.valid) return;
     const auto expire_location = [&](std::size_t location) {
+        if (duration_) {
+            double before = 0.0;
+            for (const auto& field : active_direction_[stage]) before += field[location];
+            if (!(before > 0.0)) return;
+            duration_->advance(location, stage, dt);
+            const double remaining = duration_->mass(location, stage);
+            const double factor = before > 0.0 ? std::clamp(remaining / before, 0.0, 1.0) : 0.0;
+            const double mean = duration_->mean_work(location, stage);
+            double after = 0.0;
+            for (std::size_t bucket = 0; bucket < active_direction_[stage].size(); ++bucket) {
+                auto& mass = active_direction_[stage][bucket][location];
+                mass = static_cast<float>(mass * factor);
+                active_clock_[stage][bucket][location] = static_cast<float>(mass * mean);
+                after += mass;
+            }
+            const double expired = std::max(0.0, before - after);
+            r_normal_[stage][location] += expired;
+            r_refractory_[stage][location] += expired;
+            refractory_clock_[stage][location] += expired * config_.migration.reactivation_cooldown_hours;
+            active_total_[stage][location] = static_cast<float>(after);
+            duration_->reconcile(location, stage, after);
+            if (velocity_) velocity_->reconcile(location, stage, after);
+            return;
+        }
         double total = 0.0;
         for (std::size_t bucket = 0;
              bucket < active_direction_[stage].size(); ++bucket) {
@@ -1996,7 +2061,7 @@ void StructuredPdeModel3D::expire_active(std::size_t stage, double dt) {
         const std::size_t bz = static_cast<std::size_t>(
             bounds.z1 - bounds.z0);
         const std::size_t box_size = bx * by * bz;
-        const int workers = std::max(1, std::min(
+        const int workers = duration_ ? 1 : std::max(1, std::min(
             config_.continuum.base.threads, available_worker_threads()));
         deterministic_parallel_for(
             box_size, workers, [&](std::size_t offset) {
@@ -2023,6 +2088,8 @@ void StructuredPdeModel3D::migrate_active(double dt) {
     const int nx = continuum.grid.shape[0];
     const int ny = continuum.grid.shape[1];
     const int nz = continuum.grid.shape[2];
+    const bool conditional_vacancy = config_.migration.direction_transport ==
+        "nutrient_gradient_feasible_direction_jump_exchange_v5";
     build_guidance_prefix(dt);
     if (config_.schema_version >= 4) {
         ++guidance_weight_cache_generation_;
@@ -2047,10 +2114,14 @@ void StructuredPdeModel3D::migrate_active(double dt) {
     };
 
     for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
+        if (duration_) { expire_active(stage, 0.0); shrink_active_bounds(stage); }
         if (!active_bounds_[stage].valid) continue;
         const auto stage_value = static_cast<StructuredStage3D>(stage);
         const double rate = active_rate(stage_value);
-        if (!(rate > 0.0)) continue;
+        if (!(rate > 0.0)) {
+            if (duration_) { expire_active(stage, dt); shrink_active_bounds(stage); }
+            continue;
+        }
         const bool resource_guided = config_.schema_version >= 5 ||
             (config_.schema_version >= 2 &&
              continuum.base.direction_guidance_model == "low_density_high_resource_v1");
@@ -2081,6 +2152,19 @@ void StructuredPdeModel3D::migrate_active(double dt) {
                         }
                         for (std::size_t target = 1;
                              target < weights.size(); ++target) {
+                            if (conditional_vacancy) {
+                                const auto step = direction_vector(direction_ids_[target - 1]);
+                                if (x + step.x < 0 || x + step.x >= nx ||
+                                    y + step.y < 0 || y + step.y >= ny ||
+                                    z + step.z < 0 || z + step.z >= nz) weights[target] = 0.0;
+                                else {
+                                    const auto other = index(x + step.x, y + step.y, z + step.z);
+                                    weights[target] *= vessel_blocks_cells(other) ? 0.0 :
+                                        std::pow(std::clamp(1.0 - occupied_fraction(other) /
+                                            continuum.reaction.maximum_occupied_fraction, 0.0, 1.0),
+                                            stage == 1 ? large_cell_volume_ : 1.0);
+                                }
+                            }
                             if (weights[target] > 0.0) {
                                 targets.push_back(target);
                                 weight_sum += weights[target];
@@ -2114,8 +2198,11 @@ void StructuredPdeModel3D::migrate_active(double dt) {
         }
         const double maximum_probability =
             config_.migration.maximum_move_probability_per_substep;
+        const double rate_supremum = velocity_ ? continuum.base.normal_r_migration_beta.scale *
+            continuum.migration.activated_r_mobility_multiplier *
+            (stage == 1 ? continuum.migration.large_mobility_multiplier : 1.0) : rate;
         const int substeps = std::max(1, static_cast<int>(std::ceil(
-            rate * dt / -std::log1p(-maximum_probability))));
+            rate_supremum * dt / -std::log1p(-maximum_probability))));
         const double sub_dt = dt / substeps;
         const double move_probability = 1.0 - std::exp(-rate * sub_dt);
         const double vacancy_exponent = stage == 1 ? large_cell_volume_ : 1.0;
@@ -2143,9 +2230,28 @@ void StructuredPdeModel3D::migrate_active(double dt) {
 
         for (int substep = 0; substep < substeps; ++substep) {
             if (renewal_) renewal_->begin_transport();
+            if (duration_) duration_->begin_transport();
+            if (velocity_) {
+                std::array<std::vector<double>, 4> probabilities;
+                for (int c = 0; c < 2; ++c) {
+                    probabilities[c].resize(config_.migration.activation_rate_bins + 1);
+                    for (int b = 0; b <= config_.migration.activation_rate_bins; ++b)
+                        probabilities[c][b] = -std::expm1(-rate_supremum * b /
+                            config_.migration.activation_rate_bins * sub_dt);
+                }
+                velocity_->begin_weighted_transport(std::move(probabilities));
+            }
             const StructuredActiveBounds3D old_bounds = active_bounds_[stage];
             const StructuredActiveBounds3D target_bounds =
                 expanded_bounds(old_bounds);
+            std::vector<double> proposed_incoming;
+            bool collect_incoming = false;
+            const auto incoming_offset = [&](int x, int y, int z) {
+                return (static_cast<std::size_t>(z - target_bounds.z0) *
+                    (target_bounds.y1 - target_bounds.y0) + y - target_bounds.y0) *
+                    (target_bounds.x1 - target_bounds.x0) + x - target_bounds.x0;
+            };
+            if (conditional_vacancy) proposed_incoming.resize(bounds_size(target_bounds));
             StructuredActiveBounds3D clear_bounds = target_bounds;
             if (work_dirty_bounds_.valid) {
                 clear_bounds.x0 = std::min(clear_bounds.x0, work_dirty_bounds_.x0);
@@ -2187,6 +2293,8 @@ void StructuredPdeModel3D::migrate_active(double dt) {
                     config_.migration.minimum_density) {
                     return;
                 }
+                const double local_probability = velocity_ ? velocity_->weighted_transport_mass(location, stage) /
+                    active_total_[stage][location] : move_probability;
                 if (resource_guided && config_.schema_version >= 4) {
                     ensure_guidance_cache(location);
                 }
@@ -2194,11 +2302,28 @@ void StructuredPdeModel3D::migrate_active(double dt) {
                     resource_guided && config_.schema_version < 4
                     ? guided_direction_weights(location)
                     : std::vector<double>{};
-                const auto guidance_value = [&](std::size_t bucket) {
-                    return config_.schema_version >= 4
+                std::array<double, 27> vacancies{};
+                if (conditional_vacancy) {
+                    for (std::size_t b = 1; b < active_direction_[stage].size(); ++b) {
+                        const auto step = direction_vector(direction_ids_[b - 1]);
+                        if (x + step.x < 0 || x + step.x >= nx ||
+                            y + step.y < 0 || y + step.y >= ny ||
+                            z + step.z < 0 || z + step.z >= nz) continue;
+                        const auto other = index(x + step.x, y + step.y, z + step.z);
+                        if (!vessel_blocks_cells(other)) vacancies[b] = std::pow(
+                            std::clamp(1.0 - occupied_fraction(other) /
+                                continuum.reaction.maximum_occupied_fraction, 0.0, 1.0), vacancy_exponent);
+                    }
+                }
+                const auto raw_guidance_value = [&](std::size_t bucket) {
+                    const double weight = config_.schema_version >= 4
                         ? static_cast<double>(
                               guidance_weight_cache_[bucket][location])
                         : guidance[bucket];
+                    return weight;
+                };
+                const auto guidance_value = [&](std::size_t bucket) {
+                    return raw_guidance_value(bucket) * (conditional_vacancy ? vacancies[bucket] : 1.0);
                 };
                 for (std::size_t bucket = 0;
                      bucket < active_direction_[stage].size(); ++bucket) {
@@ -2208,6 +2333,7 @@ void StructuredPdeModel3D::migrate_active(double dt) {
                     const double clock = std::max(0.0, static_cast<double>(
                         active_clock_[stage][bucket][location]));
                     if (mass < config_.migration.minimum_density) {
+                        if (collect_incoming) continue;
                         active_work_[bucket][location] +=
                             static_cast<float>(mass);
                         clock_work_[bucket][location] +=
@@ -2217,6 +2343,7 @@ void StructuredPdeModel3D::migrate_active(double dt) {
                     }
                     const double clock_per_mass = clock / mass;
                     double accepted_total = 0.0;
+                    double reset_direction = 0.0;
                     const auto available = [&](std::size_t target_bucket) {
                         const Vec3i step = direction_vector(
                             direction_ids_[target_bucket - 1]);
@@ -2225,8 +2352,8 @@ void StructuredPdeModel3D::migrate_active(double dt) {
                             z + step.z >= 0 && z + step.z < nz)) {
                             return false;
                         }
-                        return !vessel_blocks_cells(index(
-                            x + step.x, y + step.y, z + step.z));
+                        return conditional_vacancy ? vacancies[target_bucket] > 0.0 :
+                            !vessel_blocks_cells(index(x + step.x, y + step.y, z + step.z));
                     };
                     const auto move = [&](std::size_t target_bucket,
                                           double direction_probability) {
@@ -2241,13 +2368,23 @@ void StructuredPdeModel3D::migrate_active(double dt) {
                             occupied_fraction(other) /
                                 continuum.reaction.maximum_occupied_fraction,
                             0.0, 1.0);
-                        const double availability = std::pow(
+                        const double availability = conditional_vacancy ? 1.0 : std::pow(
                             std::max(0.0, 1.0 - occupied),
                             vacancy_exponent);
-                        const double moved = mass * move_probability *
+                        double moved = mass * local_probability *
                             direction_probability * availability;
                         if (!(moved > 0.0)) return;
+                        if (conditional_vacancy) {
+                            auto& demand = proposed_incoming[incoming_offset(ox, oy, oz)];
+                            if (collect_incoming) { demand += moved; return; }
+                            const double capacity = std::max(0.0,
+                                continuum.reaction.maximum_occupied_fraction - occupied_fraction(other)) /
+                                (stage == 1 ? large_cell_volume_ : 1.0);
+                            moved *= demand > 0.0 ? std::min(1.0, capacity / demand) : 0.0;
+                        }
                         if (renewal_) renewal_->transfer(location, other, stage, moved);
+                        if (duration_) duration_->transfer(location, other, stage, moved);
+                        if (velocity_) velocity_->transfer(location, other, stage, moved);
                         accepted_total += moved;
                         active_work_[target_bucket][other] +=
                             static_cast<float>(moved);
@@ -2255,7 +2392,54 @@ void StructuredPdeModel3D::migrate_active(double dt) {
                             static_cast<float>(moved * clock_per_mass);
                         mark_sparse_target(other);
                     };
-                    if (bucket != 0) {
+                    if (conditional_vacancy && bucket != 0) {
+                        // Average the literal ABM choice over independent
+                        // target-occupancy subsets. A blocked forward choice
+                        // transfers its prior to feasible turns; normalizing
+                        // mean vacancy weights would retain too much straight
+                        // motion through a partially occupied neighbourhood.
+                        std::vector<std::size_t> choices, uncertain;
+                        if (available(bucket) && raw_guidance_value(bucket) > 0) choices.push_back(bucket);
+                        for (auto turn : turn_buckets_[bucket])
+                            if (available(turn) && raw_guidance_value(turn) > 0) choices.push_back(turn);
+                        for (auto choice : choices) if (vacancies[choice] < 1.0) uncertain.push_back(choice);
+                        std::array<double, 27> probabilities{};
+                        for (std::size_t mask = 0; mask < (std::size_t(1) << uncertain.size()); ++mask) {
+                            std::array<bool, 27> selected{};
+                            for (auto choice : choices) selected[choice] = vacancies[choice] == 1.0;
+                            double probability = 1.0;
+                            for (std::size_t bit = 0; bit < uncertain.size(); ++bit) {
+                                const auto choice = uncertain[bit];
+                                selected[choice] = (mask >> bit) & 1U;
+                                probability *= selected[choice] ? vacancies[choice] : 1 - vacancies[choice];
+                            }
+                            if (!(probability > 0.0)) continue;
+                            std::size_t turns = 0;
+                            for (auto choice : choices) if (choice != bucket && selected[choice]) ++turns;
+                            std::array<double, 27> weights{};
+                            double sum = 0.0;
+                            for (auto choice : choices) {
+                                if (!selected[choice]) continue;
+                                const double prior = choice == bucket ? (turns ? continuum.base.continue_probability : 1.0) :
+                                    (selected[bucket] ? 1 - continuum.base.continue_probability : 1.0) / turns;
+                                weights[choice] = prior * raw_guidance_value(choice);
+                                sum += weights[choice];
+                            }
+                            if (sum > 0.0) for (auto choice : choices)
+                                probabilities[choice] += probability * weights[choice] / sum;
+                        }
+                        double choice_probability = 0.0;
+                        for (auto choice : choices) {
+                            choice_probability += probabilities[choice];
+                            if (probabilities[choice] > 0.0) move(choice, probabilities[choice]);
+                        }
+                        // The ABM clears direction history after an attempted
+                        // jump has no feasible forward/turn choice. Keep that
+                        // mass at this site, ready to choose any direction on
+                        // its next attempt, rather than trapping its history.
+                        reset_direction = mass * local_probability *
+                            std::clamp(1.0 - choice_probability, 0.0, 1.0);
+                    } else if (bucket != 0) {
                         if (resource_guided) {
                             const bool forward_available = available(bucket) &&
                                 guidance_value(bucket) > 0.0;
@@ -2328,16 +2512,41 @@ void StructuredPdeModel3D::migrate_active(double dt) {
                                 }
                             }
                         }
+                    } else if (conditional_vacancy) {
+                        double weight_sum = 0.0;
+                        for (std::size_t b = 1; b < active_direction_[stage].size(); ++b) {
+                            weight_sum += guidance_value(b);
+                        }
+                        if (weight_sum > 0.0)
+                            for (std::size_t b = 1; b < active_direction_[stage].size(); ++b)
+                                if (guidance_value(b) > 0.0) move(b, guidance_value(b) / weight_sum);
                     }
                     const double retained =
                         std::max(0.0, mass - accepted_total);
+                    if (collect_incoming) continue;
                     active_work_[bucket][location] +=
-                        static_cast<float>(retained);
+                        static_cast<float>(std::max(0.0, retained - reset_direction));
                     clock_work_[bucket][location] +=
-                        static_cast<float>(retained * clock_per_mass);
+                        static_cast<float>(std::max(0.0, retained - reset_direction) * clock_per_mass);
+                    if (reset_direction > 0.0) {
+                        active_work_[0][location] += static_cast<float>(reset_direction);
+                        clock_work_[0][location] += static_cast<float>(reset_direction * clock_per_mass);
+                    }
                     if (retained > 0.0) mark_sparse_target(location);
                 }
             };
+
+            if (conditional_vacancy) {
+                // Reserve target vacancy against all simultaneous proposals.
+                // Rejected incoming flux remains at its source, conserving
+                // mass without relying on the reaction capacity clamp.
+                collect_incoming = true;
+                for (int z = old_bounds.z0; z < old_bounds.z1; ++z)
+                    for (int y = old_bounds.y0; y < old_bounds.y1; ++y)
+                        for (int x = old_bounds.x0; x < old_bounds.x1; ++x)
+                            transport_location(x, y, z, index(x, y, z));
+                collect_incoming = false;
+            }
 
             if (sparse_transport) {
                 for (const std::size_t location : sparse_locations) {
@@ -2358,7 +2567,7 @@ void StructuredPdeModel3D::migrate_active(double dt) {
                 // three row colours in parallel without atomics; x remains
                 // ordered within a row, preserving the local accumulation
                 // order. This is algebraically the same transport operator.
-                const int workers = renewal_ ? 1 : std::max(1, std::min(
+                const int workers = (renewal_ || duration_) ? 1 : std::max(1, std::min(
                     continuum.base.threads, available_worker_threads()));
                 for (int row_colour = 0; row_colour < 3; ++row_colour) {
                     const int first_y = old_bounds.y0 + row_colour;
@@ -2491,6 +2700,8 @@ void StructuredPdeModel3D::migrate_active(double dt) {
             } else {
                 work_dirty_bounds_ = old_bounds;
                 active_bounds_[stage] = target_bounds;
+                finish_duration_transport();
+                finish_velocity_transport();
                 expire_active(stage, sub_dt);
                 shrink_active_bounds(stage);
             }
@@ -2598,6 +2809,8 @@ void StructuredPdeModel3D::exchange_active_r_with_K(double dt) {
     }
     if (proposals.empty()) return;
     if (renewal_) renewal_->begin_transport();
+    if (duration_) duration_->begin_transport();
+    if (velocity_) velocity_->begin_transport();
 
     std::unordered_map<std::size_t, double> outgoing_by_source;
     std::unordered_map<std::size_t, double> K_delta;
@@ -2617,6 +2830,8 @@ void StructuredPdeModel3D::exchange_active_r_with_K(double dt) {
             ? K_[0][proposal.target] / demand : 1.0;
         const double accepted = proposal.requested * target_scale;
         if (!(accepted > 0.0)) continue;
+        if (duration_) duration_->transfer(proposal.source, proposal.target, 0, accepted);
+        if (velocity_) velocity_->transfer(proposal.source, proposal.target, 0, accepted);
         if (renewal_) {
             renewal_->transfer(proposal.source, proposal.target, 0, accepted);
             renewal_->transfer(proposal.target, proposal.source, 2, accepted);
@@ -2666,6 +2881,8 @@ void StructuredPdeModel3D::exchange_active_r_with_K(double dt) {
     active_bounds_[0] = target_bounds;
     shrink_active_bounds(0);
     finish_division_transport();
+    finish_duration_transport();
+    finish_velocity_transport();
 }
 
 void StructuredPdeModel3D::build_local_counts(
@@ -2839,7 +3056,7 @@ void StructuredPdeModel3D::react(double dt) {
         ? continuum.nutrient.common_carrying_capacity : legacy_r_capacity;
     const double K_capacity = config_.schema_version >= 5
         ? continuum.nutrient.common_carrying_capacity : legacy_K_capacity;
-    const int workers = renewal_ ? 1 : std::max(
+    const int workers = (renewal_ || duration_) ? 1 : std::max(
         1, std::min(continuum.base.threads, available_worker_threads()));
     const auto bounds = population_bounds_;
     const std::size_t bx = static_cast<std::size_t>(bounds.x1 - bounds.x0);
@@ -3007,10 +3224,10 @@ void StructuredPdeModel3D::react(double dt) {
             // the ABM division-cycle reset before a later density refresh.
             r_normal_[stage][location] += scale * positive_r[stage];
             K_[stage][location] += scale * positive_K[stage];
-            if (renewal_) {
+            if (renewal_ || duration_) {
                 // Successful mothers reset activity as well as their work.
                 const double reset_fraction = old_r[stage] > 0.0
-                    ? std::clamp(completed[stage] / old_r[stage], 0.0, 1.0) : 0.0;
+                    ? std::clamp(renewal_ ? completed[stage] / old_r[stage] : dt * r_division_rate, 0.0, 1.0) : 0.0;
                 double active_sum = 0.0;
                 for (std::size_t bucket = 0; bucket < active_direction_[stage].size(); ++bucket) {
                     const double before = active_direction_[stage][bucket][location];
@@ -3021,15 +3238,19 @@ void StructuredPdeModel3D::react(double dt) {
                     active_sum += active_direction_[stage][bucket][location];
                 }
                 active_total_[stage][location] = static_cast<float>(active_sum);
-                renewal_->reconcile(location, stage, division_channel_mass(location, stage));
-                if (stage == 0) {
+                if (duration_ && (active_sum > 0.0 || duration_->mass(location, stage) > 0.0))
+                    duration_->reconcile(location, stage, active_sum);
+                if (velocity_ && (active_sum > 0.0 || velocity_->mass(location, stage) > 0.0))
+                    velocity_->reconcile(location, stage, active_sum);
+                if (renewal_) renewal_->reconcile(location, stage, division_channel_mass(location, stage));
+                if (renewal_ && stage == 0) {
                     // A K cell with no free daughter site retries; it does not
                     // draw a fresh biological cycle after a failed attempt.
                     const double retries = completed[2] * (1.0 - small_success * scale);
                     if (retries > 0.0) renewal_->add(location, 2, retries,
                         positive_part(K_growth) * continuum.base.division_timing.retry_delay_hours);
                 }
-                renewal_->reconcile(location, stage + 2, K_[stage][location]);
+                if (renewal_) renewal_->reconcile(location, stage + 2, K_[stage][location]);
             }
         }
     });
@@ -3455,6 +3676,8 @@ std::uint64_t StructuredPdeModel3D::state_checksum() const {
     hash_double_region(vessel_, full_bounds);
     if(angiogenesis_) state=hash_mix(state,angiogenesis_->checksum());
     if (renewal_) state = hash_mix(state, renewal_->checksum());
+    if (duration_) state = hash_mix(state, duration_->checksum());
+    if (velocity_) state = hash_mix(state, velocity_->checksum());
     return state;
 }
 
@@ -3470,7 +3693,7 @@ void StructuredPdeModel3D::save_checkpoint(
     std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
     if (!stream) throw std::runtime_error("unable to create structured checkpoint");
     stream.write(kCheckpointMagic.data(), kCheckpointMagic.size());
-    write_pod(stream, config_.schema_version >= 10 ? 6U : config_.schema_version >= 8 ? 5U : config_.schema_version >= 7 ? kCohortCheckpointVersion : config_.schema_version >= 5
+    write_pod(stream, config_.schema_version >= 12 ? 8U : config_.schema_version >= 11 ? 7U : config_.schema_version >= 10 ? 6U : config_.schema_version >= 8 ? 5U : config_.schema_version >= 7 ? kCohortCheckpointVersion : config_.schema_version >= 5
         ? kRefractoryCheckpointVersion : kLegacyCheckpointVersion);
     write_pod(stream, config_.dynamics_fingerprint());
     write_pod(stream, static_cast<std::uint64_t>(voxel_count_));
@@ -3509,6 +3732,8 @@ void StructuredPdeModel3D::save_checkpoint(
     write_vector(stream, vessel_);
     if(angiogenesis_) angiogenesis_->save(stream);
     if (renewal_) renewal_->save(stream);
+    if (duration_) duration_->save(stream);
+    if (velocity_) velocity_->save(stream);
     write_pod(stream, state_checksum());
     stream.flush();
     if (!stream) throw std::runtime_error("unable to finish structured checkpoint");
@@ -3524,7 +3749,7 @@ void StructuredPdeModel3D::load_checkpoint(
     std::array<char, 8> magic{};
     stream.read(magic.data(), magic.size());
     const std::uint32_t checkpoint_version = read_pod<std::uint32_t>(stream);
-    const auto expected_version = config_.schema_version >= 10 ? 6U : config_.schema_version >= 8 ? 5U : config_.schema_version >= 7 ? kCohortCheckpointVersion :
+    const auto expected_version = config_.schema_version >= 12 ? 8U : config_.schema_version >= 11 ? 7U : config_.schema_version >= 10 ? 6U : config_.schema_version >= 8 ? 5U : config_.schema_version >= 7 ? kCohortCheckpointVersion :
         config_.schema_version >= 5 ? kRefractoryCheckpointVersion : kLegacyCheckpointVersion;
     if (magic != kCheckpointMagic || checkpoint_version != expected_version) {
         throw std::runtime_error("unsupported structured checkpoint format");
@@ -3587,6 +3812,8 @@ void StructuredPdeModel3D::load_checkpoint(
     read_vector(stream, vessel_, voxel_count_);
     if(angiogenesis_) angiogenesis_->load(stream);
     if (renewal_) renewal_->load(stream, voxel_count_);
+    if (duration_) duration_->load(stream, voxel_count_);
+    if (velocity_) velocity_->load(stream, voxel_count_);
     const std::uint64_t expected_checksum = read_pod<std::uint64_t>(stream);
     if (stream.peek() != std::char_traits<char>::eof()) {
         throw std::runtime_error("structured checkpoint has trailing data");

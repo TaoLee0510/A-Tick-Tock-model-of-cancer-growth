@@ -5,6 +5,15 @@ fast-migration rule must retain its ABM memory. It separates ordinary and
 activated r density, carries a remaining-activation clock, and transports the
 activated density in the same fixed directions used by the ABM.
 
+The legacy profiles below retain their published mean-clock/rate closures.
+Schema 7 carries refractory mass with transport, schema 8 adds vascular fields,
+schema 9 adds sparse storage, and schema 10 supports a remaining division-work
+distribution. Schema 11/12 add activation-duration and speed distributions.
+Use [the shared contract](shared_rule_contract.md),
+[division renewal](renewal_validation.md), and
+[activation distributions](activation_distribution.md) for these newer models
+and their ensemble verification. All refinements require explicit model choices.
+
 The supplied two-dimensional production profile uses a `2000 x 2000 x 1`
 unit-spaced grid and runs to 2160 hours. It is separate from
 `ATCG3D_Continuum`, which remains the simpler instantaneous-mobility baseline.
@@ -104,7 +113,7 @@ direction set/filter and exclusion rule. An ABM checkpoint import preserves
 the exact remaining clock and last direction of every imported active cell
 after coarse-graining.
 
-New PDE activations use the mean of the ABM
+The legacy mean-clock model uses the mean of the ABM
 `Beta(0.005, 0.011666...) * remaining division time` duration. Consequently,
 the model does not reproduce the full duration distribution, UID lineage,
 finite-number fluctuations, event ordering, or individual hard-placement

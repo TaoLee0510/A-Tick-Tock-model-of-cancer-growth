@@ -765,5 +765,117 @@ int main() {
 
     assert(uninterrupted.diagnostics().maximum_occupied_fraction <=
            small.continuum.reaction.maximum_occupied_fraction + 5.0e-5);
+
+    // The feasible-direction model conditions on legal destinations. With
+    // one open doorway its first jump has the full active event probability.
+    auto feasible = StructuredPdeConfig3D::load(std::filesystem::path(ATCG_SOURCE_DIR) /
+        "ATCG3D_SharedRules/config/active_r200_ci_v8.yaml");
+    feasible.continuum.grid.shape = {12, 12, 1};
+    feasible.continuum.grid.origin = {-6, -6, -0.5};
+    feasible.continuum.time_step_hours = 0.001;
+    feasible.continuum.end_time_hours = 0.01;
+    feasible.continuum.base.division_timing.base_cycle_hours = 1e30;
+    feasible.continuum.base.growth_density_window_edge = 1;
+    feasible.continuum.base.migration_activation_threshold = 1.0;
+    feasible.continuum.migration.diffusion_scale = 1e-12;
+    feasible.continuum.vascular.source_mode = "static_voxels";
+    feasible.continuum.vascular.static_sources.clear();
+    feasible.continuum.nutrient.initial_value = 1;
+    feasible.continuum.nutrient.K_consumption_rate_per_hour = 0;
+    feasible.continuum.nutrient.r_consumption_rate_per_hour = 0;
+    feasible.continuum.nutrient.decay_per_hour = 0;
+    auto doorway = empty_fields(144);
+    const auto center = std::size_t(6 * 12 + 6), right = center + 1;
+    doorway.r_active[0][center] = 1;
+    doorway.active_remaining_hours[0][center] = 5;
+    for (int y = 5; y <= 7; ++y)
+        for (int x = 5; x <= 7; ++x)
+            if (std::size_t(y * 12 + x) != center && std::size_t(y * 12 + x) != right)
+                doorway.K[0][std::size_t(y * 12 + x)] = 1;
+    StructuredPdeModel3D doorway_model(feasible);
+    doorway_model.initialize_from_arrays(std::move(doorway));
+    assert(doorway_model.step());
+    const auto& ordinary = feasible.continuum.base.normal_r_migration_beta;
+    const double active_rate = ordinary.scale * ordinary.alpha /
+        (ordinary.alpha + ordinary.beta) * feasible.continuum.base.activated_r_normal_multiplier;
+    assert(close(doorway_model.r_active(StructuredStage3D::small, right),
+                 -std::expm1(-active_rate * feasible.continuum.time_step_hours)));
+    assert(close(doorway_model.diagnostics().r_total, 1));
+
+    // Two half-vacant destinations are both blocked with probability 1/4.
+    // Averaging the ABM persistence/turn rule gives each destination 3/8 of
+    // the event mass; normalization of mean vacancy scores gives 1/2.
+    auto uncertain = empty_fields(144);
+    uncertain.r_active[0][center] = 1;
+    uncertain.active_remaining_hours[0][center] = 5;
+    for (int y = 5; y <= 7; ++y)
+        for (int x = 5; x <= 7; ++x)
+            if (std::size_t(y * 12 + x) != center)
+                uncertain.r_normal[0][std::size_t(y * 12 + x)] = 1;
+    const auto diagonal = center + 13;
+    uncertain.r_normal[0][right] = uncertain.r_normal[0][diagonal] = 0.5;
+    StructuredPdeModel3D uncertain_model(feasible);
+    uncertain_model.initialize_from_arrays(std::move(uncertain));
+    assert(uncertain_model.step());
+    const double expected_half_vacancy_flux = 0.375 *
+        -std::expm1(-active_rate * feasible.continuum.time_step_hours);
+    assert(close(uncertain_model.r_active(StructuredStage3D::small, right), expected_half_vacancy_flux));
+    assert(close(uncertain_model.r_active(StructuredStage3D::small, diagonal), expected_half_vacancy_flux));
+
+    // A blocked cone clears history, then permits a reverse jump on the next
+    // attempt. Keeping the prior direction would trap this cell forever.
+    std::vector<CellInit> blocked_cells;
+    for (Vec3i anchor : {Vec3i{0, 0, 0}, Vec3i{1, -1, 0}, Vec3i{1, 0, 0}, Vec3i{1, 1, 0}}) {
+        CellInit cell;
+        cell.uid = blocked_cells.size() + 1;
+        cell.anchor = anchor;
+        if (blocked_cells.empty()) {
+            cell.flags |= kMigrationActive;
+            cell.migration_rate = float(active_rate);
+            cell.normal_migration_rate = 0.25F;
+            cell.migration_activation_end_time = 5;
+            cell.next_migration_time = 1 / active_rate;
+            for (DirectionId d = 1; d <= 26; ++d)
+                if (direction_vector(d) == Vec3i{1, 0, 0}) cell.last_direction = d;
+        }
+        blocked_cells.push_back(cell);
+    }
+    Simulation3D blocked_seed(feasible.continuum.base);
+    blocked_seed.restore(blocked_cells, 5, {}, {}, {});
+    StructuredPdeModel3D blocked_model(feasible);
+    blocked_model.initialize_from_abm(blocked_seed);
+    assert(blocked_model.step());
+    assert(blocked_model.r_active(StructuredStage3D::small, center - 1) < 1e-9);
+    assert(blocked_model.step());
+    assert(blocked_model.r_active(StructuredStage3D::small, center - 1) > 1e-6);
+    assert(close(blocked_model.diagnostics().r_total, 4));
+
+    // Simultaneous conditional fluxes conserve mass and respect target
+    // capacity in a dense mixture, including a four-thread restart.
+    auto feasible_dense = empty_fields(144);
+    for (std::size_t i = 0; i < 144; ++i) {
+        feasible_dense.K[0][i] = 0.9;
+        feasible_dense.r_active[0][i] = 0.1;
+        feasible_dense.active_remaining_hours[0][i] = 5;
+    }
+    feasible_dense.K[0][center] = 0;
+    feasible_dense.r_active[0][center] = 0;
+    StructuredPdeModel3D dense_model(feasible);
+    dense_model.initialize_from_arrays(std::move(feasible_dense));
+    const auto initial_dense = dense_model.diagnostics();
+    assert(dense_model.step());
+    const auto feasible_checkpoint = std::filesystem::current_path() / "feasible-transport.bin";
+    std::filesystem::remove(feasible_checkpoint);
+    dense_model.save_checkpoint(feasible_checkpoint);
+    feasible.continuum.base.threads = 4;
+    StructuredPdeModel3D dense_resumed(feasible);
+    dense_resumed.load_checkpoint(feasible_checkpoint);
+    while (dense_model.step()) {}
+    while (dense_resumed.step()) {}
+    assert(dense_model.state_checksum() == dense_resumed.state_checksum());
+    assert(close(dense_model.diagnostics().r_total, initial_dense.r_total));
+    assert(close(dense_model.diagnostics().K_total, initial_dense.K_total));
+    assert(dense_model.diagnostics().maximum_occupied_fraction <= 1.0 + 5e-5);
+    std::filesystem::remove(feasible_checkpoint);
     return 0;
 }

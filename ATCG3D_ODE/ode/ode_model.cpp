@@ -70,6 +70,8 @@ OdeConfig3D OdeConfig3D::load(const std::filesystem::path& path) {
 }
 void OdeConfig3D::validate() const {
     rules.validate();
+    if (rules.migration.activation_clock != "beta_mean_remaining_cycle_v1")
+        throw std::invalid_argument("wrapper v1 does not carry activation duration distributions");
     if (rules.division_clock_model != "mean_rate_v1")
         throw std::invalid_argument("ODE v1 does not carry division work distributions");
     if (rules.schema_version < 7) throw std::invalid_argument("ODE requires the transported refractory contract v7+");

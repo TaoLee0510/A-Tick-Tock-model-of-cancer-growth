@@ -3,7 +3,7 @@
 schema:
   name: atcg3d.model_config
   version: 3
-profile: shared_angiogenesis_r20_v1
+profile: shared_activation_r200_v1
 
 calibration:
   source_profile: legacy_2d_default_no_ultrasmall
@@ -15,8 +15,8 @@ calibration:
     K_limit: 18.0
     carrying_capacity_r: 31.0
     carrying_capacity_K: 36.0
-    outer_radius: 9
-    inner_radius: 7
+    outer_radius: 24
+    inner_radius: 18
 
 rng:
   seed: 1
@@ -42,7 +42,7 @@ direction:
   persistence_uses_density: false
   distance_weight_exponent: 0.0
   guidance:
-    model: nutrient_gradient_shared_resource_v3
+    model: nutrient_gradient_shared_resource_v4
     density_exponent: 1.0
     resource_exponent: 1.0
     minimum_weight: 1.0e-6
@@ -51,7 +51,7 @@ migration:
   activation_enabled: true
   activation_window_edge: 70
   activation_block_edge: 32
-  activation_threshold: 0.90
+  activation_threshold: 0.15
   normal_r_rate:
     model: beta
     alpha: 5.0
@@ -59,7 +59,7 @@ migration:
     scale: 0.5
   activated_r_rate:
     model: normal_multiplier
-    multiplier: 20.0
+    multiplier: 200.0
   activation_duration:
     model: beta_remaining_division_cycle
     alpha: 0.005
@@ -100,8 +100,8 @@ division:
   allow_shape_reduction: true
   timing:
     base_cycle_hours: 24.0
-    minimum_fraction: 0.0
-    stochastic_tail_fraction: 1.0
+    minimum_fraction: 0.9
+    stochastic_tail_fraction: 0.1
     stochastic_time_quantum_hours: 1.0
     retry_delay_hours: 1.0
     inherited_growth_multiplier_min: 0.95
@@ -112,12 +112,12 @@ division:
 initial:
   mode: explicit_counts
   explicit_counts:
-    r_cells: 64
-    K_cells: 64
+    r_cells: 500
+    K_cells: 500
   geometry:
-    outer_radius: 9
-    shell_inner_radius: 7
-    inner_small_radius: 7
+    outer_radius: 24
+    shell_inner_radius: 18
+    inner_small_radius: 22
   r_fraction: 0.50
   large_fraction: 0.0
   growth_rate:
@@ -176,34 +176,34 @@ scheduler:
   proposal_dependency_block_edge: 8
 
 angiogenesis:
-  # Hypoxia-modulated roots provide evolving perfused vessels in the shared
-  # ABM/PDE angiogenesis comparison.
-  enabled: true
+  # The aligned density experiment uses the fixed synthetic vessel field from
+  # its continuum wrapper. Dynamic vessel growth is intentionally disabled in
+  # both the ABM ensemble comparator and the structured PDE run.
+  enabled: false
   lesion_detection:
     backend: sparse_coarse_blocks_v1
     block_edge: 8
     connectivity: 26
-    core_activation_occupied_fraction: 0.02
-    core_deactivation_occupied_fraction: 0.01
-    minimum_cells_per_core_block: 1
+    core_activation_occupied_fraction: 0.15
+    core_deactivation_occupied_fraction: 0.10
+    minimum_cells_per_core_block: 8
     minimum_biological_volume_per_core_block: 0.0
     halo_blocks: 1
     refresh_interval_hours: 1.0
   trigger:
     metric: per_lesion_biological_cell_volume_voxels3
-    activation_volume_voxels3: 1.0
-    deactivation_volume_voxels3: 0.0
+    activation_volume_voxels3: 100000.0
+    deactivation_volume_voxels3: 80000.0
     delay_hours: 0.0
-    minimum_core_blocks: 1
+    minimum_core_blocks: 4
     stage_biological_volume_voxels3:
       stage0: 8.0
       stage1: 1.0
       stage2: 0.5
   seed_process:
-    model: hypoxia_modulated_poisson_v2
-    hypoxia_threshold: 0.30
+    model: density_modulated_poisson_v1
     scope: per_eligible_lesion
-    rate_sites_per_30_days: 360.0
+    rate_sites_per_30_days: 10.0
     density_stress_on_fraction: 0.15
     density_stress_full_fraction: 0.60
     density_stress_exponent: 1.0
@@ -212,7 +212,7 @@ angiogenesis:
     minimum_rate_multiplier: 0.0
     maximum_rate_multiplier: 4.0
     roots_per_event: 1
-    surface_min_separation_voxels: 1
+    surface_min_separation_voxels: 8
     surface_max_sampling_attempts: 4096
     surface_min_local_cells: 1
     root_position_policy: inside_surface_voxel
@@ -221,7 +221,7 @@ angiogenesis:
     max_roots_per_lesion: 64
     max_active_tips_per_lesion: 128
   vessel:
-    diameter_voxels: 1.0
+    diameter_voxels: 3.0
     inward:
       speed_voxels_per_hour: 0.50
       max_length_voxels: 128
@@ -233,9 +233,9 @@ angiogenesis:
       path_policy: through_lesion_v1
       far_surface_policy: continue_to_budget
     outward:
-      # This profile explicitly disables the active-r speed ordering.
+      # Activated-r is at most 1 move/hour and a 3D step is at most sqrt(3)
+      # voxels, so 2.0 is strictly faster than its maximum path speed.
       speed_voxels_per_hour: 2.0
-      speed_policy: disabled
       max_length_voxels: 128
       external_connection_distance_voxels: 64.0
       occupancy_policy: permanent_reserved_placeholder
@@ -263,12 +263,12 @@ angiogenesis:
     activation: immediate
 
 output:
-  enabled: true
+  enabled: false
   sampling_preset: phase3_default_v1
   preview_mode: stable_uid_hash_v1
   full_format: vtkhdf_points_v1
   checkpoint_format: hdf5_base_v6_slot_journal_v8
-  directory: atcg3d_shared_angiogenesis_r20_base_run
+  directory: atcg3d_shared_activation_r200_base_run
   preview_every_hours: 1.0
   full_every_hours: 24.0
   checkpoint_every_hours: 1.0

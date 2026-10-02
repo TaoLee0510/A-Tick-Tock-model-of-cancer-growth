@@ -256,6 +256,7 @@ if(ATCG_BUILD_3D)
             ATCG3D_StructuredPDE/config/structured_config.cpp
             ATCG3D_StructuredPDE/model/structured_pde_model.cpp
             ATCG3D_StructuredPDE/model/division_renewal.cpp
+            ATCG3D_StructuredPDE/model/beta_duration.cpp
             ATCG3D_StructuredPDE/io/structured_pde_output.cpp
             ATCG3D_StructuredPDE/io/structured_vtkhdf_writer.cpp
         )
@@ -276,6 +277,7 @@ if(ATCG_BUILD_3D)
         target_include_directories(atcg3d_shared_rules_core PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules)
         target_link_libraries(atcg3d_shared_rules_core PUBLIC atcg3d_structured_pde_core)
+        target_link_libraries(atcg3d_structured_pde PRIVATE atcg3d_shared_rules_core)
         add_executable(atcg3d_shared_abm ATCG3D_SharedRules/app/main.cpp)
         target_link_libraries(atcg3d_shared_abm PRIVATE atcg3d_shared_rules_core)
 
@@ -476,8 +478,13 @@ if(BUILD_TESTING)
             target_compile_options(atcg3d_division_renewal_test PRIVATE -UNDEBUG)
             target_compile_definitions(atcg3d_division_renewal_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
             add_test(NAME atcg3d_division_renewal_test COMMAND atcg3d_division_renewal_test)
+            add_executable(atcg3d_activation_distribution_test tests/3d/activation_distribution_test.cpp)
+            target_link_libraries(atcg3d_activation_distribution_test PRIVATE atcg3d_structured_pde_core)
+            target_compile_options(atcg3d_activation_distribution_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_activation_distribution_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME atcg3d_activation_distribution_test COMMAND atcg3d_activation_distribution_test)
             add_executable(atcg3d_product_cli_test tests/3d/product_cli_test.cpp)
-            target_link_libraries(atcg3d_product_cli_test PRIVATE atcg3d_hybrid_core atcg3d_ode_core)
+            target_link_libraries(atcg3d_product_cli_test PRIVATE atcg3d_hybrid_core atcg3d_ode_core ${ATCG3D_YAML_TARGET})
             target_compile_options(atcg3d_product_cli_test PRIVATE -UNDEBUG)
             target_compile_definitions(atcg3d_product_cli_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" ATCG_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}")
             add_dependencies(atcg3d_product_cli_test atcg_sim atcg_config_migrate atcg3d_structured_pde atcg3d_shared_abm atcg3d_ode atcg3d_hybrid)
@@ -532,6 +539,27 @@ if(BUILD_TESTING)
                         --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/angiogenesis_v8.yaml
                         --seeds 16 --vascular --output ${CMAKE_CURRENT_BINARY_DIR}/validation-vascular)
                 set_tests_properties(atcg3d_vascular_validation PROPERTIES LABELS validation TIMEOUT 180)
+                foreach(multiplier IN ITEMS 20 200)
+                    if(multiplier EQUAL 200)
+                        set(active_config active_r200_ci_v12.yaml)
+                    else()
+                        set(active_config active_r20_v12.yaml)
+                    endif()
+                    add_test(NAME atcg3d_active_r${multiplier}_validation
+                        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
+                            --exe $<TARGET_FILE:atcg3d_shared_abm>
+                            --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/${active_config}
+                            --seeds 16 --minimum-active-fraction 0.1
+                            --output ${CMAKE_CURRENT_BINARY_DIR}/validation-active-r${multiplier})
+                    set_tests_properties(atcg3d_active_r${multiplier}_validation PROPERTIES LABELS validation TIMEOUT 1800)
+                endforeach()
+                add_test(NAME atcg3d_nonlinear_vascular_validation
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
+                        --exe $<TARGET_FILE:atcg3d_shared_abm>
+                        --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/angiogenesis_nonlinear_v8.yaml
+                        --seeds 16 --vascular --require-vascular-activity
+                        --output ${CMAKE_CURRENT_BINARY_DIR}/validation-vascular-nonlinear)
+                set_tests_properties(atcg3d_nonlinear_vascular_validation PROPERTIES LABELS validation TIMEOUT 180)
             endif()
             add_executable(atcg3d_structured_pde_test
                 tests/3d/structured_pde_test.cpp)

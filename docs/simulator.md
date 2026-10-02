@@ -39,13 +39,14 @@ build-codex/atcg_sim --model hybrid --config ATCG3D_Hybrid/config/hybrid_smoke_v
 ctest --test-dir build-codex -L validation --output-on-failure
 ```
 
-The validation label runs 16 paired seeds on a 256-square, 48-hour growth
-example and a 48-square, eight-hour vascular example. Reports include the
+The validation label runs 16 paired seeds for sparse and regular-cycle growth
+on 256-square voxels for 48 hours, activated r20/r200 invasion, and early
+vascular growth with and without branching/anastomosis. Reports include the
 predeclared tolerances and sampling uncertainty. Unit tests separately cover
 published checksum fixtures, exact growth windows, high-rate transport,
 nonnegativity, conservation, ODE/PDE agreement and thread-independent restart.
 GitHub Actions configures Linux and macOS HDF5 builds, runs all CTests and
-uploads both validation reports. The workflow is checked in; a hosted run is
+uploads the validation reports. The workflow is checked in; a hosted run is
 only confirmed once GitHub executes it.
 
 Version and approximation boundaries are explicit in

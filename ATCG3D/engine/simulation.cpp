@@ -943,8 +943,14 @@ void Simulation3D::initialize_environment() {
                 slot, clock_.time_hours, cells_, density_, config_,
                 environment_.get(), false);
             if (environment_->individual_refractory()) {
-                (void)apply_migration_activation_class(slot,
+                const bool activated = apply_migration_activation_class(slot,
                     migration_activation_class(migration_activation_query_block(cells_.anchor(slot))));
+                if (activated && config_.direction_guidance_model ==
+                                     "nutrient_gradient_shared_resource_v4") {
+                    const double rate = effective_migration_rate(slot, cells_, config_);
+                    cells_.set_next_migration_time(slot,
+                        rate > 0.0 ? clock_.time_hours + 1.0 / rate : 0.0);
+                }
             }
         }
     }

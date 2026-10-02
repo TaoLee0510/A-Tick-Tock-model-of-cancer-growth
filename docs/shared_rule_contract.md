@@ -4,6 +4,8 @@
 Use `--model abm` or `--model pde`, `--seed N`, `--threads N` and
 `--report summary.json`. The ABM adapter selects the new
 `nutrient_gradient_shared_resource_v3` model and a finite unit-spaced domain.
+An explicitly selected v4 model keeps the same contract and corrects the first
+jump time of initially activated cells to use their active rate.
 Existing ABM models keep their original rules. Sources and initial vessel
 exclusion use the shared static geometry introduced in phase 1.
 
@@ -61,5 +63,7 @@ This records a model closure limitation, not a numerical tolerance adjustment.
 Structured schema 10 now supplies a transported division-work distribution;
 the regular-cycle ensemble passes with the same tolerances. See
 [the renewal validation report](renewal_validation.md) for the law, numerical
-checks and closure limits. Individual growth and activation clocks, footprint correlations, direction
-correlations and mixed refractory ages need broader regime validation.
+checks and closure limits. [Activation distributions](activation_distribution.md)
+describe the opt-in schema 11/12 duration and speed closures and the new active
+ensemble coverage. Footprint, direction and mixed refractory-age correlations
+remain approximate.

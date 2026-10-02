@@ -38,3 +38,8 @@ Follow-up: [transported division work in schema 10](renewal_validation.md)
 addresses the regular-cycle mass bias with an independently checked renewal
 law. The new 16-seed case passes the original tolerances. This does not resolve
 the separate activated-invasion and age/direction-correlation limits above.
+
+The next [activated verification follow-up](activated_vascular_validation.md)
+adds duration/rate distributions, corrects blocked-direction reset and initial
+active scheduling, and passes nonzero r20/r200 ensembles at the original
+tolerances. Native dispatch and the ensemble adapter also agree bitwise.

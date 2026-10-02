@@ -1,5 +1,11 @@
 # Structured migration PDE specification
 
+This specification describes the published mean-clock models. The newer
+[shared contract](shared_rule_contract.md) defines cohort refractory transport,
+[division renewal](renewal_validation.md) defines schema-10 remaining work,
+and [activation distributions](activation_distribution.md) defines schema-11/12
+duration and velocity marginals. Earlier equations remain available unchanged.
+
 ## Population state
 
 For stage `j` (small or large), the state is

@@ -36,3 +36,8 @@ early-time ensemble check is not a vascular calibration. The comparison disables
 branching/anastomosis; their nonlinear solver checks establish bounds, not ABM
 statistical equivalence. The 3D lesion-perfusion summary uses occupied support
 rather than the 2D connected-front mask. Hybrid coupling remains phase 5.
+
+The [nonlinear verification follow-up](activated_vascular_validation.md)
+enables branching/anastomosis in a second 16-seed ensemble and requires
+nonzero ABM anastomoses and PDE mechanism rates. It passes the original early
+vascular tolerances; those tolerances remain broad and are not a calibration.

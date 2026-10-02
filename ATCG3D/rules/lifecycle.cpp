@@ -278,7 +278,8 @@ bool refresh_migration_activation_state(Slot slot,
                                         const Model3DConfig& config) {
     // Shared-resource activation is evaluated by the environment after its
     // resource initialization/refresh, including individual hysteresis state.
-    if (config.direction_guidance_model == "nutrient_gradient_shared_resource_v3") return false;
+    if (config.direction_guidance_model == "nutrient_gradient_shared_resource_v3" ||
+        config.direction_guidance_model == "nutrient_gradient_shared_resource_v4") return false;
     if (!cells.valid(slot) || !config.migration_activation_enabled ||
         (cells.flags(slot) & static_cast<std::uint8_t>(kMigrationActive)) != 0) {
         return false;
@@ -301,7 +302,8 @@ bool activate_migration_state_if_density_high(
         return false;
     }
     const double density_rate = cells.density_growth_rate(slot);
-    const bool shared_resource = config.direction_guidance_model == "nutrient_gradient_shared_resource_v3";
+    const bool shared_resource = (config.direction_guidance_model == "nutrient_gradient_shared_resource_v3" ||
+        config.direction_guidance_model == "nutrient_gradient_shared_resource_v4");
     if (!shared_resource && !(density_rate > config.death_growth_rate_threshold)) return false;
     const float quantized_now = static_cast<float>(now);
     if (!std::isfinite(quantized_now)) return false;

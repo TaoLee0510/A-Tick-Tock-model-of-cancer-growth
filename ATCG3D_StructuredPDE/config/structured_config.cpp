@@ -1,5 +1,6 @@
 #include "config/structured_config.hpp"
 #include "model/division_renewal.hpp"
+#include "model/beta_duration.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -148,6 +149,8 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
         required(root, "structured_migration", "$");
     mapping(migration, "$.structured_migration",
             {"model", "activation_density", "activation_clock",
+             "activation_time_bin_width_hours", "activation_maximum_hours",
+             "activation_rate_model", "activation_rate_bins",
              "activation_stop", "direction_transport",
              "direction_density_window_edge", "direction_nutrient_window_edge",
              "chemotaxis_strength", "zero_gradient_tolerance",
@@ -164,6 +167,26 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
     result.migration.activation_clock = text(
         required(migration, "activation_clock", "$.structured_migration"),
         "$.structured_migration.activation_clock");
+    if (migration["activation_time_bin_width_hours"] || migration["activation_maximum_hours"]) {
+        if (result.schema_version < 11)
+            fail("$.structured_migration.activation_clock", "duration grid requires schema v11");
+        result.migration.activation_time_bin_width_hours = number(
+            required(migration, "activation_time_bin_width_hours", "$.structured_migration"),
+            "$.structured_migration.activation_time_bin_width_hours");
+        result.migration.activation_maximum_hours = number(
+            required(migration, "activation_maximum_hours", "$.structured_migration"),
+            "$.structured_migration.activation_maximum_hours");
+    }
+    if (migration["activation_rate_model"] || migration["activation_rate_bins"]) {
+        if (result.schema_version < 12)
+            fail("$.structured_migration.activation_rate_model", "requires schema v12");
+        result.migration.activation_rate_model = text(
+            required(migration, "activation_rate_model", "$.structured_migration"),
+            "$.structured_migration.activation_rate_model");
+        result.migration.activation_rate_bins = integer(
+            required(migration, "activation_rate_bins", "$.structured_migration"),
+            "$.structured_migration.activation_rate_bins");
+    }
     if (result.schema_version >= 5) {
         result.migration.activation_stop = text(
             required(migration, "activation_stop", "$.structured_migration"),
@@ -240,7 +263,7 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
 }
 
 void StructuredPdeConfig3D::validate() const {
-    if ((schema_version < 1 || schema_version > 10) || profile.empty()) {
+    if ((schema_version < 1 || schema_version > 12) || profile.empty()) {
         throw std::invalid_argument("structured PDE schema/profile is invalid");
     }
     if (schema_version < 9 && storage_model != "dense_v1") {
@@ -265,6 +288,32 @@ void StructuredPdeConfig3D::validate() const {
         division_maximum_work / division_work_bin_width > 4096) {
         throw std::invalid_argument("invalid structured division clock model/grid");
     }
+    if (schema_version >= 11 && (!(migration.activation_time_bin_width_hours > 0.0) ||
+        !std::isfinite(migration.activation_time_bin_width_hours) ||
+        !(migration.activation_maximum_hours > migration.activation_time_bin_width_hours) ||
+        !std::isfinite(migration.activation_maximum_hours) ||
+        migration.activation_maximum_hours / migration.activation_time_bin_width_hours > 4096))
+        throw std::invalid_argument("invalid activation duration grid");
+    if (migration.activation_rate_model != "phenotype_mean_v1" &&
+        migration.activation_rate_model != "beta_rate_distribution_v2")
+        throw std::invalid_argument("unsupported activation rate closure");
+    if (schema_version >= 12 && (migration.activation_rate_bins < 4 || migration.activation_rate_bins > 64))
+        throw std::invalid_argument("activation rate bins must be between 4 and 64");
+    if (migration.activation_rate_model == "beta_rate_distribution_v2" &&
+        (schema_version < 12 || migration.activation_clock != "beta_duration_distribution_v2" ||
+         continuum.base.normal_r_migration_beta.lower_clamp_enabled ||
+         !(continuum.base.normal_r_migration_beta.scale > 0.0) ||
+         migration.activation_rate_bins < 4 || migration.activation_rate_bins > 64))
+        throw std::invalid_argument("rate distribution requires v12, duration distributions and an unclamped positive beta rate");
+    if (migration.activation_clock == "beta_duration_distribution_v2") {
+        if (schema_version < 11) throw std::invalid_argument("activation duration distribution requires schema v11");
+        const auto& base = continuum.base;
+        const double minimum_rate = base.initial_growth_rate_model == "fixed"
+            ? base.initial_r_growth_rate : base.initial_r_growth_truncated_normal.minimum;
+        (void)beta_duration_kernel(base.migration_activation_duration_alpha,
+            base.migration_activation_duration_beta, base.division_timing.base_cycle_hours / minimum_rate,
+            migration.activation_time_bin_width_hours, migration.activation_maximum_hours);
+    }
     if (division_clock_model == "transported_shifted_geometric_v1") {
         const auto& base = continuum.base;
         std::array<double, 2> inherent{base.initial_r_growth_rate, base.initial_K_growth_rate};
@@ -279,14 +328,17 @@ void StructuredPdeConfig3D::validate() const {
     }
     if (migration.model != "abm_activation_clock_discrete_velocity_v1" ||
         migration.activation_density != "abm_anchor_box_v1" ||
-        migration.activation_clock != "beta_mean_remaining_cycle_v1" ||
+        (migration.activation_clock != "beta_mean_remaining_cycle_v1" &&
+         migration.activation_clock != "beta_duration_distribution_v2") ||
         (migration.direction_transport != "fixed_direction_jump_v1" &&
          migration.direction_transport !=
              "guided_fixed_direction_jump_v2" &&
          migration.direction_transport !=
              "guided_fixed_direction_jump_exchange_v3" &&
          migration.direction_transport !=
-             "nutrient_gradient_fixed_direction_jump_exchange_v4")) {
+             "nutrient_gradient_fixed_direction_jump_exchange_v4" &&
+         migration.direction_transport !=
+             "nutrient_gradient_feasible_direction_jump_exchange_v5")) {
         throw std::invalid_argument("unsupported structured migration model");
     }
     if (!(migration.maximum_move_probability_per_substep > 0.0) ||
@@ -295,6 +347,9 @@ void StructuredPdeConfig3D::validate() const {
         throw std::invalid_argument("structured migration numerics are invalid");
     }
     const auto& base = continuum.base;
+    if (migration.direction_transport == "nutrient_gradient_feasible_direction_jump_exchange_v5" &&
+        base.turn_half_angle_degrees > 45.0)
+        throw std::invalid_argument("feasible-direction subset closure requires a turn cone at most 45 degrees");
     if (!base.migration_activation_enabled ||
         base.activated_r_migration_rate_model != "normal_multiplier" ||
         !close(base.activated_r_normal_multiplier,
@@ -363,11 +418,14 @@ void StructuredPdeConfig3D::validate() const {
          migration.activation_stop != (schema_version >= 7
              ? "cohort_clock_refractory_hysteresis_v3"
              : "clock_expiry_refractory_hysteresis_v2") ||
-         migration.direction_transport !=
-             "nutrient_gradient_fixed_direction_jump_exchange_v4" ||
+         (migration.direction_transport !=
+             "nutrient_gradient_fixed_direction_jump_exchange_v4" &&
+          migration.direction_transport !=
+             "nutrient_gradient_feasible_direction_jump_exchange_v5") ||
          (base.direction_guidance_model != "low_density_high_resource_v1" &&
           base.direction_guidance_model != "low_density_high_resource_bounded_v2" &&
-          base.direction_guidance_model != "nutrient_gradient_shared_resource_v3") ||
+          base.direction_guidance_model != "nutrient_gradient_shared_resource_v3" &&
+        base.direction_guidance_model != "nutrient_gradient_shared_resource_v4") ||
          migration.direction_nutrient_window_edge != 70 ||
          !(migration.chemotaxis_strength > 0.0) ||
          !(migration.zero_gradient_tolerance > 0.0) ||
@@ -403,6 +461,14 @@ std::uint64_t StructuredPdeConfig3D::dynamics_fingerprint() const {
     hash_text(state, migration.model);
     hash_text(state, migration.activation_density);
     hash_text(state, migration.activation_clock);
+    if (schema_version >= 12) {
+        hash_text(state, migration.activation_rate_model);
+        state = mix(state, migration.activation_rate_bins);
+    }
+    if (schema_version >= 11) {
+        state = mix(state, std::bit_cast<std::uint64_t>(migration.activation_time_bin_width_hours));
+        state = mix(state, std::bit_cast<std::uint64_t>(migration.activation_maximum_hours));
+    }
     hash_text(state, migration.activation_stop);
     hash_text(state, migration.direction_transport);
     state = mix(state, std::bit_cast<std::uint64_t>(
@@ -475,6 +541,14 @@ std::string StructuredPdeConfig3D::to_json() const {
            << migration.maximum_move_probability_per_substep << ','
            << "\"minimum_density\":" << migration.minimum_density
            << "}";
+    if (schema_version >= 12) {
+        stream << ",\"activation_rate_distribution\":{\"model\":\"" << migration.activation_rate_model
+               << "\",\"bins\":" << migration.activation_rate_bins << '}';
+    }
+    if (schema_version >= 11) {
+        stream << ",\"activation_duration_grid\":{\"width_hours\":" << migration.activation_time_bin_width_hours
+               << ",\"maximum_hours\":" << migration.activation_maximum_hours << '}';
+    }
     if (schema_version >= 9) {
         stream << ",\"storage\":{\"model\":\"" << storage_model
                << "\",\"maximum_active_voxels\":" << maximum_active_voxels << '}';

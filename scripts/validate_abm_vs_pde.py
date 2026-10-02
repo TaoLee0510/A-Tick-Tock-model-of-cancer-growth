@@ -100,9 +100,15 @@ def main():
     parser.add_argument("--output", type=Path, default=root / "validation-output")
     parser.add_argument("--tolerances", type=Path, help="JSON object overriding named tolerances")
     parser.add_argument("--vascular", action="store_true", help="compare vascular length, volume and lesion perfusion")
+    parser.add_argument("--minimum-active-fraction", type=float, default=0.0,
+                        help="require this active-r ensemble fraction in both models")
+    parser.add_argument("--require-vascular-activity", action="store_true",
+                        help="require ABM roots/anastomoses and nonzero PDE branching/anastomosis rates")
     args = parser.parse_args()
     if args.seeds < 16 or args.jobs < 1 or args.threads < 1:
         parser.error("use at least 16 seeds and positive jobs/threads")
+    if not 0.0 <= args.minimum_active_fraction <= 1.0:
+        parser.error("minimum active fraction must be between zero and one")
     executable, config = args.exe.resolve(), args.config.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     tolerances = dict(VASCULAR_TOLERANCES if args.vascular else TOLERANCES)
@@ -116,12 +122,24 @@ def main():
                    for seed in range(1, args.seeds + 1)]
         samples = [future.result() for future in futures]
     metrics = compare(samples, tolerances)
-    passed = all(metric["passed"] for metric in metrics.values())
+    coverage = {"active_fraction": {model: statistics.mean(s[model]["active_fraction"] for s in samples)
+                                    for model in ("abm", "pde")}}
+    coverage_passed = all(value >= args.minimum_active_fraction
+                          for value in coverage["active_fraction"].values())
+    if args.require_vascular_activity:
+        coverage["vascular_activity"] = {
+            "abm_roots": sum(s["abm"]["vascular_roots"] for s in samples),
+            "abm_anastomoses": sum(s["abm"]["vascular_anastomoses"] for s in samples),
+            "pde_branching_rate": statistics.mean(s["pde"]["tip_branching_rate"] for s in samples),
+            "pde_anastomosis_rate": statistics.mean(s["pde"]["tip_anastomosis_rate"] for s in samples)}
+        coverage_passed = coverage_passed and all(v > 0 for v in coverage["vascular_activity"].values())
+    passed = all(metric["passed"] for metric in metrics.values()) and coverage_passed
     report = {"schema_version": 1, "seeds": args.seeds, "time_hours": samples[0]["abm"]["time_hours"],
               "config": config.name, "passed": passed, "metrics": metrics,
+              "coverage": coverage, "coverage_passed": coverage_passed,
               "sampling_method": "paired seeds, conservative t(15) allowance; fixed closure tolerances",
               "limits": "stochastic roots and continuous vessel/tip densities differ; early vascular smoke tolerances are broad" if args.vascular else
-                        "mean-field closure and initial age distribution differ; this smoke case has sparse activation"}
+                        "local mean-field closures approximate age, footprint and direction correlations; agreement applies to this declared regime"}
     (args.output / "validation_report.json").write_text(json.dumps(report, indent=2) + "\n")
     lines = ["# Shared ABM/PDE validation", "", f"{args.seeds} paired seeds, {samples[0]['abm']['time_hours']:g} hours. Result: {'PASS' if passed else 'FAIL'}.", "",
              "| Metric | ABM mean | PDE mean | Error | Tolerance | Sampling allowance | Result |",
@@ -135,6 +153,7 @@ def main():
     if not args.vascular:
         lines.append("The radial error uses normalized cell-number density in four-voxel annuli and an area-weighted L2 norm, with its fixed tolerance.")
     lines.append(report["limits"])
+    lines += ["", f"Mechanism coverage: {'PASS' if coverage_passed else 'FAIL'}. " + json.dumps(coverage, sort_keys=True)]
     (args.output / "validation_report.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
     return 0 if passed else 1

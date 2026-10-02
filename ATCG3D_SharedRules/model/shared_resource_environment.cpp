@@ -35,7 +35,8 @@ template <class T> T read(std::istream& in) {
 Model3DConfig abm_config(const structured_pde::StructuredPdeConfig3D& config) {
     if (config.schema_version < 5) throw std::invalid_argument("shared ABM requires structured schema v5+");
     auto base = config.continuum.base;
-    base.direction_guidance_model = "nutrient_gradient_shared_resource_v3";
+    if (base.direction_guidance_model != "nutrient_gradient_shared_resource_v4")
+        base.direction_guidance_model = "nutrient_gradient_shared_resource_v3";
     base.static_vasculature = config.continuum.shared_vascular_geometry();
     const double mapping_scale = base.legacy_mapping.density_count_scale_2d_to_3d;
     base.legacy_mapping.source_r_limit = base.legacy_mapping.source_K_limit = config.continuum.nutrient.common_density_limit;

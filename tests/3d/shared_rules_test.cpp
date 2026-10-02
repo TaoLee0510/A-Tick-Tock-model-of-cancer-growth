@@ -98,6 +98,51 @@ int main() {
     assert(resource.activation_ready(41, 25.0, 0.5));
     assert(resource.activation_ready(41, 25.0, 0.95));
 
+    // Initial environment activation must use the active rate for its first
+    // jump. V3 retains the published ordinary first-jump delay.
+    auto active_config = StructuredPdeConfig3D::load(std::filesystem::path(ATCG_SOURCE_DIR) /
+        "ATCG3D_SharedRules/config/active_r200_ci_v8.yaml");
+    for (const auto* model : {"nutrient_gradient_shared_resource_v3",
+                              "nutrient_gradient_shared_resource_v4"}) {
+        active_config.continuum.base.direction_guidance_model = model;
+        auto active_environment = std::make_unique<SharedResourceEnvironment3D>(active_config);
+        Simulation3D active(abm_config(active_config), std::move(active_environment));
+        active.initialize();
+        std::size_t activated = 0;
+        for (const auto cell : active.cells().alive_slots()) {
+            if (!(active.cells().flags(cell) & kMigrationActive)) continue;
+            ++activated;
+            const double multiplier = std::string(model).ends_with("v4") ? 200.0 : 1.0;
+            const double expected_delay = 1.0 /
+                (active.cells().normal_migration_rate(cell) * multiplier);
+            assert(std::abs(active.cells().next_migration_time(cell) - expected_delay) <
+                   3e-7 * expected_delay);
+        }
+        assert(activated > 0);
+    }
+    active_config.continuum.base.direction_guidance_model = "nutrient_gradient_shared_resource_v4";
+    auto active_environment = std::make_unique<SharedResourceEnvironment3D>(active_config);
+    auto* active_resource = active_environment.get();
+    Simulation3D active(abm_config(active_config), std::move(active_environment));
+    active.initialize();
+    for (int event = 0; event < 50; ++event) assert(active.step());
+    const auto active_checkpoint = std::filesystem::current_path() / "active-v4-resource.bin";
+    std::filesystem::remove(active_checkpoint);
+    active_resource->save_checkpoint(active_checkpoint, active.state_checksum());
+    active_config.continuum.base.threads = 4;
+    auto active_restored_environment = std::make_unique<SharedResourceEnvironment3D>(active_config);
+    auto* active_restored_resource = active_restored_environment.get();
+    active_restored_resource->load_checkpoint(active_checkpoint, active.state_checksum());
+    Simulation3D active_resumed(abm_config(active_config), std::move(active_restored_environment));
+    active_resumed.restore(active.snapshot_cells(), active.next_uid(), active.clock(), active.stats(),
+        active.lineage(), active.snapshot_vasculature(), active.cells().slot_count(),
+        active.snapshot_cell_slots(), active.cells().free_slots());
+    active.run();
+    active_resumed.run();
+    assert(active.state_checksum() == active_resumed.state_checksum());
+    assert(active_resource->field_checksum() == active_restored_resource->field_checksum());
+    std::filesystem::remove(active_checkpoint);
+
     // Match the second moment of eight equiprobable unit lattice jumps:
     // E[dx^2 + dy^2] = 3/2, so D = 3 lambda / 8.
     auto diffusion_config = config;

@@ -100,6 +100,8 @@ public:
         return nutrient_solve_count_;
     }
     const DivisionRenewal3D* division_renewal() const noexcept { return renewal_.get(); }
+    const DivisionRenewal3D* activation_distribution() const noexcept { return duration_.get(); }
+    const DivisionRenewal3D* activation_rates() const noexcept { return velocity_.get(); }
     std::size_t voxel_count() const noexcept { return voxel_count_; }
     std::size_t moving_direction_count() const noexcept {
         return direction_ids_.size();
@@ -131,6 +133,10 @@ public:
 
 private:
     std::unique_ptr<DivisionRenewal3D> renewal_;
+    std::unique_ptr<DivisionRenewal3D> duration_;
+    std::unique_ptr<DivisionRenewal3D> velocity_;
+    void finish_duration_transport();
+    void finish_velocity_transport();
     double division_channel_mass(std::size_t location, std::size_t channel) const;
     void finish_division_transport();
     std::size_t index(int x, int y, int z) const noexcept;

@@ -34,4 +34,7 @@ jobs:
             build-ci/validation/
             build-ci/validation-vascular/
             build-ci/validation-regular/
+            build-ci/validation-active-r20/
+            build-ci/validation-active-r200/
+            build-ci/validation-vascular-nonlinear/
             build-ci/Testing/Temporary/LastTest.log

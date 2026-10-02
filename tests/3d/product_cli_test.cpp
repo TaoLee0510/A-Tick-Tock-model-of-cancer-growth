@@ -7,6 +7,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
+#include <yaml-cpp/yaml.h>
 
 namespace {
 int run(const std::filesystem::path &exe,
@@ -51,7 +52,7 @@ int main() {
              "--output-directory", output.string()}) == 0);
     auto migrated = atcg3d::structured_pde::StructuredPdeConfig3D::load(
         output / "model.yaml");
-    assert(migrated.schema_version == 10);
+    assert(migrated.schema_version == 12);
     assert(migrated.continuum.schema_version == 6);
     assert(!migrated.continuum.output.directory.is_absolute());
     assert(!migrated.continuum.base.output_directory.is_absolute());
@@ -88,5 +89,42 @@ int main() {
         final = row;
     assert(final.starts_with("8,"));
     assert(std::filesystem::exists(output / "summary.json"));
+    std::filesystem::remove_all(output);
+
+    // Native dispatch and the ensemble adapter must import the same resource-
+    // initialized agents, including initial activation and sampled clocks.
+    std::filesystem::create_directories(output);
+    auto structured = YAML::LoadFile((source / "ATCG3D_SharedRules/config/active_r200_ci_v12.yaml").string());
+    auto continuum = YAML::LoadFile((source / "ATCG3D_SharedRules/config/continuum_active_r200_ci_v8.yaml").string());
+    auto base = YAML::LoadFile((source / "configs/shared_activation_r200_v1.yaml").string());
+    base["initial"]["explicit_counts"]["r_cells"] = 8;
+    base["initial"]["explicit_counts"]["K_cells"] = 8;
+    base["initial"]["geometry"]["outer_radius"] = 4;
+    base["initial"]["geometry"]["shell_inner_radius"] = 3;
+    base["initial"]["geometry"]["inner_small_radius"] = 3;
+    base["migration"]["activation_threshold"] = 0.001;
+    base["simulation"]["threads"] = 1;
+    continuum["base_config"] = "base.yaml";
+    continuum["grid"]["shape"] = std::vector<int>{12, 12, 1};
+    continuum["grid"]["origin"] = std::vector<double>{-6, -6, -0.5};
+    continuum["numerics"]["end_time_hours"] = 0.01;
+    continuum["numerics"]["time_step_hours"] = 0.01;
+    continuum["vascular"]["source_mode"] = "static_voxels";
+    continuum["vascular"]["static_sources"] = YAML::Load("[]");
+    structured["continuum_config"] = "continuum.yaml";
+    structured["structured_migration"]["reactivation_density_threshold"] = 0.0005;
+    structured["output"]["directory"] = "native_shared_run";
+    for (auto [name, node] : {std::pair{"base.yaml", base}, std::pair{"continuum.yaml", continuum},
+                              std::pair{"structured.yaml", structured}}) {
+        std::ofstream yaml(output / name);
+        yaml << node;
+    }
+    assert(run(entry, {"--model", "pde", "--config", (output / "structured.yaml").string(),
+                       "--output-root", output.string()}) == 0);
+    assert(run(binary / "atcg3d_shared_abm", {"--model", "pde", "--config",
+        (output / "structured.yaml").string(), "--report", (output / "shared.json").string()}) == 0);
+    const auto native = YAML::LoadFile((output / "native_shared_run/final.json").string());
+    const auto shared = YAML::LoadFile((output / "shared.json").string());
+    assert(native["state_checksum"].as<std::uint64_t>() == shared["state_checksum"].as<std::uint64_t>());
     std::filesystem::remove_all(output);
 }
