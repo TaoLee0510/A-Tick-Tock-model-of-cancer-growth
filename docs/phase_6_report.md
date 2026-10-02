@@ -35,3 +35,23 @@ Early PDE schemas without shared-resource calibration cannot be upgraded
 without parameter choices. Hybrid cohort/individual conversion and the ODE
 mean-clock closure retain the scientific approximations listed in their model
 manuals. Quantitative smoke agreement is not comprehensive biological calibration.
+
+## Verification and portability follow-up
+
+The current suite registers 44 default and 46 HDF5 checks, including seven
+16-seed validation targets: sparse growth, regular renewal growth, activated
+r20/r200 invasion, baseline/nonlinear vascular growth, and the seven-scenario
+hybrid interval-refinement study. The activated, nonlinear vascular and hybrid
+studies retain their declared tolerances and mechanism-coverage guards.
+
+Linux and macOS hosted builds both pass the unit/regression stage after the
+Linux legacy oracle is obtained from a separately compiled pinned original
+implementation. The published macOS checksum fixture is unchanged. See
+[ci_verification.md](ci_verification.md) for the independent reference and
+artifact layout; final full-suite outcomes are supplied by CTest and Actions.
+
+Studio's first-run path settings are empty and remain local. Historical PNG
+writers obtain a font from `ATCG_FONT_FILE` or a relative working-directory
+font name. Personal Xcode state is excluded from version control while the
+local files remain available. The optional legacy 2D executable builds and the
+Studio JavaScript syntax check passes after these portability changes.

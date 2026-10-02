@@ -49,5 +49,9 @@ The early 8-hour, 16-seed smoke tolerances are 75% relative length/volume and
 0.15 absolute lesion perfusion, with reported paired sampling uncertainty.
 These broad tolerances are a regression check, not calibration evidence.
 Root rejection, vessel rasterization, directional persistence and tip-density
-closures differ. Branching and anastomosis are disabled in the comparison,
-while separate field tests exercise their nonnegative update path.
+closures differ. The original comparison disables branching and anastomosis.
+`angiogenesis_nonlinear_v8.yaml` adds a separate 16-seed comparison with both
+mechanisms enabled; its activity guard requires actual ABM roots/anastomoses
+and positive PDE branch/anastomosis rates. See
+[activated_vascular_validation.md](activated_vascular_validation.md) for its
+measured results and scope.

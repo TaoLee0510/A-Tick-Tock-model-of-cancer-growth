@@ -46,3 +46,10 @@ that header and omits the two new columns from subsequent rows. A recognized
 current header is appended with all 15 columns. CRLF headers are accepted.
 Unknown or unreadable headers are rejected before the file is opened for
 append, so existing data is preserved.
+
+## Legacy PNG rendering
+
+The optional historical 2D executable reads its font from `ATCG_FONT_FILE`.
+If unset or empty, it looks for `Calisto MT.ttf` in the working directory.
+Supply a locally licensed font file; no user-specific font path or font binary
+is stored in the repository. This affects PNG annotation only.

@@ -30,6 +30,11 @@ Python environment remain external runtimes; the app paths can be edited in
 the Run panel. Closing Studio terminates the embedded viewer process and its
 heartbeat, but does not terminate the detached simulator.
 
+Path fields start empty on a fresh installation. Configure the local executable,
+launcher, YAML, run directory, viewer and ParaView/Python runtime in the Run
+panel. Studio saves these settings in local storage; the repository does not
+carry a developer's home directory, external-volume path or runtime version.
+
 When the configured run directory already contains readable status, Studio
 automatically starts the embedded viewer at the latest preview frame. The
 preview uses a presentation-only cell radius multiplier of 4 by default so a

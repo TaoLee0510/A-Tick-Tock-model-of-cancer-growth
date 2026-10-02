@@ -40,6 +40,6 @@ build-codex/atcg3d_sparse_pde_test --large
 
 To register that benchmark in CTest, configure with
 `-DATCG3D_ENABLE_LARGE_TESTS=ON`; `atcg3d_sparse_pde_10000_memory` is labelled
-benchmark. Default CI uses the small equivalence/restart/budget test and both
-small ensemble validations. Large benchmark output records measured resident
+benchmark. Default CI uses the small equivalence/restart/budget test and the
+labeled ensemble validations. Large benchmark output records measured resident
 bytes so a regression cannot pass solely from a theoretical byte estimate.

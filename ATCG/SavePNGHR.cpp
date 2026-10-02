@@ -6,6 +6,7 @@
 //  Copyright © 2023 Tao Lee. All rights reserved.
 //
 
+#include "png_font_path.hpp"
 #include "SavePNGHR.hpp"
 
 
@@ -24,7 +25,7 @@ void SavePNGHR(int Visual_range_x, int Visual_range_y, const CellStore &cell_arr
     char filedir8 [100] = {'\0'};
     snprintf(filedir8, sizeof(filedir8), "%.08d s",(int)TT);
     char filedir9 [100] = {'\0'};
-    snprintf(filedir9, sizeof(filedir9), "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+    snprintf(filedir9, sizeof(filedir9), "%s", legacy_png_font_path());
     FILE * fid5;
     fid5=fopen (filedir7,"wb");
     pngwriter image2(Visual_range_x, Visual_range_y, 0, filedir7);
