@@ -29,6 +29,7 @@ struct NutrientFieldConfig3D {
     double relaxation{0.8};
     double metrics_every_hours{1.0};
     double field_snapshot_every_hours{0.0};
+    StaticVascularGeometry3D static_vasculature;
 
     void validate() const;
     std::uint64_t fingerprint() const noexcept;

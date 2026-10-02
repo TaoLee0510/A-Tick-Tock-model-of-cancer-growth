@@ -1,6 +1,6 @@
-# ATCG3D structured PDE nutrient-chemotaxis v5 and v6
+# ATCG3D structured PDE nutrient chemotaxis
 
-This directory contains v5 and v6 configurations for `atcg3d_structured_pde`.
+This directory contains v5-v7 configurations for `atcg3d_structured_pde`.
 The `continuum_*.yaml` files are companion continuum configurations referenced
 by the `structured_*.yaml` entry points. Structured v5 uses continuum schema
 v3; structured v6 uses continuum schema v4. Older structured schemas retain
@@ -15,6 +15,14 @@ cell density is not a direction gate. The activation clock still expires, and
 a site-local cooldown plus density hysteresis prevents immediate reactivation.
 This refractory state is attached to the grid site in both v5 and v6; it does
 not follow ordinary-r mass during migration.
+
+V7 references continuum schema v5 and replaces the site-local cooldown with an
+ordinary-r refractory mass subset and its transported mass-weighted cooldown
+clock. It also uses the exact ABM growth-window endpoints and the shared static
+source mask during ABM initialization. Published v5/v6 runs remain unchanged.
+See [the alignment contract](../docs/abm_pde_alignment.md) for version boundaries
+and the mean-clock closure, and use `config/structured_smoke_2d_256_v7.yaml`
+for the new 48-hour smoke profile.
 
 V6 replaces planar-edge supply with a moving tumour-front boundary. A smoothed,
 thresholded occupied field selects the largest connected tumour component and

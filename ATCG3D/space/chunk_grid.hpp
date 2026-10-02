@@ -30,6 +30,9 @@ public:
     void attach_vessel_grid(const SparseVesselGrid3D* vessels) noexcept {
         vessels_ = vessels;
     }
+    void attach_static_vasculature(const StaticVascularGeometry3D* geometry) noexcept {
+        static_vasculature_ = geometry;
+    }
 
     template <class Visitor>
     void for_each_occupied_site(Visitor&& visitor) const {
@@ -81,6 +84,7 @@ private:
     DomainPolicy domain_;
     std::unordered_map<Vec3i, std::unique_ptr<Chunk>, Vec3iHash> chunks_;
     const SparseVesselGrid3D* vessels_{};
+    const StaticVascularGeometry3D* static_vasculature_{};
 };
 
 }  // namespace atcg3d

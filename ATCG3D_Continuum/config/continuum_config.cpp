@@ -172,7 +172,7 @@ ContinuumModelConfig3D ContinuumModelConfig3D::load(
     result.schema_version = integer(required(schema, "version", "$.schema"),
                                     "$.schema.version");
     if (result.schema_name != "atcg3d.continuum_model_config" ||
-        (result.schema_version < 1 || result.schema_version > 4)) {
+        (result.schema_version < 1 || result.schema_version > 5)) {
         fail("$.schema", "unsupported schema identity");
     }
     result.profile = text_value(required(root, "profile", "$"), "$.profile");
@@ -316,7 +316,8 @@ ContinuumModelConfig3D ContinuumModelConfig3D::load(
             required(nutrient, "common_carrying_capacity", "$.nutrient"),
             "$.nutrient.common_carrying_capacity");
     }
-    if (result.schema_version >= 4) {
+    if (result.schema_version >= 4 &&
+        (result.schema_version == 4 || nutrient["tumor_front"])) {
         const YAML::Node tumor_front = required(
             nutrient, "tumor_front", "$.nutrient");
         mapping(tumor_front, "$.nutrient.tumor_front",
@@ -386,7 +387,7 @@ ContinuumModelConfig3D ContinuumModelConfig3D::load(
     const YAML::Node vascular = required(root, "vascular", "$");
     mapping(vascular, "$.vascular",
             {"source_mode", "synthetic_axis", "synthetic_center",
-             "synthetic_radius_voxels"});
+             "synthetic_radius_voxels", "static_sources"});
     result.vascular.source_mode = text_value(
         required(vascular, "source_mode", "$.vascular"), "$.vascular.source_mode");
     result.vascular.synthetic_axis = text_value(
@@ -398,6 +399,19 @@ ContinuumModelConfig3D ContinuumModelConfig3D::load(
     result.vascular.synthetic_radius_voxels = number(
         required(vascular, "synthetic_radius_voxels", "$.vascular"),
         "$.vascular.synthetic_radius_voxels");
+    if (const auto sites = vascular["static_sources"]) {
+        if (result.schema_version < 5 || !sites.IsSequence()) {
+            fail("$.vascular.static_sources", "requires continuum schema v5 and a sequence");
+        }
+        for (const auto& site : sites) {
+            const auto values = fixed_sequence<int, 3>(site,
+                "$.vascular.static_sources", integer);
+            result.vascular.static_sources.push_back({values[0], values[1], values[2]});
+        }
+    }
+    if (result.schema_version >= 5) {
+        result.base.static_vasculature = result.shared_vascular_geometry();
+    }
 
     const YAML::Node output = required(root, "output", "$");
     mapping(output, "$.output",
@@ -522,7 +536,7 @@ void ContinuumModelConfig3D::validate() const {
         !(nutrient.relaxation > 0.0) || nutrient.relaxation > 1.0) {
         throw std::invalid_argument("continuum nutrient parameters are invalid");
     }
-    if (schema_version >= 4 &&
+    if (schema_version == 4 &&
         (nutrient.boundary_mode != "moving_tumor_front_dirichlet_v2" &&
          nutrient.boundary_mode !=
              "moving_tumor_front_and_vessels_dirichlet_v2")) {
@@ -530,6 +544,9 @@ void ContinuumModelConfig3D::validate() const {
             "continuum v4 requires a moving tumour-front nutrient boundary");
     }
     if (schema_version >= 4 &&
+        (schema_version == 4 ||
+         nutrient.boundary_mode == "moving_tumor_front_dirichlet_v2" ||
+         nutrient.boundary_mode == "moving_tumor_front_and_vessels_dirichlet_v2") &&
         (!base.thin_layer ||
          !(nutrient.tumor_front_density_threshold > 0.0) ||
          nutrient.tumor_front_density_threshold > 1.0 ||
@@ -542,7 +559,8 @@ void ContinuumModelConfig3D::validate() const {
     }
     if (vascular.source_mode != "abm_perfusion" &&
         vascular.source_mode != "synthetic_central_line" &&
-        vascular.source_mode != "abm_plus_synthetic_line") {
+        vascular.source_mode != "abm_plus_synthetic_line" &&
+        !(schema_version >= 5 && vascular.source_mode == "static_voxels")) {
         throw std::invalid_argument("unsupported continuum vascular source mode");
     }
     if (vascular.synthetic_axis != "x" && vascular.synthetic_axis != "y" &&
@@ -557,11 +575,29 @@ void ContinuumModelConfig3D::validate() const {
         (output.enabled && output.directory.empty())) {
         throw std::invalid_argument("continuum vascular/output parameters are invalid");
     }
+    if (schema_version >= 5) shared_vascular_geometry().validate();
+}
+
+StaticVascularGeometry3D ContinuumModelConfig3D::shared_vascular_geometry() const {
+    StaticVascularGeometry3D geometry;
+    geometry.model = "shared_static_v3";
+    geometry.shape = grid.shape;
+    geometry.origin = grid.origin;
+    geometry.spacing_voxels = grid.spacing_voxels;
+    geometry.source_mode = vascular.source_mode;
+    geometry.synthetic_axis = vascular.synthetic_axis;
+    geometry.synthetic_center = vascular.synthetic_center;
+    geometry.synthetic_radius_voxels = vascular.synthetic_radius_voxels;
+    geometry.static_sources = vascular.static_sources;
+    geometry.thin_layer = base.thin_layer;
+    return geometry;
 }
 
 std::uint64_t ContinuumModelConfig3D::dynamics_fingerprint() const {
     std::uint64_t state = 0x4154434743504445ULL;
-    hash_text(state, base.dynamics_json());
+    auto biological_base = base;
+    if (schema_version >= 5) biological_base.static_vasculature = shared_vascular_geometry();
+    hash_text(state, biological_base.dynamics_json());
     hash_text(state, initialization_mode);
     for (const int extent : grid.shape) state = mix(state, extent);
     for (const double value : grid.origin) hash_double(state, value);

@@ -623,6 +623,9 @@ Simulation3D::Simulation3D(
       lesion_index_(lesion_index_config(config_)) {
     config_.validate();
     grid_.attach_vessel_grid(&vessel_grid_);
+    if (config_.static_vasculature.enabled()) {
+        grid_.attach_static_vasculature(&config_.static_vasculature);
+    }
     density_.attach_quantized_count_index(&migration_activation_counts_);
     density_.configure_local_window_counts(
         config_.growth_density_window_edge, config_.thin_layer);

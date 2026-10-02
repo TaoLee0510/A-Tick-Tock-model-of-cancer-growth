@@ -221,7 +221,7 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
 }
 
 void StructuredPdeConfig3D::validate() const {
-    if ((schema_version < 1 || schema_version > 6) || profile.empty()) {
+    if ((schema_version < 1 || schema_version > 7) || profile.empty()) {
         throw std::invalid_argument("structured PDE schema/profile is invalid");
     }
     continuum.validate();
@@ -305,11 +305,15 @@ void StructuredPdeConfig3D::validate() const {
             "moving_tumor_front_and_vessels_dirichlet_v2";
     if (schema_version >= 5 &&
         ((schema_version == 5 && continuum.schema_version != 3) ||
-         (schema_version >= 6 && continuum.schema_version != 4) ||
-         migration.activation_stop !=
-             "clock_expiry_refractory_hysteresis_v2" ||
+         (schema_version == 6 && continuum.schema_version != 4) ||
+         (schema_version >= 7 && continuum.schema_version != 5) ||
+         migration.activation_stop != (schema_version >= 7
+             ? "cohort_clock_refractory_hysteresis_v3"
+             : "clock_expiry_refractory_hysteresis_v2") ||
          migration.direction_transport !=
              "nutrient_gradient_fixed_direction_jump_exchange_v4" ||
+         (base.direction_guidance_model != "low_density_high_resource_v1" &&
+          base.direction_guidance_model != "low_density_high_resource_bounded_v2") ||
          migration.direction_nutrient_window_edge != 70 ||
          !(migration.chemotaxis_strength > 0.0) ||
          !(migration.zero_gradient_tolerance > 0.0) ||
@@ -324,7 +328,8 @@ void StructuredPdeConfig3D::validate() const {
          continuum.nutrient.solver !=
              "transient_explicit_dirichlet_sources_v2" ||
          (schema_version == 5 && !v5_boundary) ||
-         (schema_version >= 6 && !v6_boundary) ||
+         (schema_version == 6 && !v6_boundary) ||
+         (schema_version >= 7 && !v5_boundary && !v6_boundary) ||
          continuum.nutrient.consumption_model != "per_cell_ratio_v2" ||
          !close(continuum.nutrient.r_consumption_rate_per_hour,
                 continuum.nutrient.K_consumption_rate_per_hour) ||

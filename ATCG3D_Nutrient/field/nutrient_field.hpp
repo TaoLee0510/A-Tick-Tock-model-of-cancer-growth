@@ -48,6 +48,9 @@ public:
 
     double retained_density(Vec3i site) const noexcept override;
     double normalized_resource(Vec3i site) const noexcept override;
+    bool contains_resource_site(Vec3i site) const noexcept override {
+        return active_site(site);
+    }
     double next_refresh_time_hours() const noexcept override {
         return next_refresh_time_hours_;
     }

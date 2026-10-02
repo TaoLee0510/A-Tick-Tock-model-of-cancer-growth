@@ -102,6 +102,7 @@ const char* json_bool(bool value) {
 }  // namespace
 
 void Model3DConfig::validate() const {
+    static_vasculature.validate();
     if (schema_name != "atcg3d.model_config" || schema_version != 3) {
         throw std::invalid_argument("unsupported model configuration schema");
     }
@@ -186,10 +187,12 @@ void Model3DConfig::validate() const {
         throw std::invalid_argument("distance weight exponent must be non-negative");
     }
     if (direction_guidance_model != "density_gate_uniform_v1" &&
-        direction_guidance_model != "low_density_high_resource_v1") {
+        direction_guidance_model != "low_density_high_resource_v1" &&
+        direction_guidance_model != "low_density_high_resource_bounded_v2") {
         throw std::invalid_argument("unsupported direction.guidance.model");
     }
-    if (direction_guidance_model == "low_density_high_resource_v1" &&
+    if ((direction_guidance_model == "low_density_high_resource_v1" ||
+         direction_guidance_model == "low_density_high_resource_bounded_v2") &&
         !(direction_density_threshold > 0.0)) {
         throw std::invalid_argument(
             "resource-guided migration requires a positive density threshold");
@@ -710,8 +713,11 @@ void Model3DConfig::validate() const {
 std::string Model3DConfig::to_json() const {
     std::ostringstream out;
     out << std::setprecision(17);
-    out << '{'
-        << "\"schema_name\":\"" << json_escape(schema_name) << "\","
+    out << '{';
+    if (static_vasculature.enabled()) {
+        out << "\"static_vasculature\":" << static_vasculature.to_json() << ',';
+    }
+    out << "\"schema_name\":\"" << json_escape(schema_name) << "\","
         << "\"schema_version\":" << schema_version << ','
         << "\"profile\":\"" << json_escape(profile) << "\","
         << "\"calibration_source_profile\":\"" << json_escape(legacy_mapping.source_profile) << "\","

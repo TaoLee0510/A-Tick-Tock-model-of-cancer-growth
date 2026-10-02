@@ -92,6 +92,10 @@ double directional_resource(
                 const double cosine = static_cast<double>(dot(offset, forward)) /
                     (offset_length * forward_length);
                 if (cosine + 1.0e-12 < minimum_cosine) continue;
+                if (config.direction_guidance_model == "low_density_high_resource_bounded_v2" &&
+                    (!DomainPolicy(config).contains(anchor + offset) ||
+                     !config.static_vasculature.contains(anchor + offset) ||
+                     !environment->contains_resource_site(anchor + offset))) continue;
                 total += std::clamp(
                     environment->normalized_resource(anchor + offset), 0.0, 1.0);
                 ++sites;
@@ -106,7 +110,8 @@ std::array<double, 27> guided_direction_weights(
     Vec3i anchor,
     const BlockDensityIndex3D& density,
     const Model3DConfig& config,
-    const LocalDensityModifier3D* environment) {
+    const LocalDensityModifier3D* environment,
+    bool use_density = true) {
     std::array<double, 27> result{};
     const auto directional_densities =
         density.estimate_all_directional_densities(
@@ -114,12 +119,26 @@ std::array<double, 27> guided_direction_weights(
             config.direction_density_half_angle_degrees, config.thin_layer);
     const double floor = config.direction_minimum_guidance_weight;
     for (const DirectionId direction : candidates) {
-        const double local_density = directional_densities[direction];
-        if (local_density > config.direction_density_threshold) continue;
+        double local_density = directional_densities[direction];
+        if (config.direction_guidance_model == "low_density_high_resource_bounded_v2") {
+            const auto offsets = directional_cone_offsets(direction,
+                config.direction_density_radius, config.direction_density_half_angle_degrees);
+            std::size_t full_sites = 0, in_domain_sites = 0;
+            for (const Vec3i offset : offsets) {
+                if (config.thin_layer && offset.z != 0) continue;
+                ++full_sites;
+                const auto site = anchor + offset;
+                if (DomainPolicy(config).contains(site) && config.static_vasculature.contains(site) &&
+                    (environment == nullptr || environment->contains_resource_site(site))) ++in_domain_sites;
+            }
+            local_density = in_domain_sites > 0
+                ? local_density * full_sites / in_domain_sites : 1.0;
+        }
+        if (use_density && local_density > config.direction_density_threshold) continue;
         const double density_fraction = std::clamp(
             local_density / config.direction_density_threshold, 0.0, 1.0);
-        const double density_score = floor + (1.0 - floor) *
-            (1.0 - density_fraction);
+        const double density_score = use_density ? floor + (1.0 - floor) *
+            (1.0 - density_fraction) : 1.0;
         const double resource_score = floor + (1.0 - floor) *
             directional_resource(anchor, direction, config, environment);
         const double length = std::sqrt(static_cast<double>(
@@ -200,6 +219,12 @@ DirectionId select_from_candidates(
 
 }  // namespace
 
+double migration_direction_resource(Vec3i anchor, DirectionId direction,
+                                    const Model3DConfig& config,
+                                    const LocalDensityModifier3D* environment) {
+    return directional_resource(anchor, direction, config, environment);
+}
+
 DirectionCandidates3D feasible_directions(
     Slot slot,
     const CellStore3D& cells,
@@ -245,9 +270,12 @@ DirectionId select_migration_direction(Slot slot,
     }
 
     if (config.direction_guidance_model ==
-        "low_density_high_resource_v1") {
+        "low_density_high_resource_v1" || config.direction_guidance_model ==
+        "low_density_high_resource_bounded_v2") {
         const auto guidance = guided_direction_weights(
-            feasible, cells.anchor(slot), density, config, environment);
+            feasible, cells.anchor(slot), density, config, environment,
+            config.direction_guidance_model == "low_density_high_resource_v1" ||
+                cells.last_direction(slot) == kStayDirection || config.persistence_uses_density);
         DirectionCandidates3D eligible;
         for (const DirectionId direction : feasible) {
             if (guidance[direction] > 0.0) eligible.push_back(direction);

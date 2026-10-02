@@ -453,6 +453,15 @@ if(BUILD_TESTING)
             target_compile_definitions(atcg3d_compatibility_test PRIVATE
                 ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
             add_test(NAME atcg3d_compatibility_test COMMAND atcg3d_compatibility_test)
+            foreach(contract_test IN ITEMS alignment legacy_pde_regression)
+                add_executable(atcg3d_${contract_test}_test tests/3d/${contract_test}_test.cpp)
+                target_link_libraries(atcg3d_${contract_test}_test PRIVATE
+                    atcg3d_nutrient_core atcg3d_structured_pde_core)
+                target_compile_options(atcg3d_${contract_test}_test PRIVATE -UNDEBUG)
+                target_compile_definitions(atcg3d_${contract_test}_test PRIVATE
+                    ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+                add_test(NAME atcg3d_${contract_test}_test COMMAND atcg3d_${contract_test}_test)
+            endforeach()
         endif()
         if(ATCG3D_ENABLE_VTKHDF)
             add_executable(atcg3d_vtkhdf_test tests/3d/vtkhdf_test.cpp)

@@ -24,6 +24,7 @@ namespace {
 
 constexpr std::array<char, 8> kCheckpointMagic{
     {'A', 'T', 'C', 'G', 'S', 'P', 'D', '1'}};
+constexpr std::uint32_t kCohortCheckpointVersion = 4;
 constexpr std::uint32_t kLegacyCheckpointVersion = 2;
 constexpr std::uint32_t kRefractoryCheckpointVersion = 3;
 constexpr double kFixed26DiffusionFactor = 9.0 / 26.0;
@@ -182,12 +183,29 @@ void read_region(std::istream& stream,
 
 StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
     : config_(std::move(config)) {
+    if (config_.schema_version >= 7) {
+        config_.continuum.base.static_vasculature =
+            config_.continuum.shared_vascular_geometry();
+    }
     config_.validate();
     const auto& continuum = config_.continuum;
     voxel_count_ = static_cast<std::size_t>(continuum.grid.shape[0]) *
         static_cast<std::size_t>(continuum.grid.shape[1]) *
         static_cast<std::size_t>(continuum.grid.shape[2]);
     const int dimensions = continuum.base.thin_layer ? 2 : 3;
+    double maximum_normal_diffusion = 0.0;
+    for (std::size_t stage = 0; stage < 2; ++stage) {
+        for (const auto type : {CellType::r, CellType::K}) {
+            maximum_normal_diffusion = std::max(maximum_normal_diffusion,
+                normal_diffusion(static_cast<StructuredStage3D>(stage), type));
+        }
+    }
+    const double normal_cfl = continuum.time_step_hours * 2.0 * dimensions *
+        maximum_normal_diffusion /
+        (continuum.grid.spacing_voxels * continuum.grid.spacing_voxels);
+    if (!std::isfinite(normal_cfl) || normal_cfl > 0.45 + 1.0e-12) {
+        throw std::invalid_argument("structured time step violates ordinary diffusion CFL bound");
+    }
     voxel_measure_ = std::pow(continuum.grid.spacing_voxels, dimensions);
     large_cell_volume_ =
         std::pow(continuum.base.large_footprint_edge, dimensions);
@@ -255,6 +273,12 @@ StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
     }
     for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
         r_normal_[stage].assign(voxel_count_, 0.0);
+        if (config_.schema_version >= 7) {
+            r_refractory_[stage].assign(voxel_count_, 0.0);
+            refractory_clock_[stage].assign(voxel_count_, 0.0);
+            refractory_work_[stage].assign(voxel_count_, 0.0);
+            refractory_clock_work_[stage].assign(voxel_count_, 0.0);
+        }
         K_[stage].assign(voxel_count_, 0.0);
         r_normal_work_[stage].assign(voxel_count_, 0.0);
         K_work_[stage].assign(voxel_count_, 0.0);
@@ -606,7 +630,8 @@ void StructuredPdeModel3D::initialize_from_abm(
             vessel_[index(x, y, z)] = 1.0;
         }
     }
-    if (vascular.source_mode == "synthetic_central_line" ||
+    if (config_.schema_version >= 7 ||
+        vascular.source_mode == "synthetic_central_line" ||
         vascular.source_mode == "abm_plus_synthetic_line") add_synthetic_vessel();
     clear_cells_from_vessels();
     time_hours_ = config_.continuum.initialization_mode == "abm_checkpoint"
@@ -653,6 +678,26 @@ void StructuredPdeModel3D::initialize_from_arrays(
         std::fill(activation_armed_[stage].begin(),
                   activation_armed_[stage].end(), 1U);
         r_normal_[stage] = std::move(fields.r_normal[stage]);
+        if (config_.schema_version >= 7) {
+            if ((!fields.r_refractory[stage].empty() &&
+                 fields.r_refractory[stage].size() != voxel_count_) ||
+                (!fields.refractory_remaining_hours[stage].empty() &&
+                 fields.refractory_remaining_hours[stage].size() != voxel_count_)) {
+                throw std::invalid_argument("structured refractory initial size mismatch");
+            }
+            for (std::size_t location = 0; location < voxel_count_; ++location) {
+                const double mass = fields.r_refractory[stage].empty() ? 0.0 :
+                    fields.r_refractory[stage][location];
+                const double remaining = fields.refractory_remaining_hours[stage].empty() ? 0.0 :
+                    fields.refractory_remaining_hours[stage][location];
+                if (!std::isfinite(mass) || !std::isfinite(remaining) || mass < 0.0 ||
+                    mass > r_normal_[stage][location] || remaining < 0.0) {
+                    throw std::invalid_argument("invalid structured refractory initial state");
+                }
+                r_refractory_[stage][location] = mass;
+                refractory_clock_[stage][location] = mass * remaining;
+            }
+        }
         K_[stage] = std::move(fields.K[stage]);
         active_direction_[stage][0].assign(voxel_count_, 0.0F);
         active_clock_[stage][0].assign(voxel_count_, 0.0F);
@@ -708,7 +753,7 @@ void StructuredPdeModel3D::initialize_from_arrays(
         include_population_location(x, y, z);
     }
     const auto& source = config_.continuum.vascular.source_mode;
-    if (source == "synthetic_central_line" ||
+    if (config_.schema_version >= 7 || source == "synthetic_central_line" ||
         source == "abm_plus_synthetic_line") add_synthetic_vessel();
     clear_cells_from_vessels();
     time_hours_ = time_hours;
@@ -726,6 +771,19 @@ void StructuredPdeModel3D::initialize_from_arrays(
 }
 
 void StructuredPdeModel3D::add_synthetic_vessel() {
+    if (config_.schema_version >= 7) {
+        const auto geometry = config_.continuum.shared_vascular_geometry();
+        const int nx = geometry.shape[0];
+        const int ny = geometry.shape[1];
+        for (std::size_t location = 0; location < voxel_count_; ++location) {
+            const int x = static_cast<int>(location % nx);
+            const auto yz = location / nx;
+            const int y = static_cast<int>(yz % ny);
+            const int z = static_cast<int>(yz / ny);
+            if (geometry.source_voxel({x, y, z})) vessel_[location] = 1.0;
+        }
+        return;
+    }
     const auto& vascular = config_.continuum.vascular;
     const int axis = vascular.synthetic_axis == "x" ? 0
         : (vascular.synthetic_axis == "y" ? 1 : 2);
@@ -754,8 +812,15 @@ void StructuredPdeModel3D::clear_cells_from_vessels() {
     if (!config_.migration.vessel_exclusion) return;
     for (std::size_t location = 0; location < voxel_count_; ++location) {
         if (!vessel_blocks_cells(location)) continue;
+        if (config_.schema_version >= 7 && occupied_fraction(location) > 1.0e-10) {
+            throw std::invalid_argument("structured initial population overlaps an excluded vessel");
+        }
         for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
             r_normal_[stage][location] = 0.0;
+            if (config_.schema_version >= 7) {
+                r_refractory_[stage][location] = 0.0;
+                refractory_clock_[stage][location] = 0.0;
+            }
             K_[stage][location] = 0.0;
             active_total_[stage][location] = 0.0F;
             activation_cooldown_[stage][location] = 0.0F;
@@ -818,7 +883,10 @@ void StructuredPdeModel3D::rebuild_moving_tumour_front() {
     const int y1 = std::min(ny, population_bounds_.y1 + margin);
     const int width = x1 - x0;
     const int height = y1 - y0;
-    if (width <= 0 || height <= 0) return;
+    if (width <= 0 || height <= 0) {
+        nutrient_update_bounds_ = previous_bounds;
+        return;
+    }
 
     tumour_occupancy_work_.resize(
         static_cast<std::size_t>(width) * height);
@@ -1281,8 +1349,19 @@ void StructuredPdeModel3D::refresh_activation(double dt) {
             for (int y = bounds.y0; y < bounds.y1; ++y) {
                 for (int x = bounds.x0; x < bounds.x1; ++x) {
                     const std::size_t location = index(x, y, z);
-                    const double mass = r_normal_[stage][location];
-                    if (config_.schema_version >= 5) {
+                    double mass = r_normal_[stage][location];
+                    if (config_.schema_version >= 7) {
+                        auto& refractory = r_refractory_[stage][location];
+                        auto& clock = refractory_clock_[stage][location];
+                        clock = std::max(0.0, clock - refractory * dt);
+                        if (clock <= 1.0e-12 * std::max(1.0, refractory) &&
+                            activation_density_[stage][location] <=
+                                config_.migration.reactivation_density_threshold) {
+                            refractory = 0.0;
+                            clock = 0.0;
+                        }
+                        mass = std::max(0.0, mass - refractory);
+                    } else if (config_.schema_version >= 5) {
                         auto& cooldown = activation_cooldown_[stage][location];
                         auto& armed = activation_armed_[stage][location];
                         if (active_total_[stage][location] >=
@@ -1304,7 +1383,7 @@ void StructuredPdeModel3D::refresh_activation(double dt) {
                     }
                     if (mass < config_.migration.minimum_density ||
                         activation_density_[stage][location] < threshold) continue;
-                    r_normal_[stage][location] = 0.0;
+                    r_normal_[stage][location] -= mass;
                     active_direction_[stage][0][location] +=
                         static_cast<float>(mass);
                     active_clock_[stage][0][location] +=
@@ -1384,6 +1463,12 @@ void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
                               r_normal_work_[stage].begin() + end, 0.0);
                     std::fill(K_work_[stage].begin() + begin,
                               K_work_[stage].begin() + end, 0.0);
+                    if (config_.schema_version >= 7) {
+                        std::fill(refractory_work_[stage].begin() + begin,
+                                  refractory_work_[stage].begin() + end, 0.0);
+                        std::fill(refractory_clock_work_[stage].begin() + begin,
+                                  refractory_clock_work_[stage].begin() + end, 0.0);
+                    }
                 }
             }
         }
@@ -1461,9 +1546,32 @@ void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
         const auto value = static_cast<StructuredStage3D>(stage);
         migrate_field(r_normal_[stage], r_normal_work_[stage], value, CellType::r);
         migrate_field(K_[stage], K_work_[stage], value, CellType::K);
+        if (config_.schema_version >= 7) {
+            migrate_field(r_refractory_[stage], refractory_work_[stage], value, CellType::r);
+            migrate_field(refractory_clock_[stage], refractory_clock_work_[stage], value, CellType::r);
+        }
     }
     r_normal_.swap(r_normal_work_);
     K_.swap(K_work_);
+    if (config_.schema_version >= 7) {
+        r_refractory_.swap(refractory_work_);
+        refractory_clock_.swap(refractory_clock_work_);
+        for (std::size_t stage = 0; stage < 2; ++stage) {
+            for (int z = target_bounds.z0; z < target_bounds.z1; ++z) {
+                for (int y = target_bounds.y0; y < target_bounds.y1; ++y) {
+                    for (int x = target_bounds.x0; x < target_bounds.x1; ++x) {
+                        const auto here = index(x, y, z);
+                        const double mass = r_refractory_[stage][here];
+                        if (mass > r_normal_[stage][here]) {
+                            refractory_clock_[stage][here] *= r_normal_[stage][here] / mass;
+                            r_refractory_[stage][here] = r_normal_[stage][here];
+                        }
+                        if (r_refractory_[stage][here] == 0.0) refractory_clock_[stage][here] = 0.0;
+                    }
+                }
+            }
+        }
+    }
     normal_work_dirty_bounds_ = old_bounds;
     population_bounds_ = target_bounds;
 }
@@ -1650,7 +1758,9 @@ std::vector<double> StructuredPdeModel3D::guided_direction_weights(
         std::size_t resource_sites = 0;
         if (config_.schema_version >= 3 && base.thin_layer &&
             guidance_prefix_bounds_.valid) {
-            sites = direction_sector_site_counts_[direction_index];
+            if (config_.schema_version < 7) {
+                sites = direction_sector_site_counts_[direction_index];
+            }
             for (const auto& span : direction_row_spans_[direction_index]) {
                 const int oy = y + span.dy;
                 if (oy < guidance_prefix_bounds_.y0 ||
@@ -1668,6 +1778,7 @@ std::vector<double> StructuredPdeModel3D::guided_direction_weights(
                 const std::size_t right =
                     static_cast<std::size_t>(ox1 - guidance_prefix_bounds_.x0);
                 resource_sites += static_cast<std::size_t>(ox1 - ox0);
+                if (config_.schema_version >= 7) sites += static_cast<std::size_t>(ox1 - ox0);
                 count += guidance_density_row_prefix_[row + right] -
                     guidance_density_row_prefix_[row + left];
                 resource += guidance_resource_row_prefix_[row + right] -
@@ -1686,12 +1797,13 @@ std::vector<double> StructuredPdeModel3D::guided_direction_weights(
                             static_cast<double>(dot(offset, forward)) /
                             (offset_length * forward_length);
                         if (cosine + 1.0e-12 < minimum_cosine) continue;
-                        ++sites;
+                        if (config_.schema_version < 7) ++sites;
                         const int ox = x + dx;
                         const int oy = y + dy;
                         const int oz = z + dz;
                         if (ox < 0 || ox >= nx || oy < 0 || oy >= ny ||
                             oz < 0 || oz >= nz) continue;
+                        if (config_.schema_version >= 7) ++sites;
                         const std::size_t other = index(ox, oy, oz);
                         ++resource_sites;
                         count += (r_normal_[0][other] + r_normal_[1][other] +
@@ -1763,7 +1875,11 @@ void StructuredPdeModel3D::expire_active(std::size_t stage, double dt) {
                     1.0e-6 * std::max(1.0, clock)) {
                 if (mass_value > 0.0) {
                     r_normal_[stage][location] += mass_value;
-                    if (config_.schema_version >= 5) {
+                    if (config_.schema_version >= 7) {
+                        r_refractory_[stage][location] += mass_value;
+                        refractory_clock_[stage][location] += mass_value *
+                            config_.migration.reactivation_cooldown_hours;
+                    } else if (config_.schema_version >= 5) {
                         activation_armed_[stage][location] = 0U;
                         activation_cooldown_[stage][location] =
                             static_cast<float>(std::max(
@@ -1848,9 +1964,9 @@ void StructuredPdeModel3D::migrate_active(double dt) {
         const auto stage_value = static_cast<StructuredStage3D>(stage);
         const double rate = active_rate(stage_value);
         if (!(rate > 0.0)) continue;
-        const bool resource_guided = config_.schema_version >= 2 &&
-            continuum.base.direction_guidance_model ==
-                "low_density_high_resource_v1";
+        const bool resource_guided = config_.schema_version >= 5 ||
+            (config_.schema_version >= 2 &&
+             continuum.base.direction_guidance_model == "low_density_high_resource_v1");
         // Resolve the no-persistent-direction state before transport. V2/v3
         // rule uses the same low-density/high-resource directional cone score
         // as the nutrient-coupled ABM.
@@ -2474,6 +2590,13 @@ void StructuredPdeModel3D::build_local_counts(
     const int radius = std::max(0, static_cast<int>(std::floor(
         0.5 * continuum.base.growth_density_window_edge /
         continuum.grid.spacing_voxels)));
+    const int lower = config_.schema_version >= 7
+        ? static_cast<int>(std::floor(((continuum.base.growth_density_window_edge - 1) / 2) / continuum.grid.spacing_voxels))
+        : radius;
+    const int upper = config_.schema_version >= 7
+        ? static_cast<int>(std::floor((continuum.base.growth_density_window_edge -
+            (continuum.base.growth_density_window_edge - 1) / 2 - 1) / continuum.grid.spacing_voxels))
+        : radius;
     if (continuum.base.thin_layer) {
         const int pitch = width + 1;
         const std::size_t prefix_size =
@@ -2520,11 +2643,11 @@ void StructuredPdeModel3D::build_local_counts(
                 static_cast<std::size_t>(width));
             const std::size_t here = index(
                 bounds.x0 + local_x, bounds.y0 + local_y, bounds.z0);
-            if (occupied_fraction(here) <= 0.0) return;
-            const int x0 = std::max(0, local_x - radius);
-            const int y0 = std::max(0, local_y - radius);
-            const int x1 = std::min(width, local_x + radius + 1);
-            const int y1 = std::min(height, local_y + radius + 1);
+            if (config_.schema_version < 7 && occupied_fraction(here) <= 0.0) return;
+            const int x0 = std::max(0, local_x - lower);
+            const int y0 = std::max(0, local_y - lower);
+            const int x1 = std::min(width, local_x + upper + 1);
+            const int y1 = std::min(height, local_y + upper + 1);
             r_counts[offset] = sum(r_prefix, x0, y0, x1, y1);
             K_counts[offset] = sum(K_prefix, x0, y0, x1, y1);
         });
@@ -2578,12 +2701,12 @@ void StructuredPdeModel3D::build_local_counts(
     for (int z = 0; z < depth; ++z) {
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
-                const int x0 = std::max(0, x - radius);
-                const int y0 = std::max(0, y - radius);
-                const int z0 = std::max(0, z - radius);
-                const int x1 = std::min(width, x + radius + 1);
-                const int y1 = std::min(height, y + radius + 1);
-                const int z1 = std::min(depth, z + radius + 1);
+                const int x0 = std::max(0, x - lower);
+                const int y0 = std::max(0, y - lower);
+                const int z0 = std::max(0, z - lower);
+                const int x1 = std::min(width, x + upper + 1);
+                const int y1 = std::min(height, y + upper + 1);
+                const int z1 = std::min(depth, z + upper + 1);
                 const std::size_t offset =
                     (static_cast<std::size_t>(z) * height + y) * width + x;
                 r_counts[offset] = sum(r_prefix, x0, y0, z0, x1, y1, z1);
@@ -2737,6 +2860,10 @@ void StructuredPdeModel3D::react(double dt) {
                 ? std::clamp((old_r[stage] + r_negative) / old_r[stage], 0.0, 1.0)
                 : 0.0;
             r_normal_[stage][location] *= r_factor;
+            if (config_.schema_version >= 7) {
+                r_refractory_[stage][location] *= r_factor;
+                refractory_clock_[stage][location] *= r_factor;
+            }
             for (std::size_t bucket = 0;
                  bucket < active_direction_[stage].size(); ++bucket) {
                 active_direction_[stage][bucket][location] = static_cast<float>(
@@ -2744,8 +2871,16 @@ void StructuredPdeModel3D::react(double dt) {
                 active_clock_[stage][bucket][location] = static_cast<float>(
                     active_clock_[stage][bucket][location] * r_factor);
             }
-            active_total_[stage][location] = static_cast<float>(
-                active_total_[stage][location] * r_factor);
+            if (config_.schema_version >= 7) {
+                double active_sum = 0.0;
+                for (const auto& bucket : active_direction_[stage]) {
+                    active_sum += bucket[location];
+                }
+                active_total_[stage][location] = static_cast<float>(active_sum);
+            } else {
+                active_total_[stage][location] = static_cast<float>(
+                    active_total_[stage][location] * r_factor);
+            }
             K_[stage][location] = std::max(
                 0.0, old_K[stage] + dt * std::min(0.0, delta_K[stage]));
             positive_r[stage] = dt * std::max(0.0, delta_r[stage]);
@@ -2769,6 +2904,29 @@ void StructuredPdeModel3D::react(double dt) {
             K_[stage][location] += scale * positive_K[stage];
         }
     });
+}
+
+std::array<double, 2> StructuredPdeModel3D::growth_counts_at(Vec3i site) const {
+    int x{}, y{}, z{};
+    const auto bounds = population_bounds_;
+    if (!bounds.valid || !grid_coordinate(site, x, y, z) || x < bounds.x0 || x >= bounds.x1 ||
+        y < bounds.y0 || y >= bounds.y1 || z < bounds.z0 || z >= bounds.z1) return {};
+    std::vector<double> r_counts, K_counts;
+    build_local_counts(r_counts, K_counts);
+    const auto offset = (static_cast<std::size_t>(z - bounds.z0) * (bounds.y1 - bounds.y0) +
+        (y - bounds.y0)) * (bounds.x1 - bounds.x0) + (x - bounds.x0);
+    return {r_counts[offset], K_counts[offset]};
+}
+
+double StructuredPdeModel3D::refractory_mass(
+    StructuredStage3D stage, std::size_t location) const noexcept {
+    return config_.schema_version >= 7 ? r_refractory_[static_cast<std::size_t>(stage)][location] : 0.0;
+}
+
+double StructuredPdeModel3D::refractory_mean_hours(
+    StructuredStage3D stage, std::size_t location) const noexcept {
+    const double mass = refractory_mass(stage, location);
+    return mass > 0.0 ? refractory_clock_[static_cast<std::size_t>(stage)][location] / mass : 0.0;
 }
 
 bool StructuredPdeModel3D::step() {
@@ -2987,6 +3145,15 @@ void StructuredPdeModel3D::validate_state() const {
                 for (int x = bounds.x0; x < bounds.x1; ++x) {
                     const std::size_t location = index(x, y, z);
                     for (std::size_t stage = 0; stage < 2; ++stage) {
+                        if (config_.schema_version >= 7 &&
+                            (!std::isfinite(r_refractory_[stage][location]) ||
+                             !std::isfinite(refractory_clock_[stage][location]) ||
+                             r_refractory_[stage][location] < 0.0 ||
+                             r_refractory_[stage][location] > r_normal_[stage][location] + 1.0e-10 ||
+                             refractory_clock_[stage][location] < 0.0 ||
+                             (r_refractory_[stage][location] == 0.0 && refractory_clock_[stage][location] != 0.0))) {
+                            throw std::runtime_error("invalid structured cohort refractory state");
+                        }
                         if (!std::isfinite(r_normal_[stage][location]) ||
                             r_normal_[stage][location] < -1.0e-10 ||
                             !std::isfinite(K_[stage][location]) ||
@@ -3096,6 +3263,10 @@ std::uint64_t StructuredPdeModel3D::state_checksum() const {
     for (std::size_t stage = 0; stage < 2; ++stage) {
         hash_double_region(r_normal_[stage], population_bounds_);
         hash_double_region(K_[stage], population_bounds_);
+        if (config_.schema_version >= 7) {
+            hash_double_region(r_refractory_[stage], population_bounds_);
+            hash_double_region(refractory_clock_[stage], population_bounds_);
+        }
         const auto bounds = active_bounds_[stage];
         hash_bounds(bounds);
         if (bounds.valid) {
@@ -3145,7 +3316,7 @@ void StructuredPdeModel3D::save_checkpoint(
     std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
     if (!stream) throw std::runtime_error("unable to create structured checkpoint");
     stream.write(kCheckpointMagic.data(), kCheckpointMagic.size());
-    write_pod(stream, config_.schema_version >= 5
+    write_pod(stream, config_.schema_version >= 7 ? kCohortCheckpointVersion : config_.schema_version >= 5
         ? kRefractoryCheckpointVersion : kLegacyCheckpointVersion);
     write_pod(stream, config_.dynamics_fingerprint());
     write_pod(stream, static_cast<std::uint64_t>(voxel_count_));
@@ -3174,6 +3345,12 @@ void StructuredPdeModel3D::save_checkpoint(
             write_vector(stream, activation_armed_[stage]);
         }
     }
+    if (config_.schema_version >= 7) {
+        for (std::size_t stage = 0; stage < 2; ++stage) {
+            write_region(stream, r_refractory_[stage], population_bounds_, nx, ny);
+            write_region(stream, refractory_clock_[stage], population_bounds_, nx, ny);
+        }
+    }
     write_vector(stream, nutrient_);
     write_vector(stream, vessel_);
     write_pod(stream, state_checksum());
@@ -3191,11 +3368,9 @@ void StructuredPdeModel3D::load_checkpoint(
     std::array<char, 8> magic{};
     stream.read(magic.data(), magic.size());
     const std::uint32_t checkpoint_version = read_pod<std::uint32_t>(stream);
-    if (magic != kCheckpointMagic ||
-        (checkpoint_version != kLegacyCheckpointVersion &&
-         checkpoint_version != kRefractoryCheckpointVersion) ||
-        (config_.schema_version >= 5) !=
-            (checkpoint_version == kRefractoryCheckpointVersion)) {
+    const auto expected_version = config_.schema_version >= 7 ? kCohortCheckpointVersion :
+        config_.schema_version >= 5 ? kRefractoryCheckpointVersion : kLegacyCheckpointVersion;
+    if (magic != kCheckpointMagic || checkpoint_version != expected_version) {
         throw std::runtime_error("unsupported structured checkpoint format");
     }
     if (read_pod<std::uint64_t>(stream) != config_.dynamics_fingerprint()) {
@@ -3240,10 +3415,16 @@ void StructuredPdeModel3D::load_checkpoint(
             }
         }
     }
-    if (checkpoint_version == kRefractoryCheckpointVersion) {
+    if (checkpoint_version >= kRefractoryCheckpointVersion) {
         for (std::size_t stage = 0; stage < 2; ++stage) {
             read_vector(stream, activation_cooldown_[stage], voxel_count_);
             read_vector(stream, activation_armed_[stage], voxel_count_);
+        }
+    }
+    if (config_.schema_version >= 7) {
+        for (std::size_t stage = 0; stage < 2; ++stage) {
+            read_region(stream, r_refractory_[stage], population_bounds_, nx, ny);
+            read_region(stream, refractory_clock_[stage], population_bounds_, nx, ny);
         }
     }
     read_vector(stream, nutrient_, voxel_count_);

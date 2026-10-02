@@ -79,6 +79,10 @@ DirectionCandidates3D feasible_directions(
     const SparseChunkGrid3D& grid,
     bool thin_layer);
 
+double migration_direction_resource(Vec3i anchor, DirectionId direction,
+                                    const Model3DConfig& config,
+                                    const LocalDensityModifier3D* environment);
+
 DirectionId select_migration_direction(Slot slot,
                                        const CellStore3D& cells,
                                        const SparseChunkGrid3D& grid,

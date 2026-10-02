@@ -58,6 +58,7 @@ public:
         return nutrient_solve_count_;
     }
     std::size_t voxel_count() const noexcept { return voxel_count_; }
+    int migration_substeps() const noexcept { return migration_substeps_; }
     double voxel_measure() const noexcept { return voxel_measure_; }
     double large_cell_volume() const noexcept { return large_cell_volume_; }
     const std::vector<double>& population(PopulationField3D field) const noexcept {
@@ -69,6 +70,7 @@ public:
         return tumour_mask_;
     }
     double occupied_fraction(std::size_t index) const noexcept;
+    std::array<double, 2> growth_counts_at(Vec3i site) const;
     std::array<double, 3> coordinate(std::size_t index) const noexcept;
     ContinuumDiagnostics3D diagnostics() const;
     std::uint64_t state_checksum() const;
@@ -99,6 +101,7 @@ private:
     std::size_t voxel_count_{};
     double voxel_measure_{};
     double large_cell_volume_{};
+    int migration_substeps_{1};
     std::array<std::vector<double>, kPopulationFieldCount3D> populations_;
     std::array<std::vector<double>, kPopulationFieldCount3D> work_;
     std::vector<double> nutrient_;

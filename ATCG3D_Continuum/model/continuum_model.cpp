@@ -64,6 +64,9 @@ double positive_part(double value) noexcept {
 
 ContinuumModel3D::ContinuumModel3D(ContinuumModelConfig3D config)
     : config_(std::move(config)) {
+    if (config_.schema_version >= 5) {
+        config_.base.static_vasculature = config_.shared_vascular_geometry();
+    }
     config_.validate();
     voxel_count_ = static_cast<std::size_t>(config_.grid.shape[0]) *
         static_cast<std::size_t>(config_.grid.shape[1]) *
@@ -98,7 +101,12 @@ ContinuumModel3D::ContinuumModel3D(ContinuumModelConfig3D config)
     const double cfl = config_.time_step_hours * 2.0 * dimensions *
         maximum_effective_diffusion /
         (config_.grid.spacing_voxels * config_.grid.spacing_voxels);
-    if (cfl > 0.45 + 1.0e-12) {
+    if (config_.schema_version >= 5) {
+        if (!std::isfinite(cfl) || cfl > 450000.0) {
+            throw std::invalid_argument("continuum migration requires too many substeps");
+        }
+        migration_substeps_ = std::max(1, static_cast<int>(std::ceil(cfl / 0.45)));
+    } else if (cfl > 0.45 + 1.0e-12) {
         throw std::invalid_argument(
             "continuum time step violates the explicit migration CFL bound");
     }
@@ -186,7 +194,8 @@ void ContinuumModel3D::initialize_from_abm(const Simulation3D& simulation) {
             vessel_[location] = std::min(1.0, vessel_[location] + 1.0 / voxel_measure_);
         }
     }
-    if (config_.vascular.source_mode == "synthetic_central_line" ||
+    if (config_.schema_version >= 5 ||
+        config_.vascular.source_mode == "synthetic_central_line" ||
         config_.vascular.source_mode == "abm_plus_synthetic_line") {
         add_synthetic_vessel();
     }
@@ -227,7 +236,8 @@ void ContinuumModel3D::initialize_from_arrays(
     }
     populations_ = std::move(populations);
     vessel_ = std::move(vessel_fraction);
-    if (config_.vascular.source_mode == "synthetic_central_line" ||
+    if (config_.schema_version >= 5 ||
+        config_.vascular.source_mode == "synthetic_central_line" ||
         config_.vascular.source_mode == "abm_plus_synthetic_line") {
         add_synthetic_vessel();
     }
@@ -244,6 +254,19 @@ void ContinuumModel3D::initialize_from_arrays(
 }
 
 void ContinuumModel3D::add_synthetic_vessel() {
+    if (config_.schema_version >= 5) {
+        const auto geometry = config_.shared_vascular_geometry();
+        const int nx = geometry.shape[0];
+        const int ny = geometry.shape[1];
+        for (std::size_t location = 0; location < voxel_count_; ++location) {
+            const int x = static_cast<int>(location % nx);
+            const auto yz = location / nx;
+            const int y = static_cast<int>(yz % ny);
+            const int z = static_cast<int>(yz / ny);
+            if (geometry.source_voxel({x, y, z})) vessel_[location] = 1.0;
+        }
+        return;
+    }
     const int axis = config_.vascular.synthetic_axis == "x" ? 0
         : (config_.vascular.synthetic_axis == "y" ? 1 : 2);
     const double radius_squared =
@@ -542,7 +565,8 @@ void ContinuumModel3D::migrate(double dt) {
                     field == static_cast<std::size_t>(PopulationField3D::K_large);
                 const double vacancy_exponent = large ? large_cell_volume_ : 1.0;
                 const double local_availability =
-                    std::pow(vacancy, vacancy_exponent);
+                    (config_.schema_version >= 5 && vessel_[here] > 0.0)
+                        ? 0.0 : std::pow(vacancy, vacancy_exponent);
                 double delta = 0.0;
                 for (std::size_t position = 0; position < neighbor_count;
                      ++position) {
@@ -559,7 +583,8 @@ void ContinuumModel3D::migrate(double dt) {
                         static_cast<PopulationField3D>(field),
                         0.5 * (phi + other_phi));
                     const double other_availability =
-                        std::pow(other_vacancy, vacancy_exponent);
+                        (config_.schema_version >= 5 && vessel_[other] > 0.0)
+                            ? 0.0 : std::pow(other_vacancy, vacancy_exponent);
                     delta += diffusion * inverse_h2 * mobility *
                         (populations_[field][other] * local_availability -
                          populations_[field][here] * other_availability);
@@ -601,8 +626,10 @@ void ContinuumModel3D::migrate(double dt) {
                     static_cast<std::size_t>(PopulationField3D::r_large) ||
                 field == static_cast<std::size_t>(PopulationField3D::K_large);
             const double vacancy_exponent = large ? large_cell_volume_ : 1.0;
-            const double lhs_availability = std::pow(lhs_vacancy, vacancy_exponent);
-            const double rhs_availability = std::pow(rhs_vacancy, vacancy_exponent);
+            const double lhs_availability = (config_.schema_version >= 5 && vessel_[lhs] > 0.0)
+                ? 0.0 : std::pow(lhs_vacancy, vacancy_exponent);
+            const double rhs_availability = (config_.schema_version >= 5 && vessel_[rhs] > 0.0)
+                ? 0.0 : std::pow(rhs_vacancy, vacancy_exponent);
             const double rate = diffusion * inverse_h2 * mobility *
                 (populations_[field][lhs] * rhs_availability -
                  populations_[field][rhs] * lhs_availability);
@@ -642,6 +669,13 @@ void ContinuumModel3D::build_local_counts(
     const int radius = std::max(0, static_cast<int>(std::floor(
         0.5 * config_.base.growth_density_window_edge /
         config_.grid.spacing_voxels)));
+    const int lower = config_.schema_version >= 5
+        ? static_cast<int>(std::floor(((config_.base.growth_density_window_edge - 1) / 2) / config_.grid.spacing_voxels))
+        : radius;
+    const int upper = config_.schema_version >= 5
+        ? static_cast<int>(std::floor((config_.base.growth_density_window_edge -
+            (config_.base.growth_density_window_edge - 1) / 2 - 1) / config_.grid.spacing_voxels))
+        : radius;
 
     if (config_.base.thin_layer) {
         const int pitch = nx + 1;
@@ -687,13 +721,13 @@ void ContinuumModel3D::build_local_counts(
                 + prefix[static_cast<std::size_t>(y0) * pitch + x0];
         };
         deterministic_parallel_for(voxel_count_, workers, [&](std::size_t here) {
-            if (occupied_fraction(here) <= 0.0) return;
+            if (config_.schema_version < 5 && occupied_fraction(here) <= 0.0) return;
             const int x = static_cast<int>(here % static_cast<std::size_t>(nx));
             const int y = static_cast<int>(here / static_cast<std::size_t>(nx));
-            const int x0 = std::max(0, x - radius);
-            const int y0 = std::max(0, y - radius);
-            const int x1 = std::min(nx, x + radius + 1);
-            const int y1 = std::min(ny, y + radius + 1);
+            const int x0 = std::max(0, x - lower);
+            const int y0 = std::max(0, y - lower);
+            const int x1 = std::min(nx, x + upper + 1);
+            const int y1 = std::min(ny, y + upper + 1);
             r_counts[here] = rectangle_sum(r_prefix, x0, y0, x1, y1);
             K_counts[here] = rectangle_sum(K_prefix, x0, y0, x1, y1);
         });
@@ -751,18 +785,27 @@ void ContinuumModel3D::build_local_counts(
     for (int z = 0; z < nz; ++z) {
         for (int y = 0; y < ny; ++y) {
             for (int x = 0; x < nx; ++x) {
-                const int x0 = std::max(0, x - radius);
-                const int y0 = std::max(0, y - radius);
-                const int z0 = config_.base.thin_layer ? 0 : std::max(0, z - radius);
-                const int x1 = std::min(nx, x + radius + 1);
-                const int y1 = std::min(ny, y + radius + 1);
-                const int z1 = config_.base.thin_layer ? 1 : std::min(nz, z + radius + 1);
+                const int x0 = std::max(0, x - lower);
+                const int y0 = std::max(0, y - lower);
+                const int z0 = config_.base.thin_layer ? 0 : std::max(0, z - lower);
+                const int x1 = std::min(nx, x + upper + 1);
+                const int y1 = std::min(ny, y + upper + 1);
+                const int z1 = config_.base.thin_layer ? 1 : std::min(nz, z + upper + 1);
                 const std::size_t here = index(x, y, z);
                 r_counts[here] = box_sum(r_prefix, x0, y0, z0, x1, y1, z1);
                 K_counts[here] = box_sum(K_prefix, x0, y0, z0, x1, y1, z1);
             }
         }
     }
+}
+
+std::array<double, 2> ContinuumModel3D::growth_counts_at(Vec3i site) const {
+    int x{}, y{}, z{};
+    if (!grid_coordinate(site, x, y, z)) return {};
+    std::vector<double> r_counts, K_counts;
+    build_local_counts(r_counts, K_counts);
+    const auto location = index(x, y, z);
+    return {r_counts[location], K_counts[location]};
 }
 
 void ContinuumModel3D::react(double dt) {
@@ -911,7 +954,9 @@ bool ContinuumModel3D::step() {
         target = next_nutrient_refresh_hours_;
     }
     const double dt = target - time_hours_;
-    migrate(dt);
+    for (int substep = 0; substep < migration_substeps_; ++substep) {
+        migrate(dt / migration_substeps_);
+    }
     react(dt);
     time_hours_ = target;
     ++step_count_;
@@ -1011,6 +1056,10 @@ void ContinuumModel3D::validate_state() const {
             if (!std::isfinite(field[location]) || field[location] < 0.0) {
                 throw std::runtime_error("continuum population state is invalid");
             }
+        }
+        if (config_.schema_version >= 5 && vessel_[location] > 0.0 &&
+            occupied_fraction(location) > 1.0e-10) {
+            throw std::runtime_error("continuum population overlaps an excluded vessel");
         }
         if (occupied_fraction(location) >
                 config_.reaction.maximum_occupied_fraction + 1.0e-8 ||

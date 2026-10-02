@@ -106,7 +106,7 @@ const NutrientEnvironment3D::Block* NutrientEnvironment3D::find_block(
 }
 
 bool NutrientEnvironment3D::active_site(Vec3i site) const noexcept {
-    return !thin_layer_ || site.z == 0;
+    return (!thin_layer_ || site.z == 0) && config_.static_vasculature.contains(site);
 }
 
 float NutrientEnvironment3D::value(Vec3i site) const noexcept {
@@ -176,9 +176,26 @@ void NutrientEnvironment3D::rebuild_sources_and_sinks(
     for (const Slot slot : cells.alive_slots()) {
         source_blocks.insert(address(cells.anchor(slot)).block);
     }
-    const std::vector<Vec3i> vessel_sites = vessels.occupied_sites();
+    std::vector<Vec3i> vessel_sites = vessels.occupied_sites();
+    if (config_.static_vasculature.enabled()) {
+        const auto& geometry = config_.static_vasculature;
+        for (int z = 0; z < geometry.shape[2]; ++z) {
+            for (int y = 0; y < geometry.shape[1]; ++y) {
+                for (int x = 0; x < geometry.shape[0]; ++x) {
+                    const Vec3i site{static_cast<int>(std::ceil(geometry.origin[0])) + x,
+                        static_cast<int>(std::ceil(geometry.origin[1])) + y,
+                        thin_layer_ ? 0 : static_cast<int>(std::ceil(geometry.origin[2])) + z};
+                    if (geometry.source(site)) vessel_sites.push_back(site);
+                }
+            }
+        }
+        std::sort(vessel_sites.begin(), vessel_sites.end());
+        vessel_sites.erase(std::unique(vessel_sites.begin(), vessel_sites.end()), vessel_sites.end());
+    }
     for (const Vec3i site : vessel_sites) {
-        if (vessels.perfused(site)) source_blocks.insert(address(site).block);
+        if (vessels.perfused(site) || config_.static_vasculature.source(site)) {
+            source_blocks.insert(address(site).block);
+        }
     }
     for (const Vec3i source_block : source_blocks) add_halo(source_block);
 
@@ -223,7 +240,8 @@ void NutrientEnvironment3D::rebuild_sources_and_sinks(
         }
     }
     for (const Vec3i site : vessel_sites) {
-        if (!vessels.perfused(site) || !active_site(site)) continue;
+        if ((!vessels.perfused(site) && !config_.static_vasculature.source(site)) ||
+            !active_site(site)) continue;
         const Address location = address(site);
         if (Block* block = find_block(location.block)) {
             block->perfused[location.index] = 1U;
@@ -249,6 +267,12 @@ void NutrientEnvironment3D::solve() {
                     continue;
                 }
                 const double old = block.value[index];
+                if (config_.static_vasculature.enabled() && block.perfused[index] != 0) {
+                    block.next[index] = static_cast<float>(config_.vessel_value);
+                    maximum_update = std::max(maximum_update,
+                        std::abs(config_.vessel_value - old));
+                    continue;
+                }
                 double neighbor_sum = 0.0;
                 const int neighbor_count = thin_layer_ ? 4 : 6;
                 for (int direction = 0; direction < neighbor_count; ++direction) {

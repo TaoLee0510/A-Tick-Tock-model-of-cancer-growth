@@ -26,6 +26,10 @@ public:
         (void)site;
         return 1.0;
     }
+    virtual bool contains_resource_site(Vec3i site) const noexcept {
+        (void)site;
+        return true;
+    }
 };
 
 struct EnvironmentInitializationResult3D {

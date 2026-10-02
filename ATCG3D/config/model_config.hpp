@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/types.hpp"
+#include "config/static_vascular.hpp"
 
 namespace atcg3d {
 
@@ -179,6 +180,7 @@ struct Model3DConfig {
     Vec3i domain_min{-1000000, -1000000, -1000000};
     Vec3i domain_max{1000000, 1000000, 1000000};
     bool thin_layer{false};
+    StaticVascularGeometry3D static_vasculature;
 
     std::string direction_set{"fixed_26_v1"};
     double continue_probability{0.90};

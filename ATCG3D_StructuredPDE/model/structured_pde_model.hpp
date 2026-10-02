@@ -29,6 +29,9 @@ struct StructuredInitialFields3D {
     std::array<std::vector<double>, kStructuredStageCount3D>
         active_remaining_hours;
     std::vector<double> vessel_fraction;
+    // Optional v7 ordinary-r subsets. Empty vectors mean no refractory mass.
+    std::array<std::vector<double>, kStructuredStageCount3D> r_refractory;
+    std::array<std::vector<double>, kStructuredStageCount3D> refractory_remaining_hours;
 };
 
 struct StructuredPdeDiagnostics3D {
@@ -103,6 +106,9 @@ public:
     double activation_density(StructuredStage3D stage,
                               std::size_t location) const noexcept;
     double occupied_fraction(std::size_t location) const noexcept;
+    std::array<double, 2> growth_counts_at(Vec3i site) const;
+    double refractory_mass(StructuredStage3D stage, std::size_t location) const noexcept;
+    double refractory_mean_hours(StructuredStage3D stage, std::size_t location) const noexcept;
     std::array<double, 3> coordinate(std::size_t location) const noexcept;
     const std::vector<double>& nutrient() const noexcept { return nutrient_; }
     const std::vector<double>& vessel_fraction() const noexcept { return vessel_; }
@@ -198,6 +204,12 @@ private:
     std::array<std::vector<double>, kStructuredStageCount3D> r_normal_;
     std::array<std::vector<double>, kStructuredStageCount3D> K_;
     std::array<std::vector<double>, kStructuredStageCount3D> r_normal_work_;
+    // V7 transports an ordinary-r refractory subset and its time mass with
+    // the same flux as normal r. The ratio is a mass-weighted mean clock.
+    std::array<std::vector<double>, kStructuredStageCount3D> r_refractory_;
+    std::array<std::vector<double>, kStructuredStageCount3D> refractory_clock_;
+    std::array<std::vector<double>, kStructuredStageCount3D> refractory_work_;
+    std::array<std::vector<double>, kStructuredStageCount3D> refractory_clock_work_;
     std::array<std::vector<double>, kStructuredStageCount3D> K_work_;
     std::vector<std::vector<float>> active_work_;
     std::vector<std::vector<float>> clock_work_;

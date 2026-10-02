@@ -74,6 +74,7 @@ struct ContinuumVascularConfig3D {
     std::string synthetic_axis{"z"};
     std::array<double, 3> synthetic_center{0.0, 0.0, 0.0};
     double synthetic_radius_voxels{1.5};
+    std::vector<Vec3i> static_sources;
 };
 
 struct ContinuumOutputConfig3D {
@@ -111,6 +112,7 @@ struct ContinuumModelConfig3D {
 
     static ContinuumModelConfig3D load(const std::filesystem::path& path);
     void validate() const;
+    StaticVascularGeometry3D shared_vascular_geometry() const;
     std::uint64_t dynamics_fingerprint() const;
     std::string to_json() const;
 };
