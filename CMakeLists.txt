@@ -275,6 +275,12 @@ if(ATCG_BUILD_3D)
         add_executable(atcg3d_shared_abm ATCG3D_SharedRules/app/main.cpp)
         target_link_libraries(atcg3d_shared_abm PRIVATE atcg3d_shared_rules_core)
 
+        add_library(atcg3d_ode_core ATCG3D_ODE/ode/ode_model.cpp)
+        target_include_directories(atcg3d_ode_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_ODE)
+        target_link_libraries(atcg3d_ode_core PUBLIC atcg3d_structured_pde_core PRIVATE ${ATCG3D_YAML_TARGET})
+        add_executable(atcg3d_ode ATCG3D_ODE/app/main.cpp)
+        target_link_libraries(atcg3d_ode PRIVATE atcg3d_ode_core)
+
         foreach(structured_config_name IN ITEMS
                 continuum_legacy_2d_2000_r20_aligned_v1.yaml
                 structured_legacy_2d_2000_r20_v1.yaml
@@ -443,6 +449,11 @@ if(BUILD_TESTING)
             target_compile_definitions(atcg3d_shared_rules_test PRIVATE
                 ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
             add_test(NAME atcg3d_shared_rules_test COMMAND atcg3d_shared_rules_test)
+            add_executable(atcg3d_ode_test tests/3d/ode_test.cpp)
+            target_link_libraries(atcg3d_ode_test PRIVATE atcg3d_ode_core)
+            target_compile_options(atcg3d_ode_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_ode_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME atcg3d_ode_test COMMAND atcg3d_ode_test)
             if(Python3_Interpreter_FOUND)
                 add_test(NAME atcg3d_abm_pde_validation
                     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
