@@ -31,6 +31,9 @@ struct StructuredPdeConfig3D {
     std::string profile;
     std::string storage_model{"dense_v1"};
     std::uint64_t maximum_active_voxels{1000000};
+    std::string division_clock_model{"mean_rate_v1"};
+    double division_work_bin_width{0.5};
+    double division_maximum_work{128.0};
     std::filesystem::path source_path;
     std::filesystem::path continuum_config_path;
     continuum::ContinuumModelConfig3D continuum;

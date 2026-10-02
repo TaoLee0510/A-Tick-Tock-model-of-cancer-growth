@@ -10,6 +10,7 @@
 
 #include "config/structured_config.hpp"
 #include "model/paged_field.hpp"
+#include "model/division_renewal.hpp"
 #include "model/moving_tumor_front.hpp"
 
 namespace atcg3d {
@@ -98,6 +99,7 @@ public:
     std::uint64_t nutrient_solve_count() const noexcept {
         return nutrient_solve_count_;
     }
+    const DivisionRenewal3D* division_renewal() const noexcept { return renewal_.get(); }
     std::size_t voxel_count() const noexcept { return voxel_count_; }
     std::size_t moving_direction_count() const noexcept {
         return direction_ids_.size();
@@ -128,6 +130,9 @@ public:
     void load_checkpoint(const std::filesystem::path& path);
 
 private:
+    std::unique_ptr<DivisionRenewal3D> renewal_;
+    double division_channel_mass(std::size_t location, std::size_t channel) const;
+    void finish_division_transport();
     std::size_t index(int x, int y, int z) const noexcept;
     bool grid_coordinate(Vec3i site, int& x, int& y, int& z) const noexcept;
     void add_synthetic_vessel();

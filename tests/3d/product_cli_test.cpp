@@ -51,7 +51,7 @@ int main() {
              "--output-directory", output.string()}) == 0);
     auto migrated = atcg3d::structured_pde::StructuredPdeConfig3D::load(
         output / "model.yaml");
-    assert(migrated.schema_version == 9);
+    assert(migrated.schema_version == 10);
     assert(migrated.continuum.schema_version == 6);
     assert(!migrated.continuum.output.directory.is_absolute());
     assert(!migrated.continuum.base.output_directory.is_absolute());

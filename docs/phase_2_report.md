@@ -33,3 +33,8 @@ cell footprints and directions, mixed refractory ages, and angiogenesis require
 additional validation regimes. The sparse test's zero active fraction does not
 validate activated invasion quantitatively. ODE, dynamic vessels and hybrid
 coupling remain subsequent phases.
+
+Follow-up: [transported division work in schema 10](renewal_validation.md)
+addresses the regular-cycle mass bias with an independently checked renewal
+law. The new 16-seed case passes the original tolerances. This does not resolve
+the separate activated-invasion and age/direction-correlation limits above.

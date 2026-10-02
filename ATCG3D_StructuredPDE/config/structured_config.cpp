@@ -1,4 +1,5 @@
 #include "config/structured_config.hpp"
+#include "model/division_renewal.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -116,7 +117,7 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
             error.what());
     }
     mapping(root, "$", {"schema", "profile", "continuum_config",
-                         "structured_migration", "output", "storage"});
+                         "structured_migration", "output", "storage", "division_clock"});
     const YAML::Node schema = required(root, "schema", "$");
     mapping(schema, "$.schema", {"name", "version"});
     if (text(required(schema, "name", "$.schema"), "$.schema.name") !=
@@ -226,12 +227,20 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
             required(storage, "maximum_active_voxels", "$.storage"),
             "$.storage.maximum_active_voxels");
     }
+    if (root["division_clock"]) {
+        if (result.schema_version < 10) fail("$.division_clock", "requires schema v10");
+        const auto clock = root["division_clock"];
+        mapping(clock, "$.division_clock", {"model", "work_bin_width", "maximum_work"});
+        result.division_clock_model = text(required(clock, "model", "$.division_clock"), "$.division_clock.model");
+        result.division_work_bin_width = number(required(clock, "work_bin_width", "$.division_clock"), "$.division_clock.work_bin_width");
+        result.division_maximum_work = number(required(clock, "maximum_work", "$.division_clock"), "$.division_clock.maximum_work");
+    }
     result.validate();
     return result;
 }
 
 void StructuredPdeConfig3D::validate() const {
-    if ((schema_version < 1 || schema_version > 9) || profile.empty()) {
+    if ((schema_version < 1 || schema_version > 10) || profile.empty()) {
         throw std::invalid_argument("structured PDE schema/profile is invalid");
     }
     if (schema_version < 9 && storage_model != "dense_v1") {
@@ -247,6 +256,27 @@ void StructuredPdeConfig3D::validate() const {
             "sparse zero pages v1 requires thin layer and static vasculature");
     }
     continuum.validate();
+    if ((division_clock_model != "mean_rate_v1" &&
+         division_clock_model != "transported_shifted_geometric_v1") ||
+        (schema_version < 10 && division_clock_model != "mean_rate_v1") ||
+        !(division_work_bin_width > 0.0) || !std::isfinite(division_work_bin_width) ||
+        !(division_maximum_work > division_work_bin_width) ||
+        !std::isfinite(division_maximum_work) ||
+        division_maximum_work / division_work_bin_width > 4096) {
+        throw std::invalid_argument("invalid structured division clock model/grid");
+    }
+    if (division_clock_model == "transported_shifted_geometric_v1") {
+        const auto& base = continuum.base;
+        std::array<double, 2> inherent{base.initial_r_growth_rate, base.initial_K_growth_rate};
+        if (base.initial_growth_rate_model != "fixed") {
+            const auto& r = base.initial_r_growth_truncated_normal;
+            const auto& K = base.initial_K_growth_truncated_normal;
+            inherent = {std::clamp(r.mean, r.minimum, r.maximum),
+                        std::clamp(K.mean, K.minimum, K.maximum)};
+        }
+        (void)DivisionRenewal3D(base.division_timing, division_work_bin_width,
+                              division_maximum_work, inherent);
+    }
     if (migration.model != "abm_activation_clock_discrete_velocity_v1" ||
         migration.activation_density != "abm_anchor_box_v1" ||
         migration.activation_clock != "beta_mean_remaining_cycle_v1" ||
@@ -400,6 +430,11 @@ std::uint64_t StructuredPdeConfig3D::dynamics_fingerprint() const {
         hash_text(state, storage_model);
         state = mix(state, maximum_active_voxels);
     }
+    if (schema_version >= 10) {
+        hash_text(state, division_clock_model);
+        state = mix(state, std::bit_cast<std::uint64_t>(division_work_bin_width));
+        state = mix(state, std::bit_cast<std::uint64_t>(division_maximum_work));
+    }
     return state;
 }
 
@@ -443,6 +478,11 @@ std::string StructuredPdeConfig3D::to_json() const {
     if (schema_version >= 9) {
         stream << ",\"storage\":{\"model\":\"" << storage_model
                << "\",\"maximum_active_voxels\":" << maximum_active_voxels << '}';
+    }
+    if (schema_version >= 10) {
+        stream << ",\"division_clock\":{\"model\":\"" << division_clock_model
+               << "\",\"work_bin_width\":" << division_work_bin_width
+               << ",\"maximum_work\":" << division_maximum_work << '}';
     }
     stream << '}';
     return stream.str();

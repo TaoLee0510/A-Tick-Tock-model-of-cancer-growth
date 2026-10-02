@@ -33,4 +33,5 @@ jobs:
           path: |
             build-ci/validation/
             build-ci/validation-vascular/
+            build-ci/validation-regular/
             build-ci/Testing/Temporary/LastTest.log

@@ -70,6 +70,8 @@ OdeConfig3D OdeConfig3D::load(const std::filesystem::path& path) {
 }
 void OdeConfig3D::validate() const {
     rules.validate();
+    if (rules.division_clock_model != "mean_rate_v1")
+        throw std::invalid_argument("ODE v1 does not carry division work distributions");
     if (rules.schema_version < 7) throw std::invalid_argument("ODE requires the transported refractory contract v7+");
     for (const double value : {solver.relative_tolerance,solver.absolute_tolerance,solver.maximum_step_hours}) {
         if (!std::isfinite(value) || value <= 0.0) throw std::invalid_argument("invalid adaptive ODE tolerance/step");

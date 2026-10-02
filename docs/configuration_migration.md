@@ -13,7 +13,7 @@ build-codex/atcg_sim --model pde --config migrated_run/model.yaml --dry-run
 ```
 
 Supported upgrades are ABM v1-v3 to v3, nutrient v1-v3 to v3, continuum v3-v6
-to v6, and shared-resource structured v5-v9 to v9. ODE/hybrid wrapper v1 is
+to v6, and shared-resource structured v5-v10 to v10. ODE/hybrid wrapper v1 is
 copied with its references upgraded. Structured v1-v4 and continuum v1-v2 lack
 shared-resource calibration parameters; the tool rejects them rather than
 inventing scientific parameters.
@@ -23,6 +23,9 @@ new continuum versions use the exact ABM edge window. These changes have new
 fingerprints. Migration creates a fresh run and clears old checkpoint imports;
 it does not convert a biological checkpoint or promise identical new trajectories.
 The numeric time interval and initial parameters remain visible for review.
+Schema v10 retains the mean-rate division closure unless a configuration
+explicitly selects transported shifted-geometric division work. Migration
+preserves that explicit selection and its work-grid parameters.
 
 Older nutrient configurations need `--grid-edge N` to define the new finite
 resource domain. Nutrient v1 also needs `--nutrient-K-per-cell-hour RATE`: its

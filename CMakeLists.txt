@@ -255,6 +255,7 @@ if(ATCG_BUILD_3D)
         add_library(atcg3d_structured_pde_core
             ATCG3D_StructuredPDE/config/structured_config.cpp
             ATCG3D_StructuredPDE/model/structured_pde_model.cpp
+            ATCG3D_StructuredPDE/model/division_renewal.cpp
             ATCG3D_StructuredPDE/io/structured_pde_output.cpp
             ATCG3D_StructuredPDE/io/structured_vtkhdf_writer.cpp
         )
@@ -470,6 +471,11 @@ if(BUILD_TESTING)
             target_compile_definitions(atcg3d_shared_rules_test PRIVATE
                 ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
             add_test(NAME atcg3d_shared_rules_test COMMAND atcg3d_shared_rules_test)
+            add_executable(atcg3d_division_renewal_test tests/3d/division_renewal_test.cpp)
+            target_link_libraries(atcg3d_division_renewal_test PRIVATE atcg3d_structured_pde_core)
+            target_compile_options(atcg3d_division_renewal_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_division_renewal_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME atcg3d_division_renewal_test COMMAND atcg3d_division_renewal_test)
             add_executable(atcg3d_product_cli_test tests/3d/product_cli_test.cpp)
             target_link_libraries(atcg3d_product_cli_test PRIVATE atcg3d_hybrid_core atcg3d_ode_core)
             target_compile_options(atcg3d_product_cli_test PRIVATE -UNDEBUG)
@@ -514,6 +520,12 @@ if(BUILD_TESTING)
                         --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/validation_v7.yaml
                         --seeds 16 --output ${CMAKE_CURRENT_BINARY_DIR}/validation)
                 set_tests_properties(atcg3d_abm_pde_validation PROPERTIES LABELS validation TIMEOUT 180)
+                add_test(NAME atcg3d_regular_cycle_validation
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
+                        --exe $<TARGET_FILE:atcg3d_shared_abm>
+                        --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/regular_cycle_v10.yaml
+                        --seeds 16 --output ${CMAKE_CURRENT_BINARY_DIR}/validation-regular)
+                set_tests_properties(atcg3d_regular_cycle_validation PROPERTIES LABELS validation TIMEOUT 300)
                 add_test(NAME atcg3d_vascular_validation
                     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
                         --exe $<TARGET_FILE:atcg3d_shared_abm>

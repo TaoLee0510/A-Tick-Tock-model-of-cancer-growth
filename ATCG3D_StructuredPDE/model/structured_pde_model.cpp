@@ -335,6 +335,23 @@ StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
     }
 
     tumour_mask_.assign(voxel_count_, 0U);
+    if (config_.division_clock_model == "transported_shifted_geometric_v1") {
+        renewal_ = std::make_unique<DivisionRenewal3D>(continuum.base.division_timing,
+            config_.division_work_bin_width, config_.division_maximum_work,
+            std::array<double, 2>{mean_growth_rate(CellType::r), mean_growth_rate(CellType::K)});
+    }
+}
+
+double StructuredPdeModel3D::division_channel_mass(std::size_t location,
+                                                 std::size_t channel) const {
+    const auto stage = channel % 2;
+    return channel < 2 ? r_normal_[stage][location] + active_total_[stage][location]
+                       : K_[stage][location];
+}
+void StructuredPdeModel3D::finish_division_transport() {
+    if (renewal_) renewal_->finish_transport([&](auto location, auto channel) {
+        return division_channel_mass(location, channel);
+    });
 }
 
 std::size_t StructuredPdeModel3D::index(int x, int y, int z) const noexcept {
@@ -617,6 +634,12 @@ void StructuredPdeModel3D::initialize_from_abm(
             }
             const std::size_t location = index(x, y, z);
             include_population_location(x, y, z);
+            if (renewal_) {
+                const double completed = std::max(0.0, now - simulation.cells().last_update_time(slot)) *
+                    std::max(0.0, double(simulation.cells().density_growth_rate(slot)));
+                renewal_->add(location, (type == CellType::r ? 0 : 2) + stage,
+                    weight, std::max(0.0, double(simulation.cells().division_work_remaining(slot)) - completed));
+            }
             if (type == CellType::K) {
                 K_[stage][location] += weight;
             } else if (!active) {
@@ -779,6 +802,13 @@ void StructuredPdeModel3D::initialize_from_arrays(
         source == "abm_plus_synthetic_line") add_synthetic_vessel();
     clear_cells_from_vessels();
     time_hours_ = time_hours;
+    if (renewal_) {
+        for (std::size_t location = 0; location < voxel_count_; ++location)
+            for (std::size_t channel = 0; channel < 4; ++channel) {
+                const double mass = division_channel_mass(location, channel);
+                if (mass > 0.0) renewal_->add_fresh(location, channel, mass);
+            }
+    }
     if (config_.schema_version >= 5) {
         fill_field(nutrient_,config_.continuum.nutrient.initial_value);
     }
@@ -848,6 +878,7 @@ void StructuredPdeModel3D::clear_cells_from_vessels() {
     for (std::size_t location = 0; location < voxel_count_; ++location) {
         if (!vessel_blocks_cells(location)) continue;
         if(config_.schema_version>=9&&occupied_fraction(location)==0)continue;
+        if (renewal_) renewal_->erase(location);
         if (config_.schema_version >= 7 && !initialized_ && occupied_fraction(location) > 1.0e-10) {
             throw std::invalid_argument("structured initial population overlaps an excluded vessel");
         }
@@ -1489,12 +1520,13 @@ double StructuredPdeModel3D::active_rate(StructuredStage3D stage) const noexcept
 void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
     const auto& continuum = config_.continuum;
     if (!population_bounds_.valid) return;
+    if (renewal_) renewal_->begin_transport();
     const int nx = continuum.grid.shape[0];
     const int ny = continuum.grid.shape[1];
     const int nz = continuum.grid.shape[2];
     const double inverse_h2 = 1.0 /
         (continuum.grid.spacing_voxels * continuum.grid.spacing_voxels);
-    const int workers = std::max(
+    const int workers = renewal_ ? 1 : std::max(
         1, std::min(continuum.base.threads, available_worker_threads()));
     const StructuredActiveBounds3D old_bounds = population_bounds_;
     const StructuredActiveBounds3D target_bounds = expanded_bounds(old_bounds);
@@ -1532,7 +1564,7 @@ void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
     const auto migrate_field = [&](const PagedField<double>& source,
                                    PagedField<double>& target,
                                    StructuredStage3D stage,
-                                   CellType type) {
+                                   CellType type, bool carry_cycle = false) {
         const bool large = stage == StructuredStage3D::large;
         const double vacancy_exponent = large ? large_cell_volume_ : 1.0;
         const double diffusion = normal_diffusion(stage, type);
@@ -1568,6 +1600,12 @@ void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
                 delta += diffusion * inverse_h2 * mobility *
                     (source[other] * availability -
                      source[here] * other_availability);
+                if (renewal_ && carry_cycle && here < other) {
+                    const std::size_t channel = (type == CellType::r ? 0 : 2) + std::size_t(stage);
+                    const double scale = dt * diffusion * inverse_h2 * mobility;
+                    renewal_->transfer(other, here, channel, scale * source[other] * availability);
+                    renewal_->transfer(here, other, channel, scale * source[here] * other_availability);
+                }
             };
             exchange(x - 1, y, z);
             exchange(x + 1, y, z);
@@ -1590,8 +1628,8 @@ void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
 
     for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
         const auto value = static_cast<StructuredStage3D>(stage);
-        migrate_field(r_normal_[stage], r_normal_work_[stage], value, CellType::r);
-        migrate_field(K_[stage], K_work_[stage], value, CellType::K);
+        migrate_field(r_normal_[stage], r_normal_work_[stage], value, CellType::r, true);
+        migrate_field(K_[stage], K_work_[stage], value, CellType::K, true);
         if (config_.schema_version >= 7) {
             migrate_field(r_refractory_[stage], refractory_work_[stage], value, CellType::r);
             migrate_field(refractory_clock_[stage], refractory_clock_work_[stage], value, CellType::r);
@@ -1620,6 +1658,7 @@ void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
     }
     normal_work_dirty_bounds_ = old_bounds;
     population_bounds_ = target_bounds;
+    finish_division_transport();
 }
 
 std::vector<std::size_t> StructuredPdeModel3D::eligible_initial_directions(
@@ -2103,6 +2142,7 @@ void StructuredPdeModel3D::migrate_active(double dt) {
         }
 
         for (int substep = 0; substep < substeps; ++substep) {
+            if (renewal_) renewal_->begin_transport();
             const StructuredActiveBounds3D old_bounds = active_bounds_[stage];
             const StructuredActiveBounds3D target_bounds =
                 expanded_bounds(old_bounds);
@@ -2207,6 +2247,7 @@ void StructuredPdeModel3D::migrate_active(double dt) {
                         const double moved = mass * move_probability *
                             direction_probability * availability;
                         if (!(moved > 0.0)) return;
+                        if (renewal_) renewal_->transfer(location, other, stage, moved);
                         accepted_total += moved;
                         active_work_[target_bucket][other] +=
                             static_cast<float>(moved);
@@ -2317,7 +2358,7 @@ void StructuredPdeModel3D::migrate_active(double dt) {
                 // three row colours in parallel without atomics; x remains
                 // ordered within a row, preserving the local accumulation
                 // order. This is algebraically the same transport operator.
-                const int workers = std::max(1, std::min(
+                const int workers = renewal_ ? 1 : std::max(1, std::min(
                     continuum.base.threads, available_worker_threads()));
                 for (int row_colour = 0; row_colour < 3; ++row_colour) {
                     const int first_y = old_bounds.y0 + row_colour;
@@ -2453,6 +2494,7 @@ void StructuredPdeModel3D::migrate_active(double dt) {
                 expire_active(stage, sub_dt);
                 shrink_active_bounds(stage);
             }
+            finish_division_transport();
             if (!active_bounds_[stage].valid) break;
         }
     }
@@ -2555,6 +2597,7 @@ void StructuredPdeModel3D::exchange_active_r_with_K(double dt) {
         }
     }
     if (proposals.empty()) return;
+    if (renewal_) renewal_->begin_transport();
 
     std::unordered_map<std::size_t, double> outgoing_by_source;
     std::unordered_map<std::size_t, double> K_delta;
@@ -2574,6 +2617,10 @@ void StructuredPdeModel3D::exchange_active_r_with_K(double dt) {
             ? K_[0][proposal.target] / demand : 1.0;
         const double accepted = proposal.requested * target_scale;
         if (!(accepted > 0.0)) continue;
+        if (renewal_) {
+            renewal_->transfer(proposal.source, proposal.target, 0, accepted);
+            renewal_->transfer(proposal.target, proposal.source, 2, accepted);
+        }
         outgoing_by_source[proposal.source] += accepted;
         K_delta[proposal.source] += accepted;
         K_delta[proposal.target] -= accepted;
@@ -2618,6 +2665,7 @@ void StructuredPdeModel3D::exchange_active_r_with_K(double dt) {
     work_dirty_bounds_ = clear_bounds;
     active_bounds_[0] = target_bounds;
     shrink_active_bounds(0);
+    finish_division_transport();
 }
 
 void StructuredPdeModel3D::build_local_counts(
@@ -2791,7 +2839,7 @@ void StructuredPdeModel3D::react(double dt) {
         ? continuum.nutrient.common_carrying_capacity : legacy_r_capacity;
     const double K_capacity = config_.schema_version >= 5
         ? continuum.nutrient.common_carrying_capacity : legacy_K_capacity;
-    const int workers = std::max(
+    const int workers = renewal_ ? 1 : std::max(
         1, std::min(continuum.base.threads, available_worker_threads()));
     const auto bounds = population_bounds_;
     const std::size_t bx = static_cast<std::size_t>(bounds.x1 - bounds.x0);
@@ -2867,12 +2915,19 @@ void StructuredPdeModel3D::react(double dt) {
             r_normal_[0][location] + r_active(StructuredStage3D::small, location),
             r_normal_[1][location] + r_active(StructuredStage3D::large, location)};
         const std::array<double, 2> old_K{K_[0][location], K_[1][location]};
+        std::array<double, 4> completed{};
+        if (renewal_) {
+            for (std::size_t stage = 0; stage < 2; ++stage) {
+                completed[stage] = renewal_->advance(location, stage, dt * positive_part(r_growth));
+                completed[stage + 2] = renewal_->advance(location, stage + 2, dt * positive_part(K_growth));
+            }
+        }
         std::array<double, 2> delta_r{
             -r_death_rate * old_r[0], -r_death_rate * old_r[1]};
         std::array<double, 2> delta_K{
             -K_death_rate * old_K[0], -K_death_rate * old_K[1]};
 
-        const double r_large_events = r_division_rate * old_r[1];
+        const double r_large_events = renewal_ ? completed[1] / dt : r_division_rate * old_r[1];
         const double r_large_daughters = large_success * r_large_events;
         const double r_shape_reductions =
             (1.0 - large_success) * r_large_events;
@@ -2883,21 +2938,21 @@ void StructuredPdeModel3D::react(double dt) {
         delta_r[0] += (2.0 - large_conversion) * r_shape_reductions;
         delta_K[0] += large_conversion * r_shape_reductions;
 
-        const double K_large_events = K_division_rate * old_K[1];
+        const double K_large_events = renewal_ ? completed[3] / dt : K_division_rate * old_K[1];
         const double K_large_daughters = large_success * K_large_events;
         const double K_shape_reductions =
             (1.0 - large_success) * K_large_events;
         delta_K[1] += K_large_daughters - K_shape_reductions;
         delta_K[0] += 2.0 * K_shape_reductions;
 
-        const double r_small_events = r_division_rate * old_r[0];
+        const double r_small_events = renewal_ ? completed[0] / dt : r_division_rate * old_r[0];
         const double r_small_births = small_success * r_small_events;
         const double small_conversion = conversion_probability(0);
         delta_r[0] += (1.0 - small_conversion) * r_small_births
             - (1.0 - small_success) * r_small_events *
                 continuum.reaction.failed_r_division_death_fraction;
         delta_K[0] += small_conversion * r_small_births;
-        delta_K[0] += small_success * K_division_rate * old_K[0];
+        delta_K[0] += small_success * (renewal_ ? completed[2] / dt : K_division_rate * old_K[0]);
 
         std::array<double, 2> positive_r{};
         std::array<double, 2> positive_K{};
@@ -2952,6 +3007,30 @@ void StructuredPdeModel3D::react(double dt) {
             // the ABM division-cycle reset before a later density refresh.
             r_normal_[stage][location] += scale * positive_r[stage];
             K_[stage][location] += scale * positive_K[stage];
+            if (renewal_) {
+                // Successful mothers reset activity as well as their work.
+                const double reset_fraction = old_r[stage] > 0.0
+                    ? std::clamp(completed[stage] / old_r[stage], 0.0, 1.0) : 0.0;
+                double active_sum = 0.0;
+                for (std::size_t bucket = 0; bucket < active_direction_[stage].size(); ++bucket) {
+                    const double before = active_direction_[stage][bucket][location];
+                    active_direction_[stage][bucket][location] = static_cast<float>(before * (1.0 - reset_fraction));
+                    active_clock_[stage][bucket][location] = static_cast<float>(
+                        active_clock_[stage][bucket][location] * (1.0 - reset_fraction));
+                    r_normal_[stage][location] += before - active_direction_[stage][bucket][location];
+                    active_sum += active_direction_[stage][bucket][location];
+                }
+                active_total_[stage][location] = static_cast<float>(active_sum);
+                renewal_->reconcile(location, stage, division_channel_mass(location, stage));
+                if (stage == 0) {
+                    // A K cell with no free daughter site retries; it does not
+                    // draw a fresh biological cycle after a failed attempt.
+                    const double retries = completed[2] * (1.0 - small_success * scale);
+                    if (retries > 0.0) renewal_->add(location, 2, retries,
+                        positive_part(K_growth) * continuum.base.division_timing.retry_delay_hours);
+                }
+                renewal_->reconcile(location, stage + 2, K_[stage][location]);
+            }
         }
     });
 }
@@ -3375,6 +3454,7 @@ std::uint64_t StructuredPdeModel3D::state_checksum() const {
     hash_double_region(nutrient_, full_bounds);
     hash_double_region(vessel_, full_bounds);
     if(angiogenesis_) state=hash_mix(state,angiogenesis_->checksum());
+    if (renewal_) state = hash_mix(state, renewal_->checksum());
     return state;
 }
 
@@ -3390,7 +3470,7 @@ void StructuredPdeModel3D::save_checkpoint(
     std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
     if (!stream) throw std::runtime_error("unable to create structured checkpoint");
     stream.write(kCheckpointMagic.data(), kCheckpointMagic.size());
-    write_pod(stream, config_.schema_version >= 8 ? 5U : config_.schema_version >= 7 ? kCohortCheckpointVersion : config_.schema_version >= 5
+    write_pod(stream, config_.schema_version >= 10 ? 6U : config_.schema_version >= 8 ? 5U : config_.schema_version >= 7 ? kCohortCheckpointVersion : config_.schema_version >= 5
         ? kRefractoryCheckpointVersion : kLegacyCheckpointVersion);
     write_pod(stream, config_.dynamics_fingerprint());
     write_pod(stream, static_cast<std::uint64_t>(voxel_count_));
@@ -3428,6 +3508,7 @@ void StructuredPdeModel3D::save_checkpoint(
     write_vector(stream, nutrient_);
     write_vector(stream, vessel_);
     if(angiogenesis_) angiogenesis_->save(stream);
+    if (renewal_) renewal_->save(stream);
     write_pod(stream, state_checksum());
     stream.flush();
     if (!stream) throw std::runtime_error("unable to finish structured checkpoint");
@@ -3443,7 +3524,7 @@ void StructuredPdeModel3D::load_checkpoint(
     std::array<char, 8> magic{};
     stream.read(magic.data(), magic.size());
     const std::uint32_t checkpoint_version = read_pod<std::uint32_t>(stream);
-    const auto expected_version = config_.schema_version >= 8 ? 5U : config_.schema_version >= 7 ? kCohortCheckpointVersion :
+    const auto expected_version = config_.schema_version >= 10 ? 6U : config_.schema_version >= 8 ? 5U : config_.schema_version >= 7 ? kCohortCheckpointVersion :
         config_.schema_version >= 5 ? kRefractoryCheckpointVersion : kLegacyCheckpointVersion;
     if (magic != kCheckpointMagic || checkpoint_version != expected_version) {
         throw std::runtime_error("unsupported structured checkpoint format");
@@ -3505,6 +3586,7 @@ void StructuredPdeModel3D::load_checkpoint(
     read_vector(stream, nutrient_, voxel_count_);
     read_vector(stream, vessel_, voxel_count_);
     if(angiogenesis_) angiogenesis_->load(stream);
+    if (renewal_) renewal_->load(stream, voxel_count_);
     const std::uint64_t expected_checksum = read_pod<std::uint64_t>(stream);
     if (stream.peek() != std::char_traits<char>::eof()) {
         throw std::runtime_error("structured checkpoint has trailing data");

@@ -1,6 +1,6 @@
 # Shared ABM and structured PDE rules
 
-`atcg3d_shared_abm` accepts the same structured v5-v7 YAML as the PDE.
+`atcg3d_shared_abm` accepts the same structured YAML as the PDE.
 Use `--model abm` or `--model pde`, `--seed N`, `--threads N` and
 `--report summary.json`. The ABM adapter selects the new
 `nutrient_gradient_shared_resource_v3` model and a finite unit-spaced domain.
@@ -53,10 +53,13 @@ Scalar tolerances are 35% mass/ratio, 5 percentage points active fraction,
 The area-weighted radial L2 tolerance is 0.35 with no sampling allowance.
 Reports use deterministic seed ordering and retain each seed's raw metrics.
 
-The CI case uses near-memoryless division work clocks (minimum fraction zero,
+The original CI case uses near-memoryless division work clocks (minimum fraction zero,
 stochastic fraction one), sparse small cells and no angiogenesis. It does not
 establish dense invasive agreement. The original regular-cycle case (minimum
 fraction 0.9) failed the mass tolerance: 468.69 ABM versus 650.14 PDE mean cells.
 This records a model closure limitation, not a numerical tolerance adjustment.
-Individual growth and activation clocks, footprint correlations, direction
+Structured schema 10 now supplies a transported division-work distribution;
+the regular-cycle ensemble passes with the same tolerances. See
+[the renewal validation report](renewal_validation.md) for the law, numerical
+checks and closure limits. Individual growth and activation clocks, footprint correlations, direction
 correlations and mixed refractory ages need broader regime validation.

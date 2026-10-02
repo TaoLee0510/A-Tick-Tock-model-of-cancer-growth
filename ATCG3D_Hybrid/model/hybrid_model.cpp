@@ -66,6 +66,8 @@ HybridConfig3D HybridConfig3D::load(const std::filesystem::path &path) {
 }
 void HybridConfig3D::validate() const {
     rules.validate();
+    if (rules.division_clock_model != "mean_rate_v1")
+        throw std::invalid_argument("hybrid v1 does not carry division work distributions");
     (void)shared_rules::abm_config(rules);
     if (schema_version != 1 || model != "hybrid_shared_grid_v1" ||
         (mode != "adaptive" && mode != "all_abm" && mode != "all_pde"))
