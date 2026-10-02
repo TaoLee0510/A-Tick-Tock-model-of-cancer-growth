@@ -1,6 +1,7 @@
 #include "io/structured_pde_output.hpp"
 
 #include <algorithm>
+#include "io/pde_vtkhdf_writer.hpp"
 #include <bit>
 #include <cmath>
 #include <iomanip>
@@ -92,7 +93,7 @@ StructuredPdeOutput3D::StructuredPdeOutput3D(
         last_checkpoint_time_ = initial_time_hours;
         for (const auto& entry :
              std::filesystem::directory_iterator(directory_ / "fields")) {
-            if (entry.is_regular_file()) ++field_index_;
+            if (entry.is_regular_file()&&(!config_.continuum.output.vtkhdf_fields||entry.path().extension()==".csv")) ++field_index_;
         }
     } else {
         next_metrics_ = initial_time_hours;
@@ -210,6 +211,12 @@ void StructuredPdeOutput3D::write_field(const StructuredPdeModel3D& model) {
     if (!stream) throw std::runtime_error("unable to finish structured field");
     stream.close();
     std::filesystem::rename(temporary, path);
+    if(config_.continuum.output.vtkhdf_fields) {
+        auto hdf_path=path;hdf_path.replace_extension(".vtkhdf");
+        continuum::write_pde_vtkhdf(hdf_path,model);
+        continuum::append_pde_series(directory_,hdf_path,model.time_hours());
+    }
+
 }
 
 void StructuredPdeOutput3D::write_checkpoint(

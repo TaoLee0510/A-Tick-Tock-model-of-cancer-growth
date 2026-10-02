@@ -79,6 +79,7 @@ struct ContinuumVascularConfig3D {
 };
 
 struct ContinuumOutputConfig3D {
+    bool vtkhdf_fields{false};
     bool enabled{true};
     std::filesystem::path directory{"atcg3d_continuum_run"};
     double metrics_every_hours{1.0};

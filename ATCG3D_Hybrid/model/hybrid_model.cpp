@@ -53,6 +53,8 @@ HybridConfig3D HybridConfig3D::load(const std::filesystem::path &path) {
     c.model = y["model"].as<std::string>();
     c.rules = structured_pde::StructuredPdeConfig3D::load(
         path.parent_path() / y["structured_config"].as<std::string>());
+    if (y["output"] && y["output"]["directory"])
+        c.output_directory = y["output"]["directory"].as<std::string>();
     auto h = y["hybrid"];
     c.mode = h["mode"].as<std::string>();
     c.exchange_every_hours = h["exchange_every_hours"].as<double>();

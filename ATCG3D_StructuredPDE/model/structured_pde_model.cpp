@@ -75,17 +75,17 @@ T read_pod(std::istream& stream) {
 }
 
 template <class T>
-void write_vector(std::ostream& stream, const std::vector<T>& values) {
+void write_vector(std::ostream& stream, const T& values) {
     const std::uint64_t size = values.size();
     write_pod(stream, size);
     stream.write(reinterpret_cast<const char*>(values.data()),
-                 static_cast<std::streamsize>(size * sizeof(T)));
+                 static_cast<std::streamsize>(size * sizeof(typename T::value_type)));
     if (!stream) throw std::runtime_error("unable to write structured PDE field");
 }
 
 template <class T>
 void read_vector(std::istream& stream,
-                 std::vector<T>& values,
+                 T& values,
                  std::size_t expected) {
     const std::uint64_t size = read_pod<std::uint64_t>(stream);
     if (size != expected) {
@@ -93,7 +93,7 @@ void read_vector(std::istream& stream,
     }
     values.resize(expected);
     stream.read(reinterpret_cast<char*>(values.data()),
-                static_cast<std::streamsize>(expected * sizeof(T)));
+                static_cast<std::streamsize>(expected * sizeof(typename T::value_type)));
     if (!stream) throw std::runtime_error("truncated structured PDE field");
 }
 
@@ -137,14 +137,14 @@ std::uint64_t bounds_size(const StructuredActiveBounds3D& bounds) noexcept {
 
 template <class T>
 void write_region(std::ostream& stream,
-                  const std::vector<T>& values,
+                  const T& values,
                   const StructuredActiveBounds3D& bounds,
                   int nx,
                   int ny) {
     write_pod(stream, bounds_size(bounds));
     if (!bounds.valid) return;
     const std::streamsize row_bytes = static_cast<std::streamsize>(
-        (bounds.x1 - bounds.x0) * sizeof(T));
+        (bounds.x1 - bounds.x0) * sizeof(typename T::value_type));
     for (int z = bounds.z0; z < bounds.z1; ++z) {
         for (int y = bounds.y0; y < bounds.y1; ++y) {
             const std::size_t begin =
@@ -158,7 +158,7 @@ void write_region(std::ostream& stream,
 
 template <class T>
 void read_region(std::istream& stream,
-                 std::vector<T>& values,
+                 T& values,
                  const StructuredActiveBounds3D& bounds,
                  int nx,
                  int ny) {
@@ -166,10 +166,10 @@ void read_region(std::istream& stream,
     if (stored_size != bounds_size(bounds)) {
         throw std::runtime_error("structured PDE checkpoint region size mismatch");
     }
-    std::fill(values.begin(), values.end(), T{});
+    fill_field(values,typename T::value_type{});
     if (!bounds.valid) return;
     const std::streamsize row_bytes = static_cast<std::streamsize>(
-        (bounds.x1 - bounds.x0) * sizeof(T));
+        (bounds.x1 - bounds.x0) * sizeof(typename T::value_type));
     for (int z = bounds.z0; z < bounds.z1; ++z) {
         for (int y = bounds.y0; y < bounds.y1; ++y) {
             const std::size_t begin =
@@ -272,7 +272,18 @@ StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
             }
         }
     }
+    const bool sparse = config_.storage_model == "sparse_zero_pages_v1";
     for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
+        for (auto* field : {&r_normal_[stage], &K_[stage],
+                            &r_normal_work_[stage], &K_work_[stage],
+                            &r_refractory_[stage], &refractory_clock_[stage],
+                            &refractory_work_[stage], &refractory_clock_work_[stage],
+                            &activation_density_[stage]}) {
+            field->set_sparse(sparse);
+        }
+        active_total_[stage].set_sparse(sparse);
+        activation_cooldown_[stage].set_sparse(sparse);
+        activation_armed_[stage].set_sparse(sparse);
         r_normal_[stage].assign(voxel_count_, 0.0);
         if (config_.schema_version >= 7) {
             r_refractory_[stage].assign(voxel_count_, 0.0);
@@ -290,6 +301,8 @@ StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
         active_direction_[stage].resize(buckets);
         active_clock_[stage].resize(buckets);
         for (std::size_t bucket = 0; bucket < buckets; ++bucket) {
+            active_direction_[stage][bucket].set_sparse(sparse);
+            active_clock_[stage][bucket].set_sparse(sparse);
             active_direction_[stage][bucket].assign(voxel_count_, 0.0F);
             active_clock_[stage][bucket].assign(voxel_count_, 0.0F);
         }
@@ -297,14 +310,19 @@ StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
     active_work_.resize(buckets);
     clock_work_.resize(buckets);
     for (std::size_t bucket = 0; bucket < buckets; ++bucket) {
+        active_work_[bucket].set_sparse(sparse);
+        clock_work_[bucket].set_sparse(sparse);
         active_work_[bucket].assign(voxel_count_, 0.0F);
         clock_work_[bucket].assign(voxel_count_, 0.0F);
     }
     if (config_.schema_version >= 4) {
         guidance_weight_cache_.resize(buckets);
         for (auto& field : guidance_weight_cache_) {
+            field.set_sparse(sparse);
             field.assign(voxel_count_, 0.0F);
         }
+        guidance_weight_cache_stamp_.set_sparse(sparse);
+        active_location_stamp_.set_sparse(sparse);
         guidance_weight_cache_stamp_.assign(voxel_count_, 0U);
         active_location_stamp_.assign(voxel_count_, 0U);
     }
@@ -549,24 +567,24 @@ void StructuredPdeModel3D::shrink_population_bounds() {
 void StructuredPdeModel3D::initialize_from_abm(
     const Simulation3D& simulation) {
     if (initialized_) throw std::logic_error("structured PDE is already initialized");
-    for (auto& field : r_normal_) std::fill(field.begin(), field.end(), 0.0);
-    for (auto& field : K_) std::fill(field.begin(), field.end(), 0.0);
+    for (auto& field : r_normal_) fill_field(field,0.0);
+    for (auto& field : K_) fill_field(field,0.0);
     for (auto& stage : active_direction_) {
-        for (auto& bucket : stage) std::fill(bucket.begin(), bucket.end(), 0.0F);
+        for (auto& bucket : stage) fill_field(bucket,0.0F);
     }
     for (auto& stage : active_clock_) {
-        for (auto& bucket : stage) std::fill(bucket.begin(), bucket.end(), 0.0F);
+        for (auto& bucket : stage) fill_field(bucket,0.0F);
     }
-    for (auto& field : active_total_) std::fill(field.begin(), field.end(), 0.0F);
+    for (auto& field : active_total_) fill_field(field,0.0F);
     for (auto& field : activation_cooldown_) {
-        std::fill(field.begin(), field.end(), 0.0F);
+        fill_field(field,0.0F);
     }
     for (auto& field : activation_armed_) {
-        std::fill(field.begin(), field.end(), 1U);
+        fill_field(field,1U);
     }
     active_bounds_ = {};
     population_bounds_ = {};
-    std::fill(vessel_.begin(), vessel_.end(), 0.0);
+    fill_field(vessel_,0.0);
 
     const double small_weight = 1.0 / voxel_measure_;
     const double large_site_weight =
@@ -645,8 +663,7 @@ void StructuredPdeModel3D::initialize_from_abm(
     time_hours_ = config_.continuum.initialization_mode == "abm_checkpoint"
         ? now : config_.continuum.start_time_hours;
     if (config_.schema_version >= 5) {
-        std::fill(nutrient_.begin(), nutrient_.end(),
-                  config_.continuum.nutrient.initial_value);
+        fill_field(nutrient_,config_.continuum.nutrient.initial_value);
     }
     rebuild_moving_tumour_front();
     solve_nutrient();
@@ -681,11 +698,9 @@ void StructuredPdeModel3D::initialize_from_arrays(
     }
     for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
         active_bounds_[stage] = {};
-        std::fill(active_total_[stage].begin(), active_total_[stage].end(), 0.0F);
-        std::fill(activation_cooldown_[stage].begin(),
-                  activation_cooldown_[stage].end(), 0.0F);
-        std::fill(activation_armed_[stage].begin(),
-                  activation_armed_[stage].end(), 1U);
+        fill_field(active_total_[stage],0.0F);
+        fill_field(activation_cooldown_[stage],0.0F);
+        fill_field(activation_armed_[stage],1U);
         r_normal_[stage] = std::move(fields.r_normal[stage]);
         if (config_.schema_version >= 7) {
             if ((!fields.r_refractory[stage].empty() &&
@@ -740,10 +755,8 @@ void StructuredPdeModel3D::initialize_from_arrays(
         }
         for (std::size_t bucket = 1; bucket < active_direction_[stage].size();
              ++bucket) {
-            std::fill(active_direction_[stage][bucket].begin(),
-                      active_direction_[stage][bucket].end(), 0.0F);
-            std::fill(active_clock_[stage][bucket].begin(),
-                      active_clock_[stage][bucket].end(), 0.0F);
+            fill_field(active_direction_[stage][bucket],0.0F);
+            fill_field(active_clock_[stage][bucket],0.0F);
         }
     }
     vessel_ = std::move(fields.vessel_fraction);
@@ -767,8 +780,7 @@ void StructuredPdeModel3D::initialize_from_arrays(
     clear_cells_from_vessels();
     time_hours_ = time_hours;
     if (config_.schema_version >= 5) {
-        std::fill(nutrient_.begin(), nutrient_.end(),
-                  config_.continuum.nutrient.initial_value);
+        fill_field(nutrient_,config_.continuum.nutrient.initial_value);
     }
     rebuild_moving_tumour_front();
     solve_nutrient();
@@ -835,6 +847,7 @@ void StructuredPdeModel3D::clear_cells_from_vessels() {
     if (!config_.migration.vessel_exclusion) return;
     for (std::size_t location = 0; location < voxel_count_; ++location) {
         if (!vessel_blocks_cells(location)) continue;
+        if(config_.schema_version>=9&&occupied_fraction(location)==0)continue;
         if (config_.schema_version >= 7 && !initialized_ && occupied_fraction(location) > 1.0e-10) {
             throw std::invalid_argument("structured initial population overlaps an excluded vessel");
         }
@@ -1516,8 +1529,8 @@ void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
         target_bounds.z1 - target_bounds.z0);
     const std::size_t box_size = bx * by * bz;
 
-    const auto migrate_field = [&](const std::vector<double>& source,
-                                   std::vector<double>& target,
+    const auto migrate_field = [&](const PagedField<double>& source,
+                                   PagedField<double>& target,
                                    StructuredStage3D stage,
                                    CellType type) {
         const bool large = stage == StructuredStage3D::large;
@@ -1975,8 +1988,7 @@ void StructuredPdeModel3D::migrate_active(double dt) {
     if (config_.schema_version >= 4) {
         ++guidance_weight_cache_generation_;
         if (guidance_weight_cache_generation_ == 0U) {
-            std::fill(guidance_weight_cache_stamp_.begin(),
-                      guidance_weight_cache_stamp_.end(), 0U);
+            fill_field(guidance_weight_cache_stamp_,0U);
             guidance_weight_cache_generation_ = 1U;
         }
     }
@@ -2114,8 +2126,7 @@ void StructuredPdeModel3D::migrate_active(double dt) {
             if (sparse_transport) {
                 ++active_location_generation_;
                 if (active_location_generation_ == 0U) {
-                    std::fill(active_location_stamp_.begin(),
-                              active_location_stamp_.end(), 0U);
+                    fill_field(active_location_stamp_,0U);
                     active_location_generation_ = 1U;
                 }
                 sparse_targets.reserve(sparse_locations.size() * 2);
@@ -2970,6 +2981,10 @@ double StructuredPdeModel3D::refractory_mean_hours(
 
 bool StructuredPdeModel3D::step() {
     if (!initialized_) throw std::logic_error("structured PDE is not initialized");
+    if (config_.storage_model == "sparse_zero_pages_v1" &&
+        bounds_size(expanded_bounds(population_bounds_)) > config_.maximum_active_voxels) {
+        throw std::runtime_error("sparse PDE active-region memory budget exceeded");
+    }
     const auto& continuum = config_.continuum;
     if (time_hours_ >= continuum.end_time_hours ||
         same_time(time_hours_, continuum.end_time_hours)) return false;
@@ -3042,6 +3057,23 @@ StructuredPdeDiagnostics3D StructuredPdeModel3D::diagnostics() const {
     std::vector<long double> radial_mass(
         static_cast<std::size_t>(std::floor(maximum_radius / width)) + 1, 0.0L);
     for (std::size_t location = 0; location < voxel_count_; ++location) {
+        if (config_.storage_model == "sparse_zero_pages_v1") {
+            const int nx = config_.continuum.grid.shape[0];
+            const int x = static_cast<int>(location % nx);
+            const int y = static_cast<int>(location / nx);
+            const bool populated = population_bounds_.valid &&
+                x >= population_bounds_.x0 && x < population_bounds_.x1 &&
+                y >= population_bounds_.y0 && y < population_bounds_.y1;
+            if (!populated && tumour_mask_[location] == 0U) {
+                // Preserve full-domain resource sums without faulting empty
+                // population mappings into resident memory during reporting.
+                result.maximum_nutrient = std::max(
+                    result.maximum_nutrient, nutrient_[location]);
+                nutrient_sum += nutrient_[location];
+                result.vessel_volume += vessel_[location] * voxel_measure_;
+                continue;
+            }
+        }
         const auto point = coordinate(location);
         const double radius = std::sqrt(
             point[0] * point[0] + point[1] * point[1] +
@@ -3288,7 +3320,7 @@ std::uint64_t StructuredPdeModel3D::state_checksum() const {
             state = hash_mix(state, static_cast<std::uint64_t>(value));
         }
     };
-    const auto hash_double_region = [&](const std::vector<double>& values,
+    const auto hash_double_region = [&](const auto& values,
                                         const StructuredActiveBounds3D& bounds) {
         if (!bounds.valid) return;
         for (int z = bounds.z0; z < bounds.z1; ++z) {
@@ -3441,7 +3473,7 @@ void StructuredPdeModel3D::load_checkpoint(
         for (auto& bucket : active_clock_[stage]) {
             read_region(stream, bucket, active_bounds_[stage], nx, ny);
         }
-        std::fill(active_total_[stage].begin(), active_total_[stage].end(), 0.0F);
+        fill_field(active_total_[stage],0.0F);
         const auto bounds = active_bounds_[stage];
         if (bounds.valid) {
             for (int z = bounds.z0; z < bounds.z1; ++z) {

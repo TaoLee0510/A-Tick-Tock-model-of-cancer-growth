@@ -1,0 +1,36 @@
+name: Simulator verification
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  simulator:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libyaml-cpp-dev libhdf5-dev
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install yaml-cpp libomp hdf5
+      - name: Configure
+        run: cmake -S . -B build-ci -DCMAKE_BUILD_TYPE=Release -DATCG_BUILD_LEGACY_2D=OFF -DATCG3D_ENABLE_HDF5_CHECKPOINT=ON
+      - name: Build
+        run: cmake --build build-ci --parallel 4
+      - name: Unit and regression checks
+        run: ctest --test-dir build-ci --output-on-failure -LE validation
+      - name: Small ensemble validation
+        run: ctest --test-dir build-ci --output-on-failure -L validation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-${{ matrix.os }}
+          path: |
+            build-ci/validation/
+            build-ci/validation-vascular/
+            build-ci/Testing/Temporary/LastTest.log

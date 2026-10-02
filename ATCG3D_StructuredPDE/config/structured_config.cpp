@@ -116,7 +116,7 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
             error.what());
     }
     mapping(root, "$", {"schema", "profile", "continuum_config",
-                         "structured_migration", "output"});
+                         "structured_migration", "output", "storage"});
     const YAML::Node schema = required(root, "schema", "$");
     mapping(schema, "$.schema", {"name", "version"});
     if (text(required(schema, "name", "$.schema"), "$.schema.name") !=
@@ -216,13 +216,35 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
     result.migration.minimum_density = number(
         required(migration, "minimum_density", "$.structured_migration"),
         "$.structured_migration.minimum_density");
+    if (root["storage"]) {
+        if (result.schema_version < 9) fail("$.storage", "requires schema v9");
+        const auto storage = root["storage"];
+        mapping(storage, "$.storage", {"model", "maximum_active_voxels"});
+        result.storage_model = text(required(storage, "model", "$.storage"),
+            "$.storage.model");
+        result.maximum_active_voxels = integer(
+            required(storage, "maximum_active_voxels", "$.storage"),
+            "$.storage.maximum_active_voxels");
+    }
     result.validate();
     return result;
 }
 
 void StructuredPdeConfig3D::validate() const {
-    if ((schema_version < 1 || schema_version > 8) || profile.empty()) {
+    if ((schema_version < 1 || schema_version > 9) || profile.empty()) {
         throw std::invalid_argument("structured PDE schema/profile is invalid");
+    }
+    if (schema_version < 9 && storage_model != "dense_v1") {
+        throw std::invalid_argument("sparse storage requires structured v9");
+    }
+    if ((storage_model != "dense_v1" && storage_model != "sparse_zero_pages_v1") ||
+        maximum_active_voxels < 1 || maximum_active_voxels > 1000000) {
+        throw std::invalid_argument("invalid structured storage model/budget");
+    }
+    if (storage_model == "sparse_zero_pages_v1" &&
+        (!continuum.base.thin_layer || continuum.angiogenesis.model != "disabled")) {
+        throw std::invalid_argument(
+            "sparse zero pages v1 requires thin layer and static vasculature");
     }
     continuum.validate();
     if (migration.model != "abm_activation_clock_discrete_velocity_v1" ||
@@ -374,6 +396,10 @@ std::uint64_t StructuredPdeConfig3D::dynamics_fingerprint() const {
         state = mix(state, std::bit_cast<std::uint64_t>(
             migration.reactivation_density_threshold));
     }
+    if (schema_version >= 9) {
+        hash_text(state, storage_model);
+        state = mix(state, maximum_active_voxels);
+    }
     return state;
 }
 
@@ -413,7 +439,12 @@ std::string StructuredPdeConfig3D::to_json() const {
            << "\"maximum_move_probability_per_substep\":"
            << migration.maximum_move_probability_per_substep << ','
            << "\"minimum_density\":" << migration.minimum_density
-           << "}}";
+           << "}";
+    if (schema_version >= 9) {
+        stream << ",\"storage\":{\"model\":\"" << storage_model
+               << "\",\"maximum_active_voxels\":" << maximum_active_voxels << '}';
+    }
+    stream << '}';
     return stream.str();
 }
 

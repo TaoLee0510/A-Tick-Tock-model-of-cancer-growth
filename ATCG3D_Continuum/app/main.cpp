@@ -1,6 +1,7 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include "io/pde_vtkhdf_writer.hpp"
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -19,7 +20,9 @@ namespace {
 
 void help(const char* executable) {
     std::cout
-        << "Usage: " << executable << " --config PATH [--dry-run] [--output-root PATH]\n\n"
+        << "Usage: " << executable
+        << " --config PATH [--dry-run] [--output-root PATH] "
+           "[--vtkhdf-fields] [--field-vtkhdf FILE]\n\n"
         << "Runs the four-population ATCG3D continuum reduction coupled to "
            "an effective-nutrient PDE.\n";
 }
@@ -62,6 +65,7 @@ int main(int argc, char** argv) {
         std::filesystem::path config_path;
         std::filesystem::path output_root;
         bool dry_run = false;
+        bool vtkhdf_fields=false;std::filesystem::path field_path;
         for (int index = 1; index < argc; ++index) {
             const std::string argument = argv[index];
             if (argument == "--help" || argument == "-h") {
@@ -75,6 +79,8 @@ int main(int argc, char** argv) {
                 if (output_root.empty()) {
                     throw std::invalid_argument("--output-root must not be empty");
                 }
+            } else if(argument=="--vtkhdf-fields") {vtkhdf_fields=true;
+            } else if(argument=="--field-vtkhdf"&&index+1<argc) {field_path=argv[++index];
             } else if (argument == "--dry-run") {
                 dry_run = true;
             } else {
@@ -90,6 +96,8 @@ int main(int argc, char** argv) {
             atcg3d::continuum::ContinuumModelConfig3D::load(config_path);
         config.output.directory = atcg3d::resolve_output_directory(
             config.output.directory, output_root);
+        if((vtkhdf_fields||!field_path.empty())&&!atcg3d::continuum::pde_vtkhdf_available())throw std::runtime_error("PDE VTK-HDF requires an HDF5-enabled build");
+        config.output.vtkhdf_fields=vtkhdf_fields;
         if (dry_run) {
             std::cout << config.to_json();
             return 0;
@@ -117,6 +125,7 @@ int main(int argc, char** argv) {
         output.checkpoint_now(model);
         output.finalize(model);
 
+        if(!field_path.empty())atcg3d::continuum::write_pde_vtkhdf(field_path,model);
         const auto value = model.diagnostics();
         std::cout << "ATCG3D Continuum completed\n"
                   << "time_hours=" << model.time_hours() << '\n'

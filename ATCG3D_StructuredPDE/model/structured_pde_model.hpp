@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "config/structured_config.hpp"
+#include "model/paged_field.hpp"
 #include "model/moving_tumor_front.hpp"
 
 namespace atcg3d {
@@ -189,51 +190,51 @@ private:
     // V4 evaluates guidance from a prefix field that is fixed during one PDE
     // step. Cache each visited location once instead of recomputing eight
     // 70-voxel sectors for every high-rate transport substep.
-    std::vector<std::vector<float>> guidance_weight_cache_;
-    std::vector<std::uint32_t> guidance_weight_cache_stamp_;
+    std::vector<PagedField<float>> guidance_weight_cache_;
+    PagedField<std::uint32_t> guidance_weight_cache_stamp_;
     std::uint32_t guidance_weight_cache_generation_{};
     // V4 transports only locations carrying active-r mass during the many
     // high-rate microsteps. A generation stamp deduplicates target locations
     // without scanning the (potentially very large and mostly empty) bounding
     // rectangle after every microstep.
-    std::vector<std::uint32_t> active_location_stamp_;
+    PagedField<std::uint32_t> active_location_stamp_;
     std::uint32_t active_location_generation_{};
     StructuredActiveBounds3D guidance_prefix_bounds_;
     int guidance_prefix_pitch_{};
     // Bucket zero is the ABM "no persistent direction yet" state. Buckets
     // 1..N correspond to direction_ids_[bucket-1].
-    std::array<std::vector<std::vector<float>>, kStructuredStageCount3D>
+    std::array<std::vector<PagedField<float>>, kStructuredStageCount3D>
         active_direction_;
-    std::array<std::vector<std::vector<float>>, kStructuredStageCount3D>
+    std::array<std::vector<PagedField<float>>, kStructuredStageCount3D>
         active_clock_;
-    std::array<std::vector<float>, kStructuredStageCount3D> active_total_;
+    std::array<PagedField<float>, kStructuredStageCount3D> active_total_;
     std::array<StructuredActiveBounds3D, kStructuredStageCount3D>
         active_bounds_;
     StructuredActiveBounds3D work_dirty_bounds_;
     StructuredActiveBounds3D population_bounds_;
     StructuredActiveBounds3D normal_work_dirty_bounds_;
-    std::array<std::vector<double>, kStructuredStageCount3D> r_normal_;
-    std::array<std::vector<double>, kStructuredStageCount3D> K_;
-    std::array<std::vector<double>, kStructuredStageCount3D> r_normal_work_;
+    std::array<PagedField<double>, kStructuredStageCount3D> r_normal_;
+    std::array<PagedField<double>, kStructuredStageCount3D> K_;
+    std::array<PagedField<double>, kStructuredStageCount3D> r_normal_work_;
     // V7 transports an ordinary-r refractory subset and its time mass with
     // the same flux as normal r. The ratio is a mass-weighted mean clock.
-    std::array<std::vector<double>, kStructuredStageCount3D> r_refractory_;
-    std::array<std::vector<double>, kStructuredStageCount3D> refractory_clock_;
-    std::array<std::vector<double>, kStructuredStageCount3D> refractory_work_;
-    std::array<std::vector<double>, kStructuredStageCount3D> refractory_clock_work_;
-    std::array<std::vector<double>, kStructuredStageCount3D> K_work_;
-    std::vector<std::vector<float>> active_work_;
-    std::vector<std::vector<float>> clock_work_;
-    std::array<std::vector<double>, kStructuredStageCount3D>
+    std::array<PagedField<double>, kStructuredStageCount3D> r_refractory_;
+    std::array<PagedField<double>, kStructuredStageCount3D> refractory_clock_;
+    std::array<PagedField<double>, kStructuredStageCount3D> refractory_work_;
+    std::array<PagedField<double>, kStructuredStageCount3D> refractory_clock_work_;
+    std::array<PagedField<double>, kStructuredStageCount3D> K_work_;
+    std::vector<PagedField<float>> active_work_;
+    std::vector<PagedField<float>> clock_work_;
+    std::array<PagedField<double>, kStructuredStageCount3D>
         activation_density_;
     // V5 uses an explicit local refractory/hysteresis closure. An active
     // cohort disarms each location it occupies; the location can only re-arm
     // after its cooldown expires and the 70-window density drops below the
     // configured off threshold. This prevents immediate clock-expiry
     // reactivation in the same crowded neighbourhood.
-    std::array<std::vector<float>, kStructuredStageCount3D>
+    std::array<PagedField<float>, kStructuredStageCount3D>
         activation_cooldown_;
-    std::array<std::vector<std::uint8_t>, kStructuredStageCount3D>
+    std::array<PagedField<std::uint8_t>, kStructuredStageCount3D>
         activation_armed_;
     StructuredActiveBounds3D activation_density_bounds_;
     std::vector<double> nutrient_;

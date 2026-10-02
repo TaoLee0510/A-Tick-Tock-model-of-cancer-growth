@@ -11,6 +11,7 @@ struct HybridConfig3D {
     int schema_version{1};
     std::string model{"hybrid_shared_grid_v1"}, mode{"adaptive"};
     structured_pde::StructuredPdeConfig3D rules;
+    std::filesystem::path output_directory{"atcg3d_hybrid_run"};
     double exchange_every_hours{1.0};
     int smoothing_radius{3};
     double core_on{0.5}, core_off{0.3};

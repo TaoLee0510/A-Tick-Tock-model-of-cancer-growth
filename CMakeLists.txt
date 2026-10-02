@@ -224,6 +224,7 @@ if(ATCG_BUILD_3D)
             ATCG3D_Continuum/model/moving_tumor_front.cpp
             ATCG3D_Continuum/model/continuum_model.cpp
             ATCG3D_Continuum/io/continuum_output.cpp
+            ATCG3D_Continuum/io/pde_vtkhdf_writer.cpp
         )
         target_include_directories(atcg3d_continuum_core PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_Continuum
@@ -255,6 +256,7 @@ if(ATCG_BUILD_3D)
             ATCG3D_StructuredPDE/config/structured_config.cpp
             ATCG3D_StructuredPDE/model/structured_pde_model.cpp
             ATCG3D_StructuredPDE/io/structured_pde_output.cpp
+            ATCG3D_StructuredPDE/io/structured_vtkhdf_writer.cpp
         )
         target_include_directories(atcg3d_structured_pde_core PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_StructuredPDE
@@ -287,6 +289,18 @@ if(ATCG_BUILD_3D)
         target_link_libraries(atcg3d_ode_core PUBLIC atcg3d_structured_pde_core PRIVATE ${ATCG3D_YAML_TARGET})
         add_executable(atcg3d_ode ATCG3D_ODE/app/main.cpp)
         target_link_libraries(atcg3d_ode PRIVATE atcg3d_ode_core)
+
+        add_executable(atcg_sim apps/atcg_sim.cpp)
+        target_link_libraries(atcg_sim PRIVATE ${ATCG3D_YAML_TARGET})
+        add_executable(atcg_config_migrate apps/config_migrate.cpp ATCG3D_Nutrient/config/nutrient_config.cpp)
+        target_include_directories(atcg_config_migrate PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_Nutrient)
+        target_link_libraries(atcg_config_migrate PRIVATE atcg3d_hybrid_core atcg3d_ode_core ${ATCG3D_YAML_TARGET})
+        install(TARGETS atcg_sim atcg_config_migrate atcg3d atcg3d_continuum atcg3d_structured_pde atcg3d_shared_abm atcg3d_ode atcg3d_hybrid RUNTIME DESTINATION bin)
+        if(TARGET atcg3d_nutrient)
+            install(TARGETS atcg3d_nutrient RUNTIME DESTINATION bin)
+        endif()
+        install(DIRECTORY docs DESTINATION share/atcg)
+        install(DIRECTORY configs ATCG3D_Nutrient ATCG3D_Continuum ATCG3D_StructuredPDE ATCG3D_StructuredPDE_NutrientChemotaxis ATCG3D_SharedRules ATCG3D_ODE ATCG3D_Hybrid DESTINATION share/atcg FILES_MATCHING PATTERN "*.yaml")
 
         foreach(structured_config_name IN ITEMS
                 continuum_legacy_2d_2000_r20_aligned_v1.yaml
@@ -456,6 +470,28 @@ if(BUILD_TESTING)
             target_compile_definitions(atcg3d_shared_rules_test PRIVATE
                 ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
             add_test(NAME atcg3d_shared_rules_test COMMAND atcg3d_shared_rules_test)
+            add_executable(atcg3d_product_cli_test tests/3d/product_cli_test.cpp)
+            target_link_libraries(atcg3d_product_cli_test PRIVATE atcg3d_hybrid_core atcg3d_ode_core)
+            target_compile_options(atcg3d_product_cli_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_product_cli_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" ATCG_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}")
+            add_dependencies(atcg3d_product_cli_test atcg_sim atcg_config_migrate atcg3d_structured_pde atcg3d_shared_abm atcg3d_ode atcg3d_hybrid)
+            add_test(NAME atcg3d_product_cli_test COMMAND atcg3d_product_cli_test)
+            if(ATCG3D_ENABLE_HDF5_CHECKPOINT)
+                add_executable(atcg3d_pde_vtkhdf_test tests/3d/pde_vtkhdf_test.cpp)
+                target_link_libraries(atcg3d_pde_vtkhdf_test PRIVATE atcg3d_structured_pde_core)
+                target_compile_options(atcg3d_pde_vtkhdf_test PRIVATE -UNDEBUG)
+                target_compile_definitions(atcg3d_pde_vtkhdf_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+                add_test(NAME atcg3d_pde_vtkhdf_test COMMAND atcg3d_pde_vtkhdf_test)
+            endif()
+            add_executable(atcg3d_sparse_pde_test tests/3d/sparse_pde_test.cpp)
+            target_link_libraries(atcg3d_sparse_pde_test PRIVATE atcg3d_structured_pde_core)
+            target_compile_options(atcg3d_sparse_pde_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_sparse_pde_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME atcg3d_sparse_pde_test COMMAND atcg3d_sparse_pde_test)
+            if(ATCG3D_ENABLE_LARGE_TESTS)
+                add_test(NAME atcg3d_sparse_pde_10000_memory COMMAND atcg3d_sparse_pde_test --large)
+                set_tests_properties(atcg3d_sparse_pde_10000_memory PROPERTIES LABELS benchmark TIMEOUT 120)
+            endif()
             add_executable(atcg3d_hybrid_test tests/3d/hybrid_test.cpp)
             target_link_libraries(atcg3d_hybrid_test PRIVATE atcg3d_hybrid_core)
             target_compile_options(atcg3d_hybrid_test PRIVATE -UNDEBUG)
