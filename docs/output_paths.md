@@ -53,3 +53,12 @@ The optional historical 2D executable reads its font from `ATCG_FONT_FILE`.
 If unset or empty, it looks for `Calisto MT.ttf` in the working directory.
 Supply a locally licensed font file; no user-specific font path or font binary
 is stored in the repository. This affects PNG annotation only.
+
+## Build dependency locations
+
+On macOS, CMake queries `brew --prefix` and adds that prefix and its `libomp`
+keg to the dependency search. Other installations can use `CMAKE_PREFIX_PATH`
+or the explicit CMake package/include/library cache variables. The historical
+Xcode project expects the caller's `HOMEBREW_PREFIX` build setting, for example
+`xcodebuild HOMEBREW_PREFIX="$(brew --prefix)"`. No platform installation path
+is embedded in either build description.

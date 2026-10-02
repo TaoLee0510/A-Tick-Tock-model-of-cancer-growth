@@ -15,16 +15,29 @@ option(ATCG3D_ENABLE_VTKHDF "Build VTK-HDF visualization output" OFF)
 option(ATCG3D_ENABLE_HDF5_CHECKPOINT "Build HDF5 checkpoint support" OFF)
 option(ATCG3D_ENABLE_LARGE_TESTS "Enable opt-in million/ten-million-cell tests" OFF)
 
+if(APPLE)
+    find_program(ATCG_HOMEBREW_EXECUTABLE brew)
+    if(ATCG_HOMEBREW_EXECUTABLE)
+        execute_process(COMMAND ${ATCG_HOMEBREW_EXECUTABLE} --prefix
+            OUTPUT_VARIABLE ATCG_HOMEBREW_PREFIX
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE ATCG_HOMEBREW_RESULT
+            ERROR_QUIET)
+        if(ATCG_HOMEBREW_RESULT EQUAL 0 AND ATCG_HOMEBREW_PREFIX)
+            list(APPEND CMAKE_PREFIX_PATH
+                "${ATCG_HOMEBREW_PREFIX}" "${ATCG_HOMEBREW_PREFIX}/opt/libomp")
+        endif()
+    endif()
+endif()
+
 if(ATCG_BUILD_LEGACY_2D OR ATCG_BUILD_3D)
     if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         find_path(OPENMP_INCLUDE_DIR
             NAMES omp.h
-            HINTS /opt/homebrew/opt/libomp/include /usr/local/opt/libomp/include
             REQUIRED
         )
         find_library(OPENMP_LIBRARY
             NAMES omp
-            HINTS /opt/homebrew/opt/libomp/lib /usr/local/opt/libomp/lib
             REQUIRED
         )
         add_library(atcg_openmp INTERFACE)
@@ -47,19 +60,16 @@ if(ATCG_BUILD_LEGACY_2D)
 
     find_path(BLITZ_INCLUDE_DIR
         NAMES blitz/array.h
-        HINTS /usr/local/include /opt/homebrew/include
         REQUIRED
     )
 
     find_path(PNGWRITER_INCLUDE_DIR
         NAMES pngwriter.h
-        HINTS /usr/local/include /opt/homebrew/include
         REQUIRED
     )
 
     find_library(PNGWRITER_LIBRARY
         NAMES pngwriter
-        HINTS /usr/local/lib /opt/homebrew/lib
         REQUIRED
     )
 

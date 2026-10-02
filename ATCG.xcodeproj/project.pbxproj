@@ -499,21 +499,21 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = (
-					/usr/local/include,
-					/opt/homebrew/opt/freetype/include/freetype2,
-					/opt/homebrew/include,
-					/usr/local/include/freetype2,
-					/opt/homebrew/opt/libomp/include,
+					"$(HOMEBREW_PREFIX)/include",
+					"$(HOMEBREW_PREFIX)/opt/freetype/include/freetype2",
+					"$(HOMEBREW_PREFIX)/include",
+					"$(HOMEBREW_PREFIX)/include/freetype2",
+					"$(HOMEBREW_PREFIX)/opt/libomp/include",
 				);
 				"HEADER_SEARCH_PATHS[arch=*]" = "";
 				"INFOPLIST_FILE[sdk=*]" = "";
-				LD_RUNPATH_SEARCH_PATHS = /opt/homebrew/opt/libomp/lib;
+				LD_RUNPATH_SEARCH_PATHS = "$(HOMEBREW_PREFIX)/opt/libomp/lib";
 				LIBRARY_SEARCH_PATHS = (
-					/opt/homebrew/opt/libomp/lib,
-					/opt/homebrew/opt/freetype/lib,
-					/usr/local/lib,
-					/opt/homebrew/lib,
-					/usr/local/include/freetype2,
+					"$(HOMEBREW_PREFIX)/opt/libomp/lib",
+					"$(HOMEBREW_PREFIX)/opt/freetype/lib",
+					"$(HOMEBREW_PREFIX)/lib",
+					"$(HOMEBREW_PREFIX)/lib",
+					"$(HOMEBREW_PREFIX)/include/freetype2",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.1;
 				MTL_ENABLE_DEBUG_INFO = YES;
@@ -537,10 +537,10 @@
 				);
 				SDKROOT = macosx;
 				USER_HEADER_SEARCH_PATHS = (
-					/opt/homebrew/opt/freetype/include/freetype2,
-					/opt/homebrew/include,
-					/usr/local/include/freetype2,
-					/opt/homebrew/opt/libomp/include,
+					"$(HOMEBREW_PREFIX)/opt/freetype/include/freetype2",
+					"$(HOMEBREW_PREFIX)/include",
+					"$(HOMEBREW_PREFIX)/include/freetype2",
+					"$(HOMEBREW_PREFIX)/opt/libomp/include",
 				);
 			};
 			name = Debug;
@@ -595,19 +595,19 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = (
-					/usr/local/include,
-					/opt/homebrew/opt/freetype/include/freetype2,
-					/opt/homebrew/include,
-					/usr/local/include/freetype2,
-					/opt/homebrew/opt/libomp/include,
+					"$(HOMEBREW_PREFIX)/include",
+					"$(HOMEBREW_PREFIX)/opt/freetype/include/freetype2",
+					"$(HOMEBREW_PREFIX)/include",
+					"$(HOMEBREW_PREFIX)/include/freetype2",
+					"$(HOMEBREW_PREFIX)/opt/libomp/include",
 				);
-				LD_RUNPATH_SEARCH_PATHS = /opt/homebrew/opt/libomp/lib;
+				LD_RUNPATH_SEARCH_PATHS = "$(HOMEBREW_PREFIX)/opt/libomp/lib";
 				LIBRARY_SEARCH_PATHS = (
-					/opt/homebrew/opt/libomp/lib,
-					/opt/homebrew/opt/freetype/lib,
-					/usr/local/lib,
-					/opt/homebrew/lib,
-					/usr/local/include/freetype2,
+					"$(HOMEBREW_PREFIX)/opt/libomp/lib",
+					"$(HOMEBREW_PREFIX)/opt/freetype/lib",
+					"$(HOMEBREW_PREFIX)/lib",
+					"$(HOMEBREW_PREFIX)/lib",
+					"$(HOMEBREW_PREFIX)/include/freetype2",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
@@ -631,10 +631,10 @@
 				);
 				SDKROOT = macosx;
 				USER_HEADER_SEARCH_PATHS = (
-					/opt/homebrew/opt/freetype/include/freetype2,
-					/opt/homebrew/include,
-					/usr/local/include/freetype2,
-					/opt/homebrew/opt/libomp/include,
+					"$(HOMEBREW_PREFIX)/opt/freetype/include/freetype2",
+					"$(HOMEBREW_PREFIX)/include",
+					"$(HOMEBREW_PREFIX)/include/freetype2",
+					"$(HOMEBREW_PREFIX)/opt/libomp/include",
 				);
 			};
 			name = Release;
@@ -651,19 +651,19 @@
 				DEVELOPMENT_TEAM = FR2TN5FSF5;
 				GCC_OPTIMIZATION_LEVEL = 3;
 				HEADER_SEARCH_PATHS = (
-					/usr/local/include,
-					/opt/homebrew/opt/freetype/include/freetype2,
-					/opt/homebrew/include,
-					/usr/local/include/freetype2,
-					/opt/homebrew/opt/libomp/include,
+					"$(HOMEBREW_PREFIX)/include",
+					"$(HOMEBREW_PREFIX)/opt/freetype/include/freetype2",
+					"$(HOMEBREW_PREFIX)/include",
+					"$(HOMEBREW_PREFIX)/include/freetype2",
+					"$(HOMEBREW_PREFIX)/opt/libomp/include",
 				);
-				LD_RUNPATH_SEARCH_PATHS = /opt/homebrew/opt/libomp/lib;
+				LD_RUNPATH_SEARCH_PATHS = "$(HOMEBREW_PREFIX)/opt/libomp/lib";
 				LIBRARY_SEARCH_PATHS = (
-					/opt/homebrew/opt/libomp/lib,
-					/opt/homebrew/opt/freetype/lib,
-					/usr/local/lib,
-					/opt/homebrew/lib,
-					/usr/local/include/freetype2,
+					"$(HOMEBREW_PREFIX)/opt/libomp/lib",
+					"$(HOMEBREW_PREFIX)/opt/freetype/lib",
+					"$(HOMEBREW_PREFIX)/lib",
+					"$(HOMEBREW_PREFIX)/lib",
+					"$(HOMEBREW_PREFIX)/include/freetype2",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				OTHER_CFLAGS = "";
@@ -701,19 +701,19 @@
 				DEVELOPMENT_TEAM = FR2TN5FSF5;
 				GCC_OPTIMIZATION_LEVEL = 3;
 				HEADER_SEARCH_PATHS = (
-					/usr/local/include,
-					/opt/homebrew/opt/freetype/include/freetype2,
-					/opt/homebrew/include,
-					/usr/local/include/freetype2,
-					/opt/homebrew/opt/libomp/include,
+					"$(HOMEBREW_PREFIX)/include",
+					"$(HOMEBREW_PREFIX)/opt/freetype/include/freetype2",
+					"$(HOMEBREW_PREFIX)/include",
+					"$(HOMEBREW_PREFIX)/include/freetype2",
+					"$(HOMEBREW_PREFIX)/opt/libomp/include",
 				);
-				LD_RUNPATH_SEARCH_PATHS = /opt/homebrew/opt/libomp/lib;
+				LD_RUNPATH_SEARCH_PATHS = "$(HOMEBREW_PREFIX)/opt/libomp/lib";
 				LIBRARY_SEARCH_PATHS = (
-					/opt/homebrew/opt/libomp/lib,
-					/opt/homebrew/opt/freetype/lib,
-					/usr/local/lib,
-					/opt/homebrew/lib,
-					/usr/local/include/freetype2,
+					"$(HOMEBREW_PREFIX)/opt/libomp/lib",
+					"$(HOMEBREW_PREFIX)/opt/freetype/lib",
+					"$(HOMEBREW_PREFIX)/lib",
+					"$(HOMEBREW_PREFIX)/lib",
+					"$(HOMEBREW_PREFIX)/include/freetype2",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				OTHER_CFLAGS = "";
