@@ -123,6 +123,24 @@ double DivisionRenewal3D::mean_work(std::size_t location, std::size_t channel) c
     const double total = mass(location, channel);
     return total > 0.0 ? numerator / total : 0.0;
 }
+const std::vector<double>& DivisionRenewal3D::distribution(
+    std::size_t location, std::size_t channel) const {
+    static const std::vector<double> empty;
+    const auto found = state_.find(location);
+    return found == state_.end() ? empty : found->second.at(channel);
+}
+void DivisionRenewal3D::add_distribution(std::size_t location, std::size_t channel,
+                                        const std::vector<double>& values, double scale) {
+    if (values.empty()) return;
+    if (values.size() != bins_ || !(scale >= 0.0) || !std::isfinite(scale))
+        throw std::invalid_argument("invalid exchanged distribution grid/scale");
+    if (scale == 0.0) return;
+    for (double value : values) if (!(value >= 0.0) || !std::isfinite(value))
+        throw std::invalid_argument("invalid exchanged distribution mass");
+    auto& target = node(state_, location).at(channel);
+    if (target.empty()) target.resize(bins_);
+    for (std::size_t i = 0; i < bins_; ++i) target[i] += values[i] * scale;
+}
 void DivisionRenewal3D::begin_transport() {
     for (auto& weights : transport_weights_) weights.clear();
     work_ = state_;

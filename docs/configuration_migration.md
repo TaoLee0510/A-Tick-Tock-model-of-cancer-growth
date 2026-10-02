@@ -13,8 +13,9 @@ build-codex/atcg_sim --model pde --config migrated_run/model.yaml --dry-run
 ```
 
 Supported upgrades are ABM v1-v3 to v3, nutrient v1-v3 to v3, continuum v3-v6
-to v6, and shared-resource structured v5-v12 to v12. ODE/hybrid wrapper v1 is
-copied with its references upgraded. Structured v1-v4 and continuum v1-v2 lack
+to v6, and shared-resource structured v5-v12 to v12. ODE v1 and hybrid v1/v2
+wrappers are copied with their references upgraded. Hybrid v1 retains its
+mean-clock closure; v2 retains its transported-work selection. Structured v1-v4 and continuum v1-v2 lack
 shared-resource calibration parameters; the tool rejects them rather than
 inventing scientific parameters.
 

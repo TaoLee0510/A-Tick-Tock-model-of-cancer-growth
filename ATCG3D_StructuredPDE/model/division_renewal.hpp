@@ -34,6 +34,10 @@ public:
     void reconcile(std::size_t location, std::size_t channel, double total);
     double mass(std::size_t location, std::size_t channel) const;
     double mean_work(std::size_t location, std::size_t channel) const;
+    double bin_width() const noexcept { return width_; }
+    const std::vector<double>& distribution(std::size_t location, std::size_t channel) const;
+    void add_distribution(std::size_t location, std::size_t channel,
+                          const std::vector<double>& values, double scale);
     std::uint64_t checksum() const;
     void save(std::ostream& out) const;
     void load(std::istream& in, std::size_t voxels);

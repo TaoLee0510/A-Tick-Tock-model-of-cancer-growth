@@ -57,5 +57,6 @@ jobs:
             build-ci/validation-active-r20/
             build-ci/validation-active-r200/
             build-ci/validation-vascular-nonlinear/
+            build-ci/validation-hybrid/
             build-ci/Testing/Temporary/LastTest.log
             build-legacy-ci/native_checksums.txt

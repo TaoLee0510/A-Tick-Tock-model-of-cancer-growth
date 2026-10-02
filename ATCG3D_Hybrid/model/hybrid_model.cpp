@@ -43,6 +43,25 @@ template <class T> void get_vector(std::istream &in, std::vector<T> &v) {
     for (auto &x : v)
         get(in, x);
 }
+void add_mixture(std::vector<double>& target, const std::vector<double>& source, double scale) {
+    if (source.empty() || !(scale > 0.0)) return;
+    if (target.empty()) target.resize(source.size());
+    if (target.size() != source.size()) throw std::logic_error("hybrid distribution grid mismatch");
+    for (std::size_t i = 0; i < source.size(); ++i) target[i] += source[i] * scale;
+}
+std::size_t sample_mixture(const std::vector<double>& values, std::uint64_t key) {
+    const double mass = std::accumulate(values.begin(), values.end(), 0.0);
+    if (!(mass > 0.0)) throw std::logic_error("hybrid cell lacks a clock distribution");
+    double target = (mix(key) >> 11) * 0x1.0p-53 * mass;
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        target -= values[i];
+        if (target < 0.0) return i;
+    }
+    return values.size() - 1;
+}
+void debit_mixture(std::vector<double>& values, double fraction) {
+    for (auto& value : values) value *= std::max(0.0, 1.0 - fraction);
+}
 } // namespace
 HybridConfig3D HybridConfig3D::load(const std::filesystem::path &path) {
     auto y = YAML::LoadFile(path.string());
@@ -66,12 +85,15 @@ HybridConfig3D HybridConfig3D::load(const std::filesystem::path &path) {
 }
 void HybridConfig3D::validate() const {
     rules.validate();
-    if (rules.migration.activation_clock != "beta_mean_remaining_cycle_v1")
+    const bool distributions = schema_version == 2 && model == "hybrid_distributions_v2";
+    if (!distributions && rules.migration.activation_clock != "beta_mean_remaining_cycle_v1")
         throw std::invalid_argument("wrapper v1 does not carry activation duration distributions");
-    if (rules.division_clock_model != "mean_rate_v1")
+    if (!distributions && rules.division_clock_model != "mean_rate_v1")
         throw std::invalid_argument("hybrid v1 does not carry division work distributions");
+    if (distributions && rules.division_clock_model != "transported_shifted_geometric_v1")
+        throw std::invalid_argument("hybrid v2 requires transported division work");
     (void)shared_rules::abm_config(rules);
-    if (schema_version != 1 || model != "hybrid_shared_grid_v1" ||
+    if ((!distributions && (schema_version != 1 || model != "hybrid_shared_grid_v1")) ||
         (mode != "adaptive" && mode != "all_abm" && mode != "all_pde"))
         throw std::invalid_argument("unsupported hybrid model");
     const double ticks = exchange_every_hours / rules.continuum.time_step_hours;
@@ -362,12 +384,24 @@ void HybridModel3D::convert_to_density() {
             continue;
         const int s = c.stage == CellStage::large ? 1 : 0;
         const double mass = 1.0 / footprint_sites.size();
+        const bool distributions = config_.schema_version == 2;
+        const double work = std::max(0.0, double(c.division_work_remaining) -
+            std::max(0.0, double(static_cast<float>(time_hours())) - c.last_update_time) *
+            std::max(0.0, double(c.density_growth_rate)));
         // Large ABM footprints become a distributed density of one cell.
         for (auto point : footprint_sites) {
             const auto j = location(point);
             int x, y, z;
             pde_->grid_coordinate(point, x, y, z);
             pde_->include_population_location(x, y, z);
+            if (distributions) {
+                pde_->renewal_->add(j, (c.type == CellType::r ? 0 : 2) + s, mass, work);
+                if (c.flags & kMigrationActive) {
+                    if (pde_->duration_) pde_->duration_->add(j, s, mass,
+                        std::max(0.0, c.migration_activation_end_time - time_hours()));
+                    if (pde_->velocity_) pde_->velocity_->add(j, s, mass, c.normal_migration_rate);
+                }
+            }
             if (c.type == CellType::K)
                 pde_->K_[s][j] += mass;
             else if (c.flags & kMigrationActive) {
@@ -418,10 +452,23 @@ void HybridModel3D::convert_region(const std::vector<std::size_t> &region) {
     // eligible cohorts together permits mixed r/K voxels to become agents.
     struct Pool {
         double mass{}, clock{};
+        std::vector<double> work, duration, velocity, directions;
     };
     std::array<std::array<Pool, 4>, 2> pools{};
     std::vector<std::size_t> eligible = region;
     auto &p = *pde_;
+    const bool distributions = config_.schema_version == 2;
+    if (distributions) {
+        std::array<double, 8> budgets{};
+        for (auto i : region) for (int s = 0; s < 2; ++s) {
+            budgets[4 * s] += p.r_normal_[s][i] - p.r_refractory_[s][i];
+            budgets[4 * s + 2] += p.K_[s][i];
+            budgets[4 * s + 3] += p.r_refractory_[s][i];
+            for (const auto& field : p.active_direction_[s]) budgets[4 * s + 1] += field[i];
+        }
+        if (*std::max_element(budgets.begin(), budgets.end()) < 1.0) return;
+    }
+    std::unordered_map<std::size_t, std::array<double, 8>> original_mass;
     for (auto i : eligible) {
         for (int stage = 0; stage < 2; ++stage) {
             pools[stage][0].mass +=
@@ -429,12 +476,35 @@ void HybridModel3D::convert_region(const std::vector<std::size_t> &region) {
             pools[stage][3].mass += p.r_refractory_[stage][i];
             pools[stage][3].clock += p.refractory_clock_[stage][i];
             pools[stage][2].mass += p.K_[stage][i];
+            double active_mass = 0.0;
             for (std::size_t bucket = 0;
                  bucket < p.active_direction_[stage].size(); ++bucket) {
                 pools[stage][1].mass += p.active_direction_[stage][bucket][i];
+                active_mass += p.active_direction_[stage][bucket][i];
                 pools[stage][1].clock += p.active_clock_[stage][bucket][i];
+                if (distributions) {
+                    auto& directions = pools[stage][1].directions;
+                    if (directions.empty()) directions.resize(p.active_direction_[stage].size());
+                    directions[bucket] += p.active_direction_[stage][bucket][i];
+                }
                 p.active_direction_[stage][bucket][i] = 0;
                 p.active_clock_[stage][bucket][i] = 0;
+            }
+            if (distributions) {
+                const std::array<double, 4> mass{
+                    p.r_normal_[stage][i] - p.r_refractory_[stage][i], active_mass,
+                    p.K_[stage][i], p.r_refractory_[stage][i]};
+                for (int kind = 0; kind < 4; ++kind) original_mass[i][4 * stage + kind] = mass[kind];
+                for (int kind = 0; kind < 4; ++kind) {
+                    const auto channel = (kind == 2 ? 2 : 0) + stage;
+                    const double total = p.renewal_->mass(i, channel);
+                    if (total > 0.0) add_mixture(pools[stage][kind].work,
+                        p.renewal_->distribution(i, channel), mass[kind] / total);
+                }
+                for (auto [bank, target] : {std::pair{p.duration_.get(), &pools[stage][1].duration},
+                                            std::pair{p.velocity_.get(), &pools[stage][1].velocity}})
+                    if (bank && bank->mass(i, stage) > 0.0)
+                        add_mixture(*target, bank->distribution(i, stage), active_mass / bank->mass(i, stage));
             }
             p.r_normal_[stage][i] = 0;
             p.r_refractory_[stage][i] = 0;
@@ -442,6 +512,9 @@ void HybridModel3D::convert_region(const std::vector<std::size_t> &region) {
             p.K_[stage][i] = 0;
             p.active_total_[stage][i] = 0;
         }
+        if (distributions)
+            for (auto* bank : {p.renewal_.get(), p.duration_.get(), p.velocity_.get()})
+                if (bank) bank->erase(i);
     }
     synchronize_environment(false);
     const auto remaining_volume = [&] {
@@ -503,6 +576,15 @@ void HybridModel3D::convert_region(const std::vector<std::size_t> &region) {
                 cell.migration_rate = float(rates.migration_rate);
                 cell.normal_migration_rate = sample_normal_migration_rate(
                     cell.type, cell.migration_rate, abm_->config_, cell.uid, 0);
+                const auto sample = [&](const auto& values, std::uint64_t domain) {
+                    return sample_mixture(values, config_.rules.continuum.base.seed ^
+                        mix(cell.uid) ^ mix(exchange_count_) ^ domain);
+                };
+                if (distributions) {
+                    cell.division_work_remaining = float(p.renewal_->bin_width() * sample(pool.work, 0x485942574f524bULL));
+                    if (kind == 1 && p.velocity_)
+                        cell.normal_migration_rate = float(p.velocity_->bin_width() * sample(pool.velocity, 0x48594252415445ULL));
+                }
                 if (cell.type == CellType::r &&
                     abm_->config_.activated_r_migration_rate_model ==
                         "normal_multiplier")
@@ -512,9 +594,19 @@ void HybridModel3D::convert_region(const std::vector<std::size_t> &region) {
                 if (kind == 1) {
                     cell.flags |= kMigrationActive;
                     cell.migration_activation_end_time =
-                        time_hours() + mean_clock;
+                        time_hours() + (distributions && p.duration_ ?
+                            p.duration_->bin_width() * sample(pool.duration, 0x48594254494d45ULL) : mean_clock);
+                    if (distributions) {
+                        const auto bucket = sample(pool.directions, 0x485942444952ULL);
+                        cell.last_direction = bucket ? p.direction_ids_[bucket - 1] : kStayDirection;
+                        if (!(cell.migration_activation_end_time > time_hours())) {
+                            cell.flags &= std::uint8_t(~kMigrationActive);
+                            cell.migration_activation_end_time = 0.0;
+                            cell.last_direction = kStayDirection;
+                        }
+                    }
                 }
-                const double effective_rate = kind == 1
+                const double effective_rate = (cell.flags & kMigrationActive)
                                                   ? cell.migration_rate
                                                   : cell.normal_migration_rate;
                 cell.next_migration_time =
@@ -526,12 +618,18 @@ void HybridModel3D::convert_region(const std::vector<std::size_t> &region) {
                 if (!placed)
                     throw std::logic_error("hybrid rounded placement failed");
                 abm_->density_.add(anchor, cell.type, slot);
-                initialize_division_cycle(slot, time_hours(), abm_->cells_,
-                                          abm_->config_);
+                if (!distributions)
+                    initialize_division_cycle(slot, time_hours(), abm_->cells_, abm_->config_);
                 if (kind == 3)
                     environment_->refractory_[cell.uid] = {
                         time_hours() + mean_clock, false};
+                if (distributions && kind == 1 && !(cell.flags & kMigrationActive))
+                    environment_->refractory_[cell.uid] = {
+                        time_hours() + config_.rules.migration.reactivation_cooldown_hours, false};
                 abm_->schedule_cell(slot);
+                if (distributions)
+                    for (auto* values : {&pool.work, &pool.duration, &pool.velocity, &pool.directions})
+                        debit_mixture(*values, 1 / pool.mass);
                 pool.mass -= 1;
                 pool.clock = pool.mass * mean_clock;
                 ++to_abm_;
@@ -544,37 +642,79 @@ void HybridModel3D::convert_region(const std::vector<std::size_t> &region) {
             auto &pool = pools[stage][kind];
             const double mean_clock =
                 pool.mass > 0 ? pool.clock / pool.mass : 0;
-            for (auto i : eligible) {
-                if (pool.mass <= 0)
-                    break;
-                if (!abm_->grid_.occupants(site(i)).empty())
-                    continue;
-                const double volume = stage ? p.large_cell_volume_ : 1;
-                const double mass =
-                    std::min(pool.mass, std::max(0.0, 1 - used[i]) / volume);
-                if (kind == 0 || kind == 3) {
-                    p.r_normal_[stage][i] += mass;
-                    if (kind == 3) {
-                        p.r_refractory_[stage][i] += mass;
-                        p.refractory_clock_[stage][i] += mass * mean_clock;
+            // Keep fractional fronts at their original sites. Repeatedly
+            // moving sub-cell remainders to the first permuted site creates
+            // an artificial block-scale diffusion, even without conversion.
+            const auto& restore_order = distributions ? region : eligible;
+            bool progressed;
+            do {
+                const double pass_mass = pool.mass;
+                double weight_sum = 0.0;
+                if (distributions) for (auto i : restore_order)
+                    if (abm_->grid_.occupants(site(i)).empty() && used[i] < 1.0)
+                        weight_sum += original_mass.at(i)[4 * stage + kind];
+                const bool uniform = !(weight_sum > 0.0);
+                if (distributions && uniform) for (auto i : restore_order)
+                    if (abm_->grid_.occupants(site(i)).empty() && used[i] < 1.0) weight_sum += 1.0;
+                progressed = false;
+                for (auto i : restore_order) {
+                    if (pool.mass <= 0)
+                        break;
+                    if (!abm_->grid_.occupants(site(i)).empty())
+                        continue;
+                    const double volume = stage ? p.large_cell_volume_ : 1;
+                    const double desired = distributions ? (weight_sum > 0.0 ? pass_mass *
+                        (uniform ? 1.0 : original_mass.at(i)[4 * stage + kind]) / weight_sum : 0.0) : pool.mass;
+                    const double mass =
+                        std::min({pool.mass, desired, std::max(0.0, 1 - used[i]) / volume});
+                    if (distributions && !(mass > 0.0)) continue;
+                    progressed = progressed || mass > 0.0;
+                    double active_added = 0.0;
+                    if (kind == 0 || kind == 3) {
+                        p.r_normal_[stage][i] += mass;
+                        if (kind == 3) {
+                            p.r_refractory_[stage][i] += mass;
+                            p.refractory_clock_[stage][i] += mass * mean_clock;
+                        }
+                    } else if (kind == 2)
+                        p.K_[stage][i] += mass;
+                    else {
+                        if (distributions) {
+                            const double total = std::accumulate(pool.directions.begin(), pool.directions.end(), 0.0);
+                            for (std::size_t bucket = 0; bucket < pool.directions.size(); ++bucket) {
+                                const float m = std::nextafter(float(mass * pool.directions[bucket] / total), 0.0F);
+                                p.active_direction_[stage][bucket][i] += m;
+                                p.active_clock_[stage][bucket][i] += float(m * mean_clock);
+                                active_added += m;
+                            }
+                            p.active_total_[stage][i] += float(active_added);
+                            p.r_normal_[stage][i] += mass - active_added;
+                        } else {
+                            const float m = std::nextafter(float(mass), 0.0F);
+                            p.active_direction_[stage][0][i] += m;
+                            p.active_clock_[stage][0][i] += float(m * mean_clock);
+                            p.active_total_[stage][i] += m;
+                            p.r_normal_[stage][i] += mass - double(m);
+                        }
                     }
-                } else if (kind == 2)
-                    p.K_[stage][i] += mass;
-                else {
-                    const float m = std::nextafter(float(mass), 0.0F);
-                    p.active_direction_[stage][0][i] += m;
-                    p.active_clock_[stage][0][i] += float(m * mean_clock);
-                    p.active_total_[stage][i] += m;
-                    p.r_normal_[stage][i] += mass - double(m);
+                    if (distributions) {
+                        p.renewal_->add_distribution(i, (kind == 2 ? 2 : 0) + stage, pool.work, mass / pool.mass);
+                        if (kind == 1) {
+                            if (p.duration_) p.duration_->add_distribution(i, stage, pool.duration, active_added / pool.mass);
+                            if (p.velocity_) p.velocity_->add_distribution(i, stage, pool.velocity, active_added / pool.mass);
+                        }
+                        for (auto* values : {&pool.work, &pool.duration, &pool.velocity, &pool.directions})
+                            debit_mixture(*values, mass / pool.mass);
+                    }
+                    pool.mass -= mass;
+                    used[i] += mass * volume;
+                    int x, y, z;
+                    p.grid_coordinate(site(i), x, y, z);
+                    p.include_population_location(x, y, z);
+                    if (kind == 1)
+                        p.include_active_location(stage, x, y, z);
                 }
-                pool.mass -= mass;
-                used[i] += mass * volume;
-                int x, y, z;
-                p.grid_coordinate(site(i), x, y, z);
-                p.include_population_location(x, y, z);
-                if (kind == 1)
-                    p.include_active_location(stage, x, y, z);
-            }
+            } while (distributions && progressed && pool.mass > 1e-12);
             if (pool.mass > 1e-9)
                 throw std::logic_error(
                     "hybrid exchange exhausted residual capacity");
@@ -638,13 +778,17 @@ HybridDiagnostics3D HybridModel3D::diagnostics() const {
     d.exchanges = exchange_count_;
     if (config_.mode != "all_pde") {
         d.abm_mass = abm_->cells().alive_count();
-        for (auto slot : abm_->cells().alive_slots())
+        for (auto slot : abm_->cells().alive_slots()) {
+            (abm_->cells().type(slot) == CellType::r ? d.r_mass : d.K_mass) += 1;
             if (abm_->cells().flags(slot) & kMigrationActive)
                 d.active_mass += 1;
+        }
     }
     if (config_.mode != "all_abm") {
         auto p = pde_->diagnostics();
         d.pde_mass = p.r_total + p.K_total;
+        d.r_mass += p.r_total;
+        d.K_mass += p.K_total;
         d.active_mass += p.r_active_total;
         d.mean_nutrient = p.mean_nutrient;
     } else
@@ -653,6 +797,27 @@ HybridDiagnostics3D HybridModel3D::diagnostics() const {
                           environment_->nutrient().size();
     d.total_mass = d.abm_mass + d.pde_mass;
     return d;
+}
+std::vector<double> HybridModel3D::radial_mass() const {
+    double squared = 0.0;
+    for (int edge : config_.rules.continuum.grid.shape) squared += double(edge) * edge;
+    std::vector<double> mass(std::size_t(std::ceil(std::sqrt(squared))) + 1);
+    const auto add = [&](double x, double y, double z, double amount) {
+        const double radius = std::sqrt(x * x + y * y +
+            (config_.rules.continuum.base.thin_layer ? 0.0 : z * z));
+        mass[std::min(mass.size() - 1, std::size_t(std::floor(radius)))] += amount;
+    };
+    if (config_.mode != "all_pde") for (auto slot : abm_->cells().alive_slots()) {
+        const auto anchor = abm_->cells().anchor(slot);
+        add(anchor.x + 0.5, anchor.y + 0.5, anchor.z + 0.5, 1);
+    }
+    if (config_.mode != "all_abm") for (std::size_t i = 0; i < core_.size(); ++i) {
+        const auto center = pde_->coordinate(i);
+        double amount = 0;
+        for (int s = 0; s < 2; ++s) amount += pde_->r_normal_[s][i] + pde_->active_total_[s][i] + pde_->K_[s][i];
+        add(center[0], center[1], center[2], amount * pde_->voxel_measure_);
+    }
+    return mass;
 }
 std::uint64_t HybridModel3D::state_checksum() const {
     if (config_.mode == "all_abm")
@@ -685,7 +850,7 @@ void HybridModel3D::save_checkpoint(const std::filesystem::path &path) const {
         pde_->save_checkpoint(path.string() + ".pde.bin");
     const auto temporary = path.string() + ".tmp";
     std::ofstream out(temporary, std::ios::binary);
-    put(out, std::uint64_t(0x4154434748594231));
+    put(out, std::uint64_t(config_.schema_version == 2 ? 0x4154434748594232 : 0x4154434748594231));
     put(out, config_.fingerprint());
     put(out, state_checksum());
     put(out, abm_->state_checksum());
@@ -735,7 +900,8 @@ void HybridModel3D::load_checkpoint(const std::filesystem::path &path) {
     get(in, fingerprint);
     get(in, checksum);
     get(in, abm_checksum);
-    if (magic != 0x4154434748594231 || fingerprint != config_.fingerprint())
+    if (magic != (config_.schema_version == 2 ? 0x4154434748594232 : 0x4154434748594231) ||
+        fingerprint != config_.fingerprint())
         throw std::runtime_error("hybrid checkpoint configuration mismatch");
     get(in, exchange_count_);
     get(in, to_pde_);

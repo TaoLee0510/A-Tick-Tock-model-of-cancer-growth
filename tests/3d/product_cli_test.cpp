@@ -36,7 +36,8 @@ int main() {
              {"abm", "ATCG3D_SharedRules/config/validation_v7.yaml"},
              {"pde", "ATCG3D_StructuredPDE/config/structured_sparse_v9.yaml"},
              {"ode", "ATCG3D_ODE/config/ode_smoke_v1.yaml"},
-             {"hybrid", "ATCG3D_Hybrid/config/hybrid_smoke_v1.yaml"}})
+             {"hybrid", "ATCG3D_Hybrid/config/hybrid_smoke_v1.yaml"},
+             {"hybrid", "ATCG3D_Hybrid/config/hybrid_regular_cycle_v2.yaml"}})
         assert(run(entry, {"--model", model, "--config",
                            (source / path).string(), "--dry-run"}) == 0);
     assert(run(entry,
@@ -66,7 +67,8 @@ int main() {
                               "ATCG3D_StructuredPDE_NutrientChemotaxis/config/"
                               "structured_smoke_2d_256_v5.yaml",
                               "ATCG3D_ODE/config/ode_smoke_v1.yaml",
-                              "ATCG3D_Hybrid/config/hybrid_smoke_v1.yaml"}) {
+                              "ATCG3D_Hybrid/config/hybrid_smoke_v1.yaml",
+                              "ATCG3D_Hybrid/config/hybrid_regular_cycle_v2.yaml"}) {
         assert(run(binary / "atcg_config_migrate",
                    {"--input", (source / input).string(), "--output-directory",
                     output.string(), "--grid-edge", "128",
@@ -126,5 +128,25 @@ int main() {
     const auto native = YAML::LoadFile((output / "native_shared_run/final.json").string());
     const auto shared = YAML::LoadFile((output / "shared.json").string());
     assert(native["state_checksum"].as<std::uint64_t>() == shared["state_checksum"].as<std::uint64_t>());
+    structured["division_clock"]["model"] = "transported_shifted_geometric_v1";
+    structured["division_clock"]["work_bin_width"] = 0.5;
+    structured["division_clock"]["maximum_work"] = 128.0;
+    {
+        std::ofstream yaml(output / "structured.yaml");
+        yaml << structured;
+    }
+    auto hybrid = YAML::LoadFile((source / "ATCG3D_Hybrid/config/hybrid_regular_cycle_v2.yaml").string());
+    hybrid["structured_config"] = "structured.yaml";
+    {
+        std::ofstream yaml(output / "hybrid.yaml");
+        yaml << hybrid;
+    }
+    assert(run(entry, {"--model", "hybrid", "--config", (output / "hybrid.yaml").string(),
+        "--mode", "all_pde", "--seed", "2", "--step-hours", "0.01", "--exchange-hours", "0.01",
+        "--no-output", "--validation-report", "--report", (output / "hybrid.json").string()}) == 0);
+    const auto mixed = YAML::LoadFile((output / "hybrid.json").string());
+    assert(mixed["r_mass"].as<double>() > 0 && mixed["K_mass"].as<double>() > 0);
+    assert(mixed["radial_mass"].IsSequence());
+    assert(!std::filesystem::exists("atcg3d_hybrid_regular_cycle_v2_run"));
     std::filesystem::remove_all(output);
 }

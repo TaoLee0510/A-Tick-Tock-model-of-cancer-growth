@@ -27,7 +27,7 @@ on the selected native model; invoke its `--help` for the complete list.
 | ABM | Native or nutrient YAML; shared structured YAML | Individual event clocks, directional migration and angiogenesis. Shared mode writes requested JSON reports and paired checkpoints. |
 | ODE | `ATCG3D_ODE/config/ode_smoke_v1.yaml` | Well-mixed mean-clock reaction, adaptive RK45, CSV and checkpoint. |
 | PDE | Continuum or structured YAML | Density fields, resource/vascular fields, CSV and native checkpoint. |
-| Hybrid | `ATCG3D_Hybrid/config/hybrid_smoke_v1.yaml` | Dense PDE core and sparse/front ABM, conservative exchanges, CSV and paired checkpoint. |
+| Hybrid | `ATCG3D_Hybrid/config/hybrid_regular_cycle_v2.yaml` | Dense PDE core and sparse/front ABM, conservative distribution exchanges, CSV and paired checkpoint. |
 
 Examples:
 
@@ -42,12 +42,14 @@ ctest --test-dir build-codex -L validation --output-on-failure
 The validation label runs 16 paired seeds for sparse and regular-cycle growth
 on 256-square voxels for 48 hours, activated r20/r200 invasion, and early
 vascular growth with and without branching/anastomosis. Reports include the
-predeclared tolerances and sampling uncertainty. Unit tests separately cover
+predeclared tolerances and sampling uncertainty. Hybrid validation compares
+the native limits with a growing mixed population and refines splitting and
+exchange intervals using 16 paired seeds per case. Unit tests separately cover
 published checksum fixtures, exact growth windows, high-rate transport,
 nonnegativity, conservation, ODE/PDE agreement and thread-independent restart.
 GitHub Actions configures Linux and macOS HDF5 builds, runs all CTests and
-uploads the validation reports. The workflow is checked in; a hosted run is
-only confirmed once GitHub executes it.
+uploads the validation reports. [ci_verification.md](ci_verification.md)
+describes the strict native legacy regression reference on each platform.
 
 Version and approximation boundaries are explicit in
 [shared_rule_contract.md](shared_rule_contract.md),

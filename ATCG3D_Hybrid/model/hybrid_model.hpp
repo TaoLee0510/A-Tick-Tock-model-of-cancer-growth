@@ -22,6 +22,7 @@ struct HybridConfig3D {
 
 struct HybridDiagnostics3D {
     double abm_mass{}, pde_mass{}, total_mass{}, active_mass{}, mean_nutrient{};
+    double r_mass{}, K_mass{};
     std::uint64_t to_pde{}, to_abm{}, exchanges{};
 };
 
@@ -34,6 +35,7 @@ class HybridModel3D {
     bool step();
     double time_hours() const noexcept;
     HybridDiagnostics3D diagnostics() const;
+    std::vector<double> radial_mass() const;
     std::uint64_t state_checksum() const;
     const Simulation3D &abm() const noexcept { return *abm_; }
     const structured_pde::StructuredPdeModel3D &pde() const noexcept {
