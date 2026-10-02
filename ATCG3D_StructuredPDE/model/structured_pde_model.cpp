@@ -311,6 +311,11 @@ StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
     nutrient_.assign(voxel_count_, 0.0);
     nutrient_next_.assign(voxel_count_, 0.0);
     vessel_.assign(voxel_count_, 0.0);
+    if(config_.continuum.angiogenesis.model != "disabled") {
+        const auto& c=config_.continuum;
+        angiogenesis_=std::make_unique<continuum::AngiogenesisField3D>(c.angiogenesis,c.grid.shape,c.grid.spacing_voxels,c.base.thin_layer);
+    }
+
     tumour_mask_.assign(voxel_count_, 0U);
 }
 
@@ -646,6 +651,7 @@ void StructuredPdeModel3D::initialize_from_abm(
     build_activation_density();
     next_nutrient_refresh_hours_ =
         time_hours_ + config_.continuum.nutrient.refresh_every_hours;
+    if(angiogenesis_) angiogenesis_->initialize(vessel_);
     initialized_ = true;
     validate_state();
 }
@@ -767,8 +773,20 @@ void StructuredPdeModel3D::initialize_from_arrays(
     build_activation_density();
     next_nutrient_refresh_hours_ =
         time_hours_ + config_.continuum.nutrient.refresh_every_hours;
+    if(angiogenesis_) angiogenesis_->initialize(vessel_);
     initialized_ = true;
     validate_state();
+}
+
+void StructuredPdeModel3D::advance_angiogenesis(double dt) {
+    if(!angiogenesis_) return;
+    std::vector<double> consumers(voxel_count_,0.0);
+    for(std::size_t here=0;here<voxel_count_;++here) {
+        for(std::size_t stage=0;stage<2;++stage) consumers[here]+=r_normal_[stage][here]+active_total_[stage][here]+K_[stage][here];
+    }
+    angiogenesis_->advance(dt,consumers,nutrient_,config_.continuum.nutrient.vessel_value);
+    vessel_=angiogenesis_->vessels();
+    clear_cells_from_vessels();
 }
 
 void StructuredPdeModel3D::add_synthetic_vessel() {
@@ -806,14 +824,15 @@ void StructuredPdeModel3D::add_synthetic_vessel() {
 
 bool StructuredPdeModel3D::vessel_blocks_cells(
     std::size_t location) const noexcept {
-    return config_.migration.vessel_exclusion && vessel_[location] > 0.0;
+    return config_.migration.vessel_exclusion && (config_.schema_version < 8
+        ? vessel_[location] > 0.0 : vessel_[location] >= config_.continuum.angiogenesis.exclusion_fraction);
 }
 
 void StructuredPdeModel3D::clear_cells_from_vessels() {
     if (!config_.migration.vessel_exclusion) return;
     for (std::size_t location = 0; location < voxel_count_; ++location) {
         if (!vessel_blocks_cells(location)) continue;
-        if (config_.schema_version >= 7 && occupied_fraction(location) > 1.0e-10) {
+        if (config_.schema_version >= 7 && !initialized_ && occupied_fraction(location) > 1.0e-10) {
             throw std::invalid_argument("structured initial population overlaps an excluded vessel");
         }
         for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
@@ -929,7 +948,7 @@ bool StructuredPdeModel3D::nutrient_source(
         const bool use_vessels = mode ==
             "moving_tumor_front_and_vessels_dirichlet_v2";
         return tumour_mask_[location] == 0U ||
-            (use_vessels && vessel_[location] > 0.0);
+            (use_vessels && (config_.schema_version < 8 ? vessel_[location] > 0.0 : vessel_[location] >= config_.continuum.angiogenesis.exclusion_fraction));
     }
     const auto& grid = config_.continuum.grid;
     const bool planar_edge = x == 0 || x + 1 == grid.shape[0] ||
@@ -939,7 +958,7 @@ bool StructuredPdeModel3D::nutrient_source(
     const bool use_edges = mode != "vessels_dirichlet_v1";
     const bool use_vessels = mode != "planar_edges_dirichlet_v1";
     return (use_edges && planar_edge) ||
-        (use_vessels && vessel_[location] > 0.0);
+        (use_vessels && (config_.schema_version < 8 ? vessel_[location] > 0.0 : vessel_[location] >= config_.continuum.angiogenesis.exclusion_fraction));
 }
 
 void StructuredPdeModel3D::advance_transient_nutrient(double dt) {
@@ -1030,6 +1049,8 @@ void StructuredPdeModel3D::advance_transient_nutrient(double dt) {
             ? continuum::resource_after_uptake(diffused, consumers, nutrient.K_consumption_rate_per_hour,
                 half, dt, source_value)
             : std::clamp(consumed, 0.0, source_value);
+        if(angiogenesis_) nutrient_next_[here]=source_value-(source_value-nutrient_next_[here])*
+            std::exp(-dt*continuum.angiogenesis.perfusion_exchange_per_hour*vessel_[here]);
     });
     nutrient_.swap(nutrient_next_);
     if (moving_front) {
@@ -2951,6 +2972,7 @@ bool StructuredPdeModel3D::step() {
         target = next_nutrient_refresh_hours_;
     }
     const double dt = target - time_hours_;
+    advance_angiogenesis(dt);
     // Density is only the trigger. Active cohorts keep their own remaining
     // clock and therefore do not deactivate when this field later falls.
     refresh_activation(dt);
@@ -3310,6 +3332,7 @@ std::uint64_t StructuredPdeModel3D::state_checksum() const {
         config_.continuum.grid.shape[1], config_.continuum.grid.shape[2], true};
     hash_double_region(nutrient_, full_bounds);
     hash_double_region(vessel_, full_bounds);
+    if(angiogenesis_) state=hash_mix(state,angiogenesis_->checksum());
     return state;
 }
 
@@ -3325,7 +3348,7 @@ void StructuredPdeModel3D::save_checkpoint(
     std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
     if (!stream) throw std::runtime_error("unable to create structured checkpoint");
     stream.write(kCheckpointMagic.data(), kCheckpointMagic.size());
-    write_pod(stream, config_.schema_version >= 7 ? kCohortCheckpointVersion : config_.schema_version >= 5
+    write_pod(stream, config_.schema_version >= 8 ? 5U : config_.schema_version >= 7 ? kCohortCheckpointVersion : config_.schema_version >= 5
         ? kRefractoryCheckpointVersion : kLegacyCheckpointVersion);
     write_pod(stream, config_.dynamics_fingerprint());
     write_pod(stream, static_cast<std::uint64_t>(voxel_count_));
@@ -3362,6 +3385,7 @@ void StructuredPdeModel3D::save_checkpoint(
     }
     write_vector(stream, nutrient_);
     write_vector(stream, vessel_);
+    if(angiogenesis_) angiogenesis_->save(stream);
     write_pod(stream, state_checksum());
     stream.flush();
     if (!stream) throw std::runtime_error("unable to finish structured checkpoint");
@@ -3377,7 +3401,7 @@ void StructuredPdeModel3D::load_checkpoint(
     std::array<char, 8> magic{};
     stream.read(magic.data(), magic.size());
     const std::uint32_t checkpoint_version = read_pod<std::uint32_t>(stream);
-    const auto expected_version = config_.schema_version >= 7 ? kCohortCheckpointVersion :
+    const auto expected_version = config_.schema_version >= 8 ? 5U : config_.schema_version >= 7 ? kCohortCheckpointVersion :
         config_.schema_version >= 5 ? kRefractoryCheckpointVersion : kLegacyCheckpointVersion;
     if (magic != kCheckpointMagic || checkpoint_version != expected_version) {
         throw std::runtime_error("unsupported structured checkpoint format");
@@ -3438,6 +3462,7 @@ void StructuredPdeModel3D::load_checkpoint(
     }
     read_vector(stream, nutrient_, voxel_count_);
     read_vector(stream, vessel_, voxel_count_);
+    if(angiogenesis_) angiogenesis_->load(stream);
     const std::uint64_t expected_checksum = read_pod<std::uint64_t>(stream);
     if (stream.peek() != std::char_traits<char>::eof()) {
         throw std::runtime_error("structured checkpoint has trailing data");

@@ -80,6 +80,11 @@ ContinuumModel3D::ContinuumModel3D(ContinuumModelConfig3D config)
     nutrient_.assign(voxel_count_, 0.0);
     nutrient_next_.assign(voxel_count_, 0.0);
     vessel_.assign(voxel_count_, 0.0);
+    if(config_.angiogenesis.model != "disabled") {
+        const auto& c=config_;
+        angiogenesis_=std::make_unique<AngiogenesisField3D>(c.angiogenesis,c.grid.shape,c.grid.spacing_voxels,c.base.thin_layer);
+    }
+
     tumour_mask_.assign(voxel_count_, 0U);
 
     // The activated-r coefficient is only used on faces whose occupied
@@ -213,6 +218,7 @@ void ContinuumModel3D::initialize_from_abm(const Simulation3D& simulation) {
     rebuild_moving_tumour_front();
     solve_nutrient();
     next_nutrient_refresh_hours_ = time_hours_ + config_.nutrient.refresh_every_hours;
+    if(angiogenesis_) angiogenesis_->initialize(vessel_);
     initialized_ = true;
     validate_state();
 }
@@ -250,8 +256,24 @@ void ContinuumModel3D::initialize_from_arrays(
     rebuild_moving_tumour_front();
     solve_nutrient();
     next_nutrient_refresh_hours_ = time_hours_ + config_.nutrient.refresh_every_hours;
+    if(angiogenesis_) angiogenesis_->initialize(vessel_);
     initialized_ = true;
     validate_state();
+}
+
+void ContinuumModel3D::advance_angiogenesis(double dt) {
+    if(!angiogenesis_) return;
+    std::vector<double> consumers(voxel_count_,0.0);
+    for(std::size_t here=0;here<voxel_count_;++here) {
+        for(const auto& field:populations_) consumers[here]+=field[here];
+    }
+    angiogenesis_->advance(dt,consumers,nutrient_,config_.nutrient.vessel_value);
+    vessel_=angiogenesis_->vessels();
+    for(std::size_t here=0;here<voxel_count_;++here) if(vessel_blocks_cells(here)) for(auto& field:populations_) field[here]=0.0;
+}
+
+bool ContinuumModel3D::vessel_blocks_cells(std::size_t here) const noexcept {
+    return config_.schema_version < 6 ? vessel_[here]>0.0 : vessel_[here]>=config_.angiogenesis.exclusion_fraction;
 }
 
 void ContinuumModel3D::add_synthetic_vessel() {
@@ -351,7 +373,7 @@ bool ContinuumModel3D::nutrient_source(
         const bool use_vessels = mode ==
             "moving_tumor_front_and_vessels_dirichlet_v2";
         return tumour_mask_[location] == 0U ||
-            (use_vessels && vessel_[location] > 0.0);
+            (use_vessels && (config_.schema_version < 6 ? vessel_[location] > 0.0 : vessel_[location] >= config_.angiogenesis.exclusion_fraction));
     }
     const bool planar_edge = x == 0 || x + 1 == config_.grid.shape[0] ||
         y == 0 || y + 1 == config_.grid.shape[1] ||
@@ -360,7 +382,7 @@ bool ContinuumModel3D::nutrient_source(
     const bool use_edges = mode != "vessels_dirichlet_v1";
     const bool use_vessels = mode != "planar_edges_dirichlet_v1";
     return (use_edges && planar_edge) ||
-        (use_vessels && vessel_[location] > 0.0);
+        (use_vessels && (config_.schema_version < 6 ? vessel_[location] > 0.0 : vessel_[location] >= config_.angiogenesis.exclusion_fraction));
 }
 
 void ContinuumModel3D::advance_transient_nutrient(double dt) {
@@ -419,6 +441,8 @@ void ContinuumModel3D::advance_transient_nutrient(double dt) {
             ? resource_after_uptake(diffused, consumers, config_.nutrient.K_consumption_rate_per_hour,
                 half, dt, source_value)
             : std::clamp(0.5 * (-b + std::sqrt(discriminant)), 0.0, source_value);
+        if(angiogenesis_) nutrient_next_[here]=source_value-(source_value-nutrient_next_[here])*
+            std::exp(-dt*config_.angiogenesis.perfusion_exchange_per_hour*vessel_[here]);
     });
     nutrient_.swap(nutrient_next_);
     ++nutrient_solve_count_;
@@ -569,7 +593,7 @@ void ContinuumModel3D::migrate(double dt) {
                     field == static_cast<std::size_t>(PopulationField3D::K_large);
                 const double vacancy_exponent = large ? large_cell_volume_ : 1.0;
                 const double local_availability =
-                    (config_.schema_version >= 5 && vessel_[here] > 0.0)
+                    (config_.schema_version >= 5 && vessel_blocks_cells(here))
                         ? 0.0 : std::pow(vacancy, vacancy_exponent);
                 double delta = 0.0;
                 for (std::size_t position = 0; position < neighbor_count;
@@ -587,7 +611,7 @@ void ContinuumModel3D::migrate(double dt) {
                         static_cast<PopulationField3D>(field),
                         0.5 * (phi + other_phi));
                     const double other_availability =
-                        (config_.schema_version >= 5 && vessel_[other] > 0.0)
+                        (config_.schema_version >= 5 && vessel_blocks_cells(other))
                             ? 0.0 : std::pow(other_vacancy, vacancy_exponent);
                     delta += diffusion * inverse_h2 * mobility *
                         (populations_[field][other] * local_availability -
@@ -630,9 +654,9 @@ void ContinuumModel3D::migrate(double dt) {
                     static_cast<std::size_t>(PopulationField3D::r_large) ||
                 field == static_cast<std::size_t>(PopulationField3D::K_large);
             const double vacancy_exponent = large ? large_cell_volume_ : 1.0;
-            const double lhs_availability = (config_.schema_version >= 5 && vessel_[lhs] > 0.0)
+            const double lhs_availability = (config_.schema_version >= 5 && vessel_blocks_cells(lhs))
                 ? 0.0 : std::pow(lhs_vacancy, vacancy_exponent);
-            const double rhs_availability = (config_.schema_version >= 5 && vessel_[rhs] > 0.0)
+            const double rhs_availability = (config_.schema_version >= 5 && vessel_blocks_cells(rhs))
                 ? 0.0 : std::pow(rhs_vacancy, vacancy_exponent);
             const double rate = diffusion * inverse_h2 * mobility *
                 (populations_[field][lhs] * rhs_availability -
@@ -958,6 +982,7 @@ bool ContinuumModel3D::step() {
         target = next_nutrient_refresh_hours_;
     }
     const double dt = target - time_hours_;
+    advance_angiogenesis(dt);
     for (int substep = 0; substep < migration_substeps_; ++substep) {
         migrate(dt / migration_substeps_);
     }
@@ -1061,7 +1086,7 @@ void ContinuumModel3D::validate_state() const {
                 throw std::runtime_error("continuum population state is invalid");
             }
         }
-        if (config_.schema_version >= 5 && vessel_[location] > 0.0 &&
+        if (config_.schema_version >= 5 && vessel_blocks_cells(location) &&
             occupied_fraction(location) > 1.0e-10) {
             throw std::runtime_error("continuum population overlaps an excluded vessel");
         }
@@ -1094,6 +1119,7 @@ std::uint64_t ContinuumModel3D::state_checksum() const {
     for (const double value : vessel_) {
         result = hash_mix(result, std::bit_cast<std::uint64_t>(value));
     }
+    if(angiogenesis_) result=hash_mix(result,angiogenesis_->checksum());
     return result;
 }
 
@@ -1111,7 +1137,7 @@ void ContinuumModel3D::save_checkpoint(const std::filesystem::path& path) const 
     std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
     if (!stream) throw std::runtime_error("unable to create continuum checkpoint");
     stream.write(kCheckpointMagic.data(), kCheckpointMagic.size());
-    write_pod(stream, kCheckpointVersion);
+    write_pod(stream, config_.schema_version >= 6 ? 2U : kCheckpointVersion);
     write_pod(stream, config_.dynamics_fingerprint());
     for (const int extent : config_.grid.shape) write_pod(stream, extent);
     write_pod(stream, static_cast<std::uint64_t>(voxel_count_));
@@ -1127,6 +1153,7 @@ void ContinuumModel3D::save_checkpoint(const std::filesystem::path& path) const 
     for (const auto& field : populations_) write_field(field);
     write_field(nutrient_);
     write_field(vessel_);
+    if(angiogenesis_) angiogenesis_->save(stream);
     stream.flush();
     if (!stream) throw std::runtime_error("unable to finish continuum checkpoint");
     stream.close();
@@ -1140,7 +1167,7 @@ void ContinuumModel3D::load_checkpoint(const std::filesystem::path& path) {
     std::array<char, 8> magic{};
     stream.read(magic.data(), magic.size());
     if (!stream || magic != kCheckpointMagic ||
-        read_pod<std::uint32_t>(stream) != kCheckpointVersion) {
+        read_pod<std::uint32_t>(stream) != (config_.schema_version >= 6 ? 2U : kCheckpointVersion)) {
         throw std::runtime_error("unsupported continuum checkpoint format");
     }
     if (read_pod<std::uint64_t>(stream) != config_.dynamics_fingerprint()) {
@@ -1167,6 +1194,7 @@ void ContinuumModel3D::load_checkpoint(const std::filesystem::path& path) {
     for (auto& field : populations_) read_field(field);
     read_field(nutrient_);
     read_field(vessel_);
+    if(angiogenesis_) angiogenesis_->load(stream);
     if (stream.peek() != std::char_traits<char>::eof()) {
         throw std::runtime_error("continuum checkpoint has trailing data");
     }

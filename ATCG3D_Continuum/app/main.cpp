@@ -29,6 +29,10 @@ std::unique_ptr<atcg3d::Simulation3D> source_abm(
     atcg3d::Model3DConfig base = config.base;
     base.output_enabled = false;
     base.control_enabled = false;
+    if(base.angiogenesis.seed_process_model=="hypoxia_modulated_poisson_v2") {
+        if(config.initialization_mode != "base_model") throw std::invalid_argument("hypoxic ABM checkpoint import requires the shared-resource executable");
+        base.angiogenesis.enabled=false;
+    }
     auto simulation = std::make_unique<atcg3d::Simulation3D>(base);
     if (config.initialization_mode == "base_model") {
         simulation->initialize();

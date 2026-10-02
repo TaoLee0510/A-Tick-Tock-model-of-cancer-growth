@@ -161,7 +161,7 @@ ContinuumModelConfig3D ContinuumModelConfig3D::load(
     }
     mapping(root, "$", {"schema", "profile", "base_config", "run",
                           "initialization", "grid", "numerics", "migration",
-                          "reaction", "nutrient", "vascular", "output"});
+                          "reaction", "nutrient", "vascular", "output", "angiogenesis"});
 
     ContinuumModelConfig3D result;
     result.source_path = std::filesystem::absolute(path).lexically_normal();
@@ -172,7 +172,7 @@ ContinuumModelConfig3D ContinuumModelConfig3D::load(
     result.schema_version = integer(required(schema, "version", "$.schema"),
                                     "$.schema.version");
     if (result.schema_name != "atcg3d.continuum_model_config" ||
-        (result.schema_version < 1 || result.schema_version > 5)) {
+        (result.schema_version < 1 || result.schema_version > 6)) {
         fail("$.schema", "unsupported schema identity");
     }
     result.profile = text_value(required(root, "profile", "$"), "$.profile");
@@ -413,6 +413,27 @@ ContinuumModelConfig3D ContinuumModelConfig3D::load(
         result.base.static_vasculature = result.shared_vascular_geometry();
     }
 
+    if (result.schema_version >= 6) {
+        const auto angiogenesis = required(root, "angiogenesis", "$");
+        mapping(angiogenesis, "$.angiogenesis", {"model", "hypoxia_threshold", "taf_production_per_cell_hour", "taf_diffusion_voxels2_per_hour", "taf_decay_per_hour", "tip_diffusion_voxels2_per_hour", "tip_chemotaxis", "tip_branching_per_hour", "tip_anastomosis_per_hour", "seed_tips_per_hour", "tip_speed_voxels_per_hour", "vessel_radius_voxels", "perfusion_exchange_per_hour", "exclusion_fraction", "maximum_tip_density"});
+        result.angiogenesis.model = text_value(required(angiogenesis,"model","$.angiogenesis"),"$.angiogenesis.model");
+        if(angiogenesis["hypoxia_threshold"]) result.angiogenesis.hypoxia_threshold = number(angiogenesis["hypoxia_threshold"],"$.angiogenesis.hypoxia_threshold");
+        if(angiogenesis["taf_production_per_cell_hour"]) result.angiogenesis.taf_production_per_cell_hour = number(angiogenesis["taf_production_per_cell_hour"],"$.angiogenesis.taf_production_per_cell_hour");
+        if(angiogenesis["taf_diffusion_voxels2_per_hour"]) result.angiogenesis.taf_diffusion_voxels2_per_hour = number(angiogenesis["taf_diffusion_voxels2_per_hour"],"$.angiogenesis.taf_diffusion_voxels2_per_hour");
+        if(angiogenesis["taf_decay_per_hour"]) result.angiogenesis.taf_decay_per_hour = number(angiogenesis["taf_decay_per_hour"],"$.angiogenesis.taf_decay_per_hour");
+        if(angiogenesis["tip_diffusion_voxels2_per_hour"]) result.angiogenesis.tip_diffusion_voxels2_per_hour = number(angiogenesis["tip_diffusion_voxels2_per_hour"],"$.angiogenesis.tip_diffusion_voxels2_per_hour");
+        if(angiogenesis["tip_chemotaxis"]) result.angiogenesis.tip_chemotaxis = number(angiogenesis["tip_chemotaxis"],"$.angiogenesis.tip_chemotaxis");
+        if(angiogenesis["tip_branching_per_hour"]) result.angiogenesis.tip_branching_per_hour = number(angiogenesis["tip_branching_per_hour"],"$.angiogenesis.tip_branching_per_hour");
+        if(angiogenesis["tip_anastomosis_per_hour"]) result.angiogenesis.tip_anastomosis_per_hour = number(angiogenesis["tip_anastomosis_per_hour"],"$.angiogenesis.tip_anastomosis_per_hour");
+        if(angiogenesis["seed_tips_per_hour"]) result.angiogenesis.seed_tips_per_hour = number(angiogenesis["seed_tips_per_hour"],"$.angiogenesis.seed_tips_per_hour");
+        if(angiogenesis["tip_speed_voxels_per_hour"]) result.angiogenesis.tip_speed_voxels_per_hour = number(angiogenesis["tip_speed_voxels_per_hour"],"$.angiogenesis.tip_speed_voxels_per_hour");
+        if(angiogenesis["vessel_radius_voxels"]) result.angiogenesis.vessel_radius_voxels = number(angiogenesis["vessel_radius_voxels"],"$.angiogenesis.vessel_radius_voxels");
+        if(angiogenesis["perfusion_exchange_per_hour"]) result.angiogenesis.perfusion_exchange_per_hour = number(angiogenesis["perfusion_exchange_per_hour"],"$.angiogenesis.perfusion_exchange_per_hour");
+        if(angiogenesis["exclusion_fraction"]) result.angiogenesis.exclusion_fraction = number(angiogenesis["exclusion_fraction"],"$.angiogenesis.exclusion_fraction");
+        if(angiogenesis["maximum_tip_density"]) result.angiogenesis.maximum_tip_density = number(angiogenesis["maximum_tip_density"],"$.angiogenesis.maximum_tip_density");
+        result.angiogenesis.validate();
+    } else if(root["angiogenesis"]) fail("$.angiogenesis","requires continuum schema v6");
+
     const YAML::Node output = required(root, "output", "$");
     mapping(output, "$.output",
             {"enabled", "directory", "metrics_every_hours", "field_every_hours",
@@ -577,6 +598,8 @@ void ContinuumModelConfig3D::validate() const {
         throw std::invalid_argument("continuum vascular/output parameters are invalid");
     }
     if (schema_version >= 5) shared_vascular_geometry().validate();
+    angiogenesis.validate();
+    if(schema_version < 6 && angiogenesis.model != "disabled") throw std::invalid_argument("angiogenesis fields require continuum v6");
 }
 
 StaticVascularGeometry3D ContinuumModelConfig3D::shared_vascular_geometry() const {
@@ -645,6 +668,7 @@ std::uint64_t ContinuumModelConfig3D::dynamics_fingerprint() const {
     hash_text(state, vascular.source_mode);
     hash_text(state, vascular.synthetic_axis);
     for (const double value : vascular.synthetic_center) hash_double(state, value);
+    if(schema_version >= 6) state = mix(state,angiogenesis.fingerprint());
     return state;
 }
 
@@ -745,7 +769,9 @@ std::string ContinuumModelConfig3D::to_json() const {
         << "\"dynamics_fingerprint\":" << dynamics_fingerprint() << ','
         << "\"base\":" << base.to_json()
         << '}';
-    return out.str();
+    std::string json=out.str();
+    if(schema_version >= 6) json.insert(json.size()-1,",\"angiogenesis\":"+angiogenesis.to_json());
+    return json;
 }
 
 }  // namespace atcg3d::continuum

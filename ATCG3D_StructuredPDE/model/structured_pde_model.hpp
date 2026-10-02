@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <vector>
 
 #include "config/structured_config.hpp"
@@ -99,6 +100,7 @@ public:
     }
     double voxel_measure() const noexcept { return voxel_measure_; }
     double large_cell_volume() const noexcept { return large_cell_volume_; }
+    const continuum::AngiogenesisField3D* angiogenesis() const noexcept { return angiogenesis_.get(); }
 
     double r_normal(StructuredStage3D stage, std::size_t location) const noexcept;
     double r_active(StructuredStage3D stage, std::size_t location) const noexcept;
@@ -125,6 +127,7 @@ private:
     std::size_t index(int x, int y, int z) const noexcept;
     bool grid_coordinate(Vec3i site, int& x, int& y, int& z) const noexcept;
     void add_synthetic_vessel();
+    void advance_angiogenesis(double dt);
     void clear_cells_from_vessels();
     void solve_nutrient();
     void advance_transient_nutrient(double dt);
@@ -165,6 +168,7 @@ private:
     void validate_state() const;
 
     StructuredPdeConfig3D config_;
+    std::unique_ptr<continuum::AngiogenesisField3D> angiogenesis_;
     std::size_t voxel_count_{};
     double voxel_measure_{};
     double large_cell_volume_{};

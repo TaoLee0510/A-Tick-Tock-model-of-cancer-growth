@@ -6,6 +6,7 @@
 #include <string>
 
 #include "config/model_config.hpp"
+#include "model/angiogenesis_field.hpp"
 
 namespace atcg3d::continuum {
 
@@ -108,6 +109,7 @@ struct ContinuumModelConfig3D {
     ContinuumReactionConfig3D reaction;
     ContinuumNutrientConfig3D nutrient;
     ContinuumVascularConfig3D vascular;
+    AngiogenesisFieldConfig3D angiogenesis;
     ContinuumOutputConfig3D output;
 
     static ContinuumModelConfig3D load(const std::filesystem::path& path);

@@ -631,6 +631,9 @@ Simulation3D::Simulation3D(
 }
 
 void Simulation3D::initialize() {
+    if (config_.angiogenesis.enabled && config_.angiogenesis.seed_process_model == "hypoxia_modulated_poisson_v2" && !environment_) {
+        throw std::invalid_argument("hypoxic angiogenesis requires a nutrient environment");
+    }
     if (initialized_) {
         throw std::logic_error("simulation is already initialized");
     }
@@ -895,6 +898,7 @@ void Simulation3D::restore(const std::vector<CellInit>& restored_cells,
     for (const VesselTipSlot slot : vessel_tips_.alive_slots()) restore_vessel_tip_event(slot);
     const bool initialize_missing_lesion_processes =
         config_.angiogenesis.enabled &&
+        (config_.angiogenesis.seed_process_model != "hypoxia_modulated_poisson_v2" || environment_) &&
         lesion_angiogenesis_processes_.empty() &&
         !lesion_index_.lesions().empty();
     if (initialize_missing_lesion_processes) {
@@ -983,6 +987,7 @@ void Simulation3D::process_environment_refresh(const Event& event) {
                                       cells_.anchor(slots[index]))));
         apply_growth_refresh(slots[index], refreshes[index]);
     }
+    if (config_.angiogenesis.seed_process_model == "hypoxia_modulated_poisson_v2") sync_angiogenesis_eligibility(true);
     schedule_environment_refresh();
 }
 
@@ -1025,6 +1030,9 @@ void Simulation3D::run(const std::function<void(const Simulation3D&)>& observer)
 }
 
 bool Simulation3D::step() {
+    if (config_.angiogenesis.enabled && config_.angiogenesis.seed_process_model == "hypoxia_modulated_poisson_v2" && !environment_) {
+        throw std::invalid_argument("hypoxic angiogenesis requires a nutrient environment");
+    }
     if (!initialized_) initialize();
     if (clock_.completed_events >= config_.max_events) return false;
     while (!events_.empty() && !current(events_.top())) events_.pop();
@@ -2298,6 +2306,16 @@ void Simulation3D::update_lesion_source_ownership(
 
 double Simulation3D::lesion_density_stress(
     const LesionSummary3D& lesion) const {
+    if (config_.angiogenesis.seed_process_model == "hypoxia_modulated_poisson_v2") {
+        std::uint64_t count=0,hypoxic=0;
+        for (const Slot slot : cells_.alive_slots()) {
+            const Vec3i anchor=cells_.anchor(slot);
+            if (lesion_index_.lesion_for_anchor(anchor) != lesion.id) continue;
+            ++count;
+            if (environment_->normalized_resource(anchor) < config_.angiogenesis.seed_hypoxia_threshold) ++hypoxic;
+        }
+        return count>0 ? static_cast<double>(hypoxic)/count : 0.0;
+    }
     if (lesion.core_blocks.empty()) return 0.0;
     const int edge = config_.angiogenesis.lesion_block_edge;
     const std::uint64_t block_capacity = static_cast<std::uint64_t>(edge) * edge *
@@ -2503,6 +2521,7 @@ bool Simulation3D::process_seed_event(const Event& event) {
             0.0, splitmix64(config_.seed ^ event.uid),
             process.state().attempted_events,
             [this, lesion_id = event.uid](const ExposedFace3D& face) {
+                if(config_.thin_layer && config_.angiogenesis.seed_process_model == "hypoxia_modulated_poisson_v2" && face.outward_normal.z != 0) return false;
                 const auto owner = lesion_index_.lesion_for_face(
                     face, cells_, grid_);
                 return owner.has_value() && *owner == lesion_id;

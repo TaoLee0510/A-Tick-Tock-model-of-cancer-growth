@@ -219,6 +219,7 @@ if(ATCG_BUILD_3D)
 
     if(ATCG_BUILD_3D_CONTINUUM)
         add_library(atcg3d_continuum_core
+            ATCG3D_Continuum/model/angiogenesis_field.cpp
             ATCG3D_Continuum/config/continuum_config.cpp
             ATCG3D_Continuum/model/moving_tumor_front.cpp
             ATCG3D_Continuum/model/continuum_model.cpp
@@ -454,6 +455,11 @@ if(BUILD_TESTING)
             target_compile_options(atcg3d_ode_test PRIVATE -UNDEBUG)
             target_compile_definitions(atcg3d_ode_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
             add_test(NAME atcg3d_ode_test COMMAND atcg3d_ode_test)
+            add_executable(atcg3d_vascular_field_test tests/3d/vascular_field_test.cpp)
+            target_link_libraries(atcg3d_vascular_field_test PRIVATE atcg3d_shared_rules_core)
+            target_compile_options(atcg3d_vascular_field_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_vascular_field_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME atcg3d_vascular_field_test COMMAND atcg3d_vascular_field_test)
             if(Python3_Interpreter_FOUND)
                 add_test(NAME atcg3d_abm_pde_validation
                     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
@@ -461,6 +467,12 @@ if(BUILD_TESTING)
                         --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/validation_v7.yaml
                         --seeds 16 --output ${CMAKE_CURRENT_BINARY_DIR}/validation)
                 set_tests_properties(atcg3d_abm_pde_validation PROPERTIES LABELS validation TIMEOUT 180)
+                add_test(NAME atcg3d_vascular_validation
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
+                        --exe $<TARGET_FILE:atcg3d_shared_abm>
+                        --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/angiogenesis_v8.yaml
+                        --seeds 16 --vascular --output ${CMAKE_CURRENT_BINARY_DIR}/validation-vascular)
+                set_tests_properties(atcg3d_vascular_validation PROPERTIES LABELS validation TIMEOUT 180)
             endif()
             add_executable(atcg3d_structured_pde_test
                 tests/3d/structured_pde_test.cpp)

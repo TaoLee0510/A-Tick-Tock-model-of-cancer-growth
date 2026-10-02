@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <vector>
 
 #include "config/continuum_config.hpp"
@@ -61,6 +62,7 @@ public:
     int migration_substeps() const noexcept { return migration_substeps_; }
     double voxel_measure() const noexcept { return voxel_measure_; }
     double large_cell_volume() const noexcept { return large_cell_volume_; }
+    const AngiogenesisField3D* angiogenesis() const noexcept { return angiogenesis_.get(); }
     const std::vector<double>& population(PopulationField3D field) const noexcept {
         return populations_[static_cast<std::size_t>(field)];
     }
@@ -82,6 +84,8 @@ private:
     std::size_t index(int x, int y, int z) const noexcept;
     bool grid_coordinate(Vec3i site, int& x, int& y, int& z) const noexcept;
     void add_synthetic_vessel();
+    void advance_angiogenesis(double dt);
+    bool vessel_blocks_cells(std::size_t location) const noexcept;
     void solve_nutrient();
     void advance_transient_nutrient(double dt);
     void rebuild_moving_tumour_front();
@@ -98,6 +102,7 @@ private:
     void validate_state() const;
 
     ContinuumModelConfig3D config_;
+    std::unique_ptr<AngiogenesisField3D> angiogenesis_;
     std::size_t voxel_count_{};
     double voxel_measure_{};
     double large_cell_volume_{};

@@ -221,7 +221,7 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
 }
 
 void StructuredPdeConfig3D::validate() const {
-    if ((schema_version < 1 || schema_version > 7) || profile.empty()) {
+    if ((schema_version < 1 || schema_version > 8) || profile.empty()) {
         throw std::invalid_argument("structured PDE schema/profile is invalid");
     }
     continuum.validate();
@@ -306,7 +306,8 @@ void StructuredPdeConfig3D::validate() const {
     if (schema_version >= 5 &&
         ((schema_version == 5 && continuum.schema_version != 3) ||
          (schema_version == 6 && continuum.schema_version != 4) ||
-         (schema_version >= 7 && continuum.schema_version != 5) ||
+         (schema_version == 7 && continuum.schema_version != 5) ||
+         (schema_version >= 8 && continuum.schema_version != 6) ||
          migration.activation_stop != (schema_version >= 7
              ? "cohort_clock_refractory_hysteresis_v3"
              : "clock_expiry_refractory_hysteresis_v2") ||

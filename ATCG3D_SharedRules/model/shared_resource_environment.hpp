@@ -3,6 +3,7 @@
 #include <array>
 #include <filesystem>
 #include <map>
+#include <memory>
 #include <vector>
 
 #include "engine/environment.hpp"
@@ -44,6 +45,7 @@ public:
 private:
     struct Refractory { double until{}; bool armed{true}; };
     struct RowSpan { int dy{}, dx0{}, dx1{}; };
+    std::unique_ptr<continuum::AngiogenesisField3D> angiogenesis_;
     std::size_t index(int x, int y, int z) const noexcept;
     std::size_t location(Vec3i site) const noexcept;
     void assemble(const CellStore3D& cells, const SparseVesselGrid3D& vessels);

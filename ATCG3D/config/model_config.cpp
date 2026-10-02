@@ -11,6 +11,38 @@
 namespace atcg3d {
 namespace {
 
+// Regularized incomplete beta via its continued fraction. This is evaluated
+// only during startup, including the configured lower-clamp contribution.
+double regularized_beta(double x, double a, double b) {
+    if (x <= 0.0) return 0.0;
+    if (x >= 1.0) return 1.0;
+    if (x > (a+1.0)/(a+b+2.0)) return 1.0-regularized_beta(1.0-x,b,a);
+    const double tiny=1.0e-300;
+    double c=1.0,d=1.0-(a+b)*x/(a+1.0);
+    if(std::abs(d)<tiny) d=tiny;
+    d=1.0/d; double fraction=d;
+    for(int m=1;m<=10000;++m) {
+        const double first=m*(b-m)*x/((a+2*m-1)*(a+2*m));
+        d=1.0+first*d; if(std::abs(d)<tiny) d=tiny;
+        c=1.0+first/c; if(std::abs(c)<tiny) c=tiny;
+        d=1.0/d; fraction*=d*c;
+        const double second=-(a+m)*(a+b+m)*x/((a+2*m)*(a+2*m+1));
+        d=1.0+second*d; if(std::abs(d)<tiny) d=tiny;
+        c=1.0+second/c; if(std::abs(c)<tiny) c=tiny;
+        d=1.0/d; const double change=d*c; fraction*=change;
+        if(std::abs(change-1.0)<1.0e-14) return std::clamp(
+            std::exp(std::lgamma(a+b)-std::lgamma(a)-std::lgamma(b)+a*std::log(x)+b*std::log1p(-x))*fraction/a,0.0,1.0);
+    }
+    throw std::invalid_argument("migration beta mean calculation did not converge");
+}
+double clamped_beta_mean(const BetaRateConfig& law) {
+    const double mean=law.scale*law.alpha/(law.alpha+law.beta);
+    if(!law.lower_clamp_enabled) return mean;
+    const double threshold=law.lower_clamp_threshold/law.scale;
+    return mean+law.lower_clamp_value*regularized_beta(threshold,law.alpha,law.beta)
+        -mean*regularized_beta(threshold,law.alpha+1,law.beta);
+}
+
 bool approximately_equal(double lhs, double rhs) {
     return std::abs(lhs - rhs) <=
         1e-12 * std::max({1.0, std::abs(lhs), std::abs(rhs)});
@@ -502,7 +534,8 @@ void Model3DConfig::validate() const {
         throw std::invalid_argument("angiogenesis trigger/biological volume configuration is invalid");
     }
     if ((angiogenesis.seed_process_model != "homogeneous_poisson" &&
-         angiogenesis.seed_process_model != "density_modulated_poisson_v1") ||
+         angiogenesis.seed_process_model != "density_modulated_poisson_v1" &&
+         angiogenesis.seed_process_model != "hypoxia_modulated_poisson_v2") ||
         angiogenesis.seed_process_scope != "per_eligible_lesion" ||
         angiogenesis.seed_rate_sites_per_30_days <= 0.0 ||
         !approximately_equal(angiogenesis.seed_rate_sites_per_hour,
@@ -557,11 +590,28 @@ void Model3DConfig::validate() const {
                   ? activated_r_migration_beta.lower_clamp_value : 0.0);
     const double activated_r_path_speed_upper_bound =
         std::sqrt(3.0) * activated_r_rate_upper_bound;
+    if (angiogenesis.outward_speed_policy != "strict_supremum_v1" &&
+        angiogenesis.outward_speed_policy != "mean_path_speed_v1" &&
+        angiogenesis.outward_speed_policy != "disabled") throw std::invalid_argument("unknown outward vessel speed policy");
+    require_probability(angiogenesis.seed_hypoxia_threshold,"angiogenesis.seed_hypoxia_threshold");
+    const double nominal_rate = angiogenesis.outward_speed_policy != "mean_path_speed_v1" ? 0.0 :
+        (activated_r_migration_rate_model == "normal_multiplier"
+        ? clamped_beta_mean(normal_r_migration_beta)*activated_r_normal_multiplier
+        : clamped_beta_mean(activated_r_migration_beta));
+    double length_sum=0.0,weight_sum=0.0;
+    for(int z=thin_layer?0:-1;z<=(thin_layer?0:1);++z) for(int y=-1;y<=1;++y) for(int x=-1;x<=1;++x) {
+        if(x==0 && y==0 && z==0) continue;
+        const double length=std::sqrt(static_cast<double>(x*x+y*y+z*z));
+        const double weight=std::pow(length,-distance_weight_exponent);
+        length_sum+=length*weight; weight_sum+=weight;
+    }
+    const double compared_speed = angiogenesis.outward_speed_policy == "mean_path_speed_v1"
+        ? nominal_rate*length_sum/weight_sum : activated_r_path_speed_upper_bound;
     if (angiogenesis.enabled &&
         (!(angiogenesis.outward_speed_voxels_per_hour >
            angiogenesis.inward_speed_voxels_per_hour) ||
-         !(angiogenesis.outward_speed_voxels_per_hour >
-           activated_r_path_speed_upper_bound))) {
+         (angiogenesis.outward_speed_policy != "disabled" &&
+          !(angiogenesis.outward_speed_voxels_per_hour > compared_speed)))) {
         throw std::invalid_argument(
             "angiogenesis outward vessel speed must exceed both inward "
             "vessel speed and the maximum activated-r 3D path speed");
@@ -957,6 +1007,8 @@ std::string Model3DConfig::to_json() const {
         << "\"angiogenesis_surface_min_local_cells\":" << angiogenesis.surface_min_local_cells << ','
         << "\"angiogenesis_diameter_voxels\":" << angiogenesis.diameter_voxels << ','
         << "\"angiogenesis_inward_speed_voxels_per_hour\":" << angiogenesis.inward_speed_voxels_per_hour << ','
+        << "\"angiogenesis_outward_speed_policy\":\"" << json_escape(angiogenesis.outward_speed_policy) << "\","
+        << "\"angiogenesis_seed_hypoxia_threshold\":" << angiogenesis.seed_hypoxia_threshold << ','
         << "\"angiogenesis_outward_speed_voxels_per_hour\":" << angiogenesis.outward_speed_voxels_per_hour << ','
         << "\"angiogenesis_inward_max_length_voxels\":" << angiogenesis.inward_max_length_voxels << ','
         << "\"angiogenesis_inward_length_tortuosity_factor\":"
@@ -1091,6 +1143,8 @@ std::string Model3DConfig::dynamics_json() const {
     // Default guidance and beta-rate settings preserve the identity written
     // before these optional models were introduced.
     const Model3DConfig defaults;
+    if (angiogenesis.outward_speed_policy == "strict_supremum_v1") erase_member("angiogenesis_outward_speed_policy");
+    if (angiogenesis.seed_process_model != "hypoxia_modulated_poisson_v2") erase_member("angiogenesis_seed_hypoxia_threshold");
     if (direction_guidance_model == defaults.direction_guidance_model) {
         erase_member("direction_guidance_model");
     }

@@ -824,7 +824,9 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
          "surface_min_separation_voxels", "surface_max_sampling_attempts",
          "surface_min_local_cells", "root_position_policy",
          "max_total_roots", "max_active_tips", "max_roots_per_lesion",
-         "max_active_tips_per_lesion"});
+         "max_active_tips_per_lesion", "hypoxia_threshold"});
+    if (seed_process["hypoxia_threshold"]) config.angiogenesis.seed_hypoxia_threshold =
+        strict_double(seed_process["hypoxia_threshold"], "angiogenesis.seed_process.hypoxia_threshold");
     config.angiogenesis.seed_process_model = strict_string(
         required(seed_process, "model", "$.angiogenesis.seed_process"),
         "angiogenesis.seed_process.model");
@@ -939,7 +941,9 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     const YAML::Node outward = checked_section(
         vessel, "outward", "$.angiogenesis.vessel",
         {"speed_voxels_per_hour", "max_length_voxels",
-         "external_connection_distance_voxels", "occupancy_policy"});
+         "external_connection_distance_voxels", "occupancy_policy", "speed_policy"});
+    if (outward["speed_policy"]) config.angiogenesis.outward_speed_policy =
+        strict_string(outward["speed_policy"], "angiogenesis.vessel.outward.speed_policy");
     config.angiogenesis.outward_speed_voxels_per_hour = strict_double(
         required(outward, "speed_voxels_per_hour", "$.angiogenesis.vessel.outward"),
         "angiogenesis.vessel.outward.speed_voxels_per_hour");

@@ -93,6 +93,7 @@ struct AngiogenesisConfig {
     double stage2_biological_volume_voxels3{0.5};
 
     std::string seed_process_model{"density_modulated_poisson_v1"};
+    double seed_hypoxia_threshold{0.30};
     std::string seed_process_scope{"per_eligible_lesion"};
     double seed_rate_sites_per_30_days{10.0};
     double seed_rate_sites_per_hour{10.0 / 720.0};
@@ -124,6 +125,7 @@ struct AngiogenesisConfig {
     // migration rates are moves/hour and one fixed-26 step can span sqrt(3)
     // voxels, whereas vessel speed is already expressed in voxels/hour.
     double outward_speed_voxels_per_hour{2.0};
+    std::string outward_speed_policy{"strict_supremum_v1"};
     // Lower bound for the inward path budget.  Production roots expand this
     // budget from the source-lesion scale so a large lesion cannot strand a
     // tip merely because it outgrew this legacy fixed value.

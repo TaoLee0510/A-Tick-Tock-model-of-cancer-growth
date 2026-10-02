@@ -11,6 +11,7 @@
 
 #include "config/output_paths.hpp"
 #include "engine/simulation.hpp"
+#include "geometry/footprint.hpp"
 #include "model/shared_resource_environment.hpp"
 #include "model/structured_pde_model.hpp"
 #ifdef ATCG3D_HAS_HDF5_CHECKPOINT
@@ -20,6 +21,7 @@
 namespace {
 struct Summary {
     double r{}, K{}, active{}, time{};
+    double vascular_length{}, vascular_path_length{}, perfused_volume{}, lesion_perfused_fraction{};
     std::vector<double> radial;
     std::uint64_t checksum{}, resource_checksum{};
     explicit Summary(std::size_t bins) : radial(bins, 0.0) {}
@@ -44,11 +46,59 @@ struct Summary {
             << ",\"active_fraction\":" << (r > 0.0 ? active / r : 0.0)
             << ",\"r50\":" << quantile(0.5) << ",\"r90\":" << quantile(0.9) << ",\"r99\":" << quantile(0.99)
             << ",\"state_checksum\":" << checksum << ",\"resource_checksum\":" << resource_checksum
+            << ",\"vascular_length\":" << vascular_length << ",\"vascular_path_length\":" << vascular_path_length
+            << ",\"perfused_volume\":" << perfused_volume << ",\"lesion_perfused_fraction\":" << lesion_perfused_fraction
             << ",\"radial_mass\":[";
         for (std::size_t i = 0; i < radial.size(); ++i) { if (i != 0) out << ','; out << radial[i]; }
         out << "]}\n";
     }
 };
+void vascular_summary(Summary& summary, const std::vector<double>& vessels, const std::vector<double>& occupied,
+                      const atcg3d::continuum::ContinuumModelConfig3D& config) {
+    summary.perfused_volume=std::accumulate(vessels.begin(),vessels.end(),0.0);
+    const double radius=config.angiogenesis.vessel_radius_voxels;
+    const double cross_section=config.base.thin_layer ? 2*radius : std::acos(-1.0)*radius*radius;
+    summary.vascular_length=summary.perfused_volume/cross_section;
+    std::vector<std::uint8_t> mask(occupied.size(),0);
+    if(config.base.thin_layer) {
+        atcg3d::continuum::MovingTumorFrontWorkspace2D workspace;
+        atcg3d::continuum::build_moving_tumor_front_mask_2d(occupied,config.grid.shape[0],config.grid.shape[1],
+            config.nutrient.tumor_front_smoothing_radius_voxels,config.nutrient.tumor_front_density_threshold,workspace,mask);
+    } else for(std::size_t i=0;i<mask.size();++i) mask[i]=occupied[i]>0;
+    double area=0,perfused=0;
+    for(std::size_t i=0;i<mask.size();++i) if(mask[i]) { area+=1;perfused+=vessels[i]; }
+    summary.lesion_perfused_fraction=area>0 ? perfused/area : 0;
+}
+void vascular_abm(Summary& summary,const atcg3d::Simulation3D& simulation,
+                  const atcg3d::shared_rules::SharedResourceEnvironment3D& resource,
+                  const atcg3d::continuum::ContinuumModelConfig3D& config) {
+    const auto geometry=config.shared_vascular_geometry();
+    std::vector<double> occupied(resource.vessel_fraction().size(),0),vessels=resource.vessel_fraction();
+    const auto index=[&](atcg3d::Vec3i site) {
+        const auto x=static_cast<std::size_t>(std::floor(site.x-geometry.origin[0]));
+        const auto y=static_cast<std::size_t>(std::floor(site.y-geometry.origin[1]));
+        const auto z=geometry.thin_layer ? 0 : static_cast<std::size_t>(std::floor(site.z-geometry.origin[2]));
+        return (z*geometry.shape[1]+y)*geometry.shape[0]+x;
+    };
+    for(const auto slot:simulation.cells().alive_slots()) {
+        const auto add=[&](atcg3d::Vec3i site) { if(geometry.contains(site)) occupied[index(site)]+=1; };
+        if(simulation.cells().stage(slot)==atcg3d::CellStage::large) for(auto site:atcg3d::large_footprint(simulation.cells().anchor(slot))) add(site);
+        else add(simulation.cells().anchor(slot));
+    }
+    for(auto site:simulation.vessel_grid().occupied_sites()) if(geometry.contains(site)&&simulation.vessel_grid().perfused(site)) vessels[index(site)]=1;
+    vascular_summary(summary,vessels,occupied,config);
+    for(const auto slot:simulation.vessel_nodes().alive_slots()) {
+        const auto parent=simulation.vessel_nodes().parent_node_slot(slot);
+        if(parent==atcg3d::kEmptyVesselNodeSlot) continue;
+        const auto delta=simulation.vessel_nodes().position(slot)-simulation.vessel_nodes().position(parent);
+        summary.vascular_path_length+=std::sqrt(static_cast<double>(atcg3d::squared_length(delta)));
+    }
+}
+std::size_t radial_bin_count(const atcg3d::continuum::ContinuumModelConfig3D& config) {
+    double squared=0;
+    for(int edge:config.grid.shape) squared+=static_cast<double>(edge)*edge;
+    return static_cast<std::size_t>(std::ceil(std::sqrt(squared)))+1;
+}
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -99,7 +149,7 @@ int main(int argc, char** argv) {
             restored.restore(saved.cells, saved.next_uid, saved.clock, saved.stats, saved.lineage,
                 saved.vasculature, saved.cell_slot_count, saved.cell_slots, saved.cell_free_slots);
             restored.run();
-            const std::size_t bins = static_cast<std::size_t>(std::ceil(std::hypot(config.continuum.grid.shape[0], config.continuum.grid.shape[1]))) + 1;
+            const auto bins = radial_bin_count(config.continuum);
             Summary result(bins);
             result.time = restored.clock().time_hours;
             for (const auto slot : restored.cells().alive_slots()) {
@@ -109,6 +159,7 @@ int main(int argc, char** argv) {
                 result.add(std::sqrt((point.x + 0.5) * (point.x + 0.5) + (point.y + 0.5) * (point.y + 0.5) +
                     (base.thin_layer ? 0.0 : (point.z + 0.5) * (point.z + 0.5))), 1.0);
             }
+            vascular_abm(result,restored,*field,config.continuum);
             result.checksum = restored.state_checksum(); result.resource_checksum = field->field_checksum();
             if (report.empty()) result.write(std::cout, model, seed);
             else {
@@ -124,10 +175,7 @@ int main(int argc, char** argv) {
         }
         atcg3d::Simulation3D simulation(base, std::move(environment));
         simulation.initialize();
-        const std::size_t bins = static_cast<std::size_t>(std::ceil(std::sqrt(
-            static_cast<double>(config.continuum.grid.shape[0]) * config.continuum.grid.shape[0] +
-            static_cast<double>(config.continuum.grid.shape[1]) * config.continuum.grid.shape[1] +
-            static_cast<double>(config.continuum.grid.shape[2]) * config.continuum.grid.shape[2]))) + 1;
+        const auto bins = radial_bin_count(config.continuum);
         Summary result(bins);
         if (model == "abm") {
             simulation.run();
@@ -139,6 +187,7 @@ int main(int argc, char** argv) {
                 result.add(std::sqrt((point.x + 0.5) * (point.x + 0.5) + (point.y + 0.5) * (point.y + 0.5) +
                     (base.thin_layer ? 0.0 : (point.z + 0.5) * (point.z + 0.5))), 1.0);
             }
+            vascular_abm(result,simulation,*field,config.continuum);
             result.checksum = simulation.state_checksum(); result.resource_checksum = field->field_checksum();
             if (!checkpoint.empty()) {
 #ifdef ATCG3D_HAS_HDF5_CHECKPOINT
@@ -152,6 +201,9 @@ int main(int argc, char** argv) {
             atcg3d::structured_pde::StructuredPdeModel3D pde(config);
             pde.initialize_from_abm(simulation);
             while (pde.step()) {}
+            std::vector<double> occupied(pde.voxel_count(),0);
+            for(std::size_t i=0;i<pde.voxel_count();++i) occupied[i]=pde.occupied_fraction(i);
+            vascular_summary(result,pde.vessel_fraction(),occupied,config.continuum);
             const auto diagnostics = pde.diagnostics();
             result.r = diagnostics.r_total; result.K = diagnostics.K_total; result.active = diagnostics.r_active_total;
             result.time = pde.time_hours(); result.checksum = pde.state_checksum();

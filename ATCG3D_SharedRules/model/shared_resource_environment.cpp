@@ -71,6 +71,7 @@ SharedResourceEnvironment3D::SharedResourceEnvironment3D(structured_pde::Structu
     nutrient_.assign(size, config_.continuum.nutrient.initial_value);
     for (auto* field : {&next_, &consumers_, &occupied_, &vessels_}) field->assign(size, 0.0);
     tumour_mask_.assign(size, 0U);
+    if(config_.continuum.angiogenesis.model != "disabled") angiogenesis_=std::make_unique<continuum::AngiogenesisField3D>(config_.continuum.angiogenesis,grid.shape,grid.spacing_voxels,geometry_.thin_layer);
     const int edge = config_.migration.direction_nutrient_window_edge;
     const int lower = (edge - 1) / 2;
     const int upper = edge - lower - 1;
@@ -142,7 +143,7 @@ void SharedResourceEnvironment3D::assemble(const CellStore3D& cells, const Spars
         if (!alive.contains(it->first)) it = refractory_.erase(it);
         else ++it;
     }
-    if (geometry_.source_mode == "abm_perfusion" || geometry_.source_mode == "abm_plus_synthetic_line") {
+    if (config_.schema_version>=8 || geometry_.source_mode == "abm_perfusion" || geometry_.source_mode == "abm_plus_synthetic_line") {
         for (const auto site : vessels.occupied_sites()) {
             if (vessels.perfused(site) && contains_resource_site(site)) vessels_[location(site)] = 1.0;
         }
@@ -184,6 +185,7 @@ EnvironmentInitializationResult3D SharedResourceEnvironment3D::initialize(double
         return {false};
     }
     assemble(cells, vessels);
+    if(angiogenesis_) angiogenesis_->initialize(vessels_);
     for (int z = 0; z < geometry_.shape[2]; ++z) {
         for (int y = 0; y < geometry_.shape[1]; ++y) {
             for (int x = 0; x < geometry_.shape[0]; ++x) {
@@ -203,6 +205,7 @@ void SharedResourceEnvironment3D::refresh(double now, const CellStore3D& cells, 
     const double dt = now - last_refresh_;
     assemble(cells, vessels);
     const auto& n = config_.continuum.nutrient;
+    if(angiogenesis_) { angiogenesis_->initialize(vessels_); angiogenesis_->advance(dt,consumers_,nutrient_,n.vessel_value,false); }
     const double mu = n.diffusion_voxels2_per_hour * dt;
     const double decay = std::exp(-n.decay_per_hour * dt);
     const int dimensions = geometry_.thin_layer ? 2 : 3;
@@ -222,6 +225,8 @@ void SharedResourceEnvironment3D::refresh(double now, const CellStore3D& cells, 
         const double diffused = std::clamp(old + mu * (neighbours - 2.0 * dimensions * old), 0.0, n.vessel_value) * decay;
         next_[here] = continuum::resource_after_uptake(diffused, consumers_[here], n.K_consumption_rate_per_hour,
             n.K_consumption_half_saturation, dt, n.vessel_value);
+        if(angiogenesis_) next_[here]=n.vessel_value-(n.vessel_value-next_[here])*
+            std::exp(-dt*config_.continuum.angiogenesis.perfusion_exchange_per_hour*vessels_[here]);
     });
     nutrient_.swap(next_);
     last_refresh_ = now;
@@ -284,6 +289,7 @@ std::size_t SharedResourceEnvironment3D::allocated_bytes() const noexcept {
     std::size_t result = (nutrient_.capacity() + next_.capacity() + consumers_.capacity() + occupied_.capacity() +
         vessels_.capacity() + row_prefix_.capacity()) * sizeof(double) + tumour_mask_.capacity();
     for (const auto& offsets : sector_offsets_) result += offsets.capacity() * sizeof(Vec3i);
+    if(angiogenesis_) result+=5*nutrient_.size()*sizeof(double);
     return result + refractory_.size() * sizeof(std::pair<CellUid, Refractory>);
 }
 std::uint64_t SharedResourceEnvironment3D::field_checksum() const noexcept {
@@ -295,6 +301,7 @@ std::uint64_t SharedResourceEnvironment3D::field_checksum() const noexcept {
     for (const auto& [uid, refractory] : refractory_) {
         state = mix(mix(mix(state, uid), std::bit_cast<std::uint64_t>(refractory.until)), refractory.armed);
     }
+    if(angiogenesis_) state=mix(state,angiogenesis_->checksum());
     return state;
 }
 
@@ -314,6 +321,7 @@ void SharedResourceEnvironment3D::save_checkpoint(const std::filesystem::path& p
     for (const auto& [uid, refractory] : refractory_) {
         write(out, uid); write(out, refractory.until); write(out, static_cast<std::uint8_t>(refractory.armed));
     }
+    if(angiogenesis_) angiogenesis_->save(out);
     write(out, field_checksum()); out.close();
     std::filesystem::rename(temporary, path);
 }
@@ -350,6 +358,7 @@ void SharedResourceEnvironment3D::load_checkpoint(const std::filesystem::path& p
             throw std::runtime_error("invalid shared refractory checkpoint");
         }
     }
+    if(angiogenesis_) { angiogenesis_->load(in); if(angiogenesis_->vessels()!=vessels_) throw std::runtime_error("shared vascular checkpoint mismatch"); }
     if (read<std::uint64_t>(in) != field_checksum() || in.peek() != std::char_traits<char>::eof()) {
         throw std::runtime_error("shared resource checkpoint checksum mismatch");
     }

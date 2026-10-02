@@ -19,6 +19,11 @@ TOLERANCES = {
     "r99": 0.30,
     "radial_profile_L2": 0.35,
 }
+VASCULAR_TOLERANCES = {
+    "vascular_length": 0.75,
+    "perfused_volume": 0.75,
+    "lesion_perfused_fraction": 0.15,
+}
 
 
 def run_pair(executable, config, seed, output, threads):
@@ -74,7 +79,7 @@ def compare(samples, tolerances):
         means = {model: statistics.mean(v) for model, v in values.items()}
         differences = [p - a for a, p in zip(values["abm"], values["pde"])]
         standard_error = statistics.stdev(differences) / math.sqrt(len(samples))
-        scale = 1.0 if metric == "active_fraction" else max(1e-12, abs(means["abm"]))
+        scale = 1.0 if metric in ("active_fraction", "lesion_perfused_fraction") else max(1e-12, abs(means["abm"]))
         error = abs(means["pde"] - means["abm"]) / scale
         allowance = 2.131 * standard_error / scale  # paired t(15), two-sided 95% for N=16
         metrics[metric] = {"abm_mean": means["abm"], "pde_mean": means["pde"],
@@ -94,12 +99,13 @@ def main():
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--output", type=Path, default=root / "validation-output")
     parser.add_argument("--tolerances", type=Path, help="JSON object overriding named tolerances")
+    parser.add_argument("--vascular", action="store_true", help="compare vascular length, volume and lesion perfusion")
     args = parser.parse_args()
     if args.seeds < 16 or args.jobs < 1 or args.threads < 1:
         parser.error("use at least 16 seeds and positive jobs/threads")
     executable, config = args.exe.resolve(), args.config.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
-    tolerances = dict(TOLERANCES)
+    tolerances = dict(VASCULAR_TOLERANCES if args.vascular else TOLERANCES)
     if args.tolerances:
         overrides = json.loads(args.tolerances.read_text())
         if set(overrides) - set(tolerances) or any(not math.isfinite(v) or v < 0 for v in overrides.values()):
@@ -114,7 +120,8 @@ def main():
     report = {"schema_version": 1, "seeds": args.seeds, "time_hours": samples[0]["abm"]["time_hours"],
               "config": config.name, "passed": passed, "metrics": metrics,
               "sampling_method": "paired seeds, conservative t(15) allowance; fixed closure tolerances",
-              "limits": "mean-field closure and initial age distribution differ; this smoke case has sparse activation"}
+              "limits": "stochastic roots and continuous vessel/tip densities differ; early vascular smoke tolerances are broad" if args.vascular else
+                        "mean-field closure and initial age distribution differ; this smoke case has sparse activation"}
     (args.output / "validation_report.json").write_text(json.dumps(report, indent=2) + "\n")
     lines = ["# Shared ABM/PDE validation", "", f"{args.seeds} paired seeds, {samples[0]['abm']['time_hours']:g} hours. Result: {'PASS' if passed else 'FAIL'}.", "",
              "| Metric | ABM mean | PDE mean | Error | Tolerance | Sampling allowance | Result |",
@@ -123,10 +130,11 @@ def main():
         lines.append(f"| {name} | {metric.get('abm_mean', 0):.6g} | {metric.get('pde_mean', 0):.6g} | "
                      f"{metric['error']:.4f} | {metric['tolerance']:.4f} | {metric['sampling_allowance']:.4f} | "
                      f"{'PASS' if metric['passed'] else 'FAIL'} |")
-    lines += ["", "Relative errors use the ABM ensemble mean. Active fraction uses absolute percentage-point error.",
-              "The radial error uses normalized cell-number density in four-voxel annuli and an area-weighted L2 norm.",
-              "Scalar errors include a declared paired sampling allowance; radial L2 uses its fixed tolerance.",
-              "This sparse growth/transport smoke test does not establish agreement in dense invasive or angiogenic regimes."]
+    lines += ["", "Relative errors use the ABM ensemble mean. Active and lesion perfusion fractions use absolute errors.",
+              "Scalar errors include a declared paired sampling allowance."]
+    if not args.vascular:
+        lines.append("The radial error uses normalized cell-number density in four-voxel annuli and an area-weighted L2 norm, with its fixed tolerance.")
+    lines.append(report["limits"])
     (args.output / "validation_report.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
     return 0 if passed else 1
