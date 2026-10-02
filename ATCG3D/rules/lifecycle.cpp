@@ -276,6 +276,9 @@ bool refresh_migration_activation_state(Slot slot,
                                         CellStore3D& cells,
                                         const BlockDensityIndex3D& density,
                                         const Model3DConfig& config) {
+    // Shared-resource activation is evaluated by the environment after its
+    // resource initialization/refresh, including individual hysteresis state.
+    if (config.direction_guidance_model == "nutrient_gradient_shared_resource_v3") return false;
     if (!cells.valid(slot) || !config.migration_activation_enabled ||
         (cells.flags(slot) & static_cast<std::uint8_t>(kMigrationActive)) != 0) {
         return false;
@@ -298,7 +301,8 @@ bool activate_migration_state_if_density_high(
         return false;
     }
     const double density_rate = cells.density_growth_rate(slot);
-    if (!(density_rate > config.death_growth_rate_threshold)) return false;
+    const bool shared_resource = config.direction_guidance_model == "nutrient_gradient_shared_resource_v3";
+    if (!shared_resource && !(density_rate > config.death_growth_rate_threshold)) return false;
     const float quantized_now = static_cast<float>(now);
     if (!std::isfinite(quantized_now)) return false;
     const double elapsed_since_growth_refresh = std::max(
@@ -307,7 +311,9 @@ bool activate_migration_state_if_density_high(
     const double remaining_work = std::max(
         0.0, static_cast<double>(cells.division_work_remaining(slot)) -
                  density_rate * elapsed_since_growth_refresh);
-    const double remaining_cycle_hours = remaining_work / density_rate;
+    const double remaining_cycle_hours = shared_resource
+        ? config.division_timing.base_cycle_hours / std::max(1.0e-12, static_cast<double>(cells.inherent_growth_rate(slot)))
+        : remaining_work / density_rate;
     if (!(remaining_cycle_hours > 0.0) || !std::isfinite(remaining_cycle_hours)) {
         return false;
     }

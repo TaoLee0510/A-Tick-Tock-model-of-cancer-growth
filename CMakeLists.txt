@@ -267,6 +267,14 @@ if(ATCG_BUILD_3D)
         target_link_libraries(atcg3d_structured_pde PRIVATE
             atcg3d_structured_pde_core)
 
+        add_library(atcg3d_shared_rules_core
+            ATCG3D_SharedRules/model/shared_resource_environment.cpp)
+        target_include_directories(atcg3d_shared_rules_core PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules)
+        target_link_libraries(atcg3d_shared_rules_core PUBLIC atcg3d_structured_pde_core)
+        add_executable(atcg3d_shared_abm ATCG3D_SharedRules/app/main.cpp)
+        target_link_libraries(atcg3d_shared_abm PRIVATE atcg3d_shared_rules_core)
+
         foreach(structured_config_name IN ITEMS
                 continuum_legacy_2d_2000_r20_aligned_v1.yaml
                 structured_legacy_2d_2000_r20_v1.yaml
@@ -429,6 +437,20 @@ if(BUILD_TESTING)
             add_test(NAME atcg3d_continuum_test COMMAND atcg3d_continuum_test)
         endif()
         if(ATCG_BUILD_3D_STRUCTURED_PDE)
+            add_executable(atcg3d_shared_rules_test tests/3d/shared_rules_test.cpp)
+            target_link_libraries(atcg3d_shared_rules_test PRIVATE atcg3d_shared_rules_core)
+            target_compile_options(atcg3d_shared_rules_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_shared_rules_test PRIVATE
+                ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME atcg3d_shared_rules_test COMMAND atcg3d_shared_rules_test)
+            if(Python3_Interpreter_FOUND)
+                add_test(NAME atcg3d_abm_pde_validation
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
+                        --exe $<TARGET_FILE:atcg3d_shared_abm>
+                        --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/validation_v7.yaml
+                        --seeds 16 --output ${CMAKE_CURRENT_BINARY_DIR}/validation)
+                set_tests_properties(atcg3d_abm_pde_validation PROPERTIES LABELS validation TIMEOUT 180)
+            endif()
             add_executable(atcg3d_structured_pde_test
                 tests/3d/structured_pde_test.cpp)
             target_link_libraries(atcg3d_structured_pde_test PRIVATE

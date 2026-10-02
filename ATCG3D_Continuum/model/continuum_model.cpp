@@ -1,4 +1,5 @@
 #include "model/continuum_model.hpp"
+#include "model/shared_resource.hpp"
 
 #include <algorithm>
 #include <array>
@@ -414,8 +415,10 @@ void ContinuumModel3D::advance_transient_nutrient(double dt) {
         const double b = half + dt * demand - diffused;
         const double discriminant = std::max(
             0.0, b * b + 4.0 * half * diffused);
-        nutrient_next_[here] = std::clamp(
-            0.5 * (-b + std::sqrt(discriminant)), 0.0, source_value);
+        nutrient_next_[here] = config_.schema_version >= 5
+            ? resource_after_uptake(diffused, consumers, config_.nutrient.K_consumption_rate_per_hour,
+                half, dt, source_value)
+            : std::clamp(0.5 * (-b + std::sqrt(discriminant)), 0.0, source_value);
     });
     nutrient_.swap(nutrient_next_);
     ++nutrient_solve_count_;
@@ -523,7 +526,8 @@ double ContinuumModel3D::base_diffusion(
         : (config_.base.initial_K_migration_rate_model == "fixed"
                ? config_.base.initial_K_migration_rate
                : beta_mean(config_.base.initial_K_migration_beta));
-    double diffusion = kFixed26DiffusionFactor * migration_rate *
+    double diffusion = (config_.base.thin_layer && config_.migration.mapping == "shared_fixed_lattice_means_v2"
+        ? 3.0 / 8.0 : kFixed26DiffusionFactor) * migration_rate *
         config_.migration.diffusion_scale;
     if (r_type && config_.base.migration_activation_enabled &&
         local_occupied_fraction >= config_.base.migration_activation_threshold) {

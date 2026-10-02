@@ -105,7 +105,8 @@ DirectionId select_crowding_swap_direction(
     const CellStore3D& cells,
     const SparseChunkGrid3D& grid,
     const Model3DConfig& config,
-    std::uint64_t event_sequence);
+    std::uint64_t event_sequence,
+    const LocalDensityModifier3D* environment = nullptr);
 
 struct MoveProposal {
     Slot slot{kEmptySlot};

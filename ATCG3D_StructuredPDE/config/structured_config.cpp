@@ -313,7 +313,8 @@ void StructuredPdeConfig3D::validate() const {
          migration.direction_transport !=
              "nutrient_gradient_fixed_direction_jump_exchange_v4" ||
          (base.direction_guidance_model != "low_density_high_resource_v1" &&
-          base.direction_guidance_model != "low_density_high_resource_bounded_v2") ||
+          base.direction_guidance_model != "low_density_high_resource_bounded_v2" &&
+          base.direction_guidance_model != "nutrient_gradient_shared_resource_v3") ||
          migration.direction_nutrient_window_edge != 70 ||
          !(migration.chemotaxis_strength > 0.0) ||
          !(migration.zero_gradient_tolerance > 0.0) ||

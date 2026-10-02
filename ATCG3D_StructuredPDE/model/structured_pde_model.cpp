@@ -1,4 +1,5 @@
 #include "model/structured_pde_model.hpp"
+#include "model/shared_resource.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1025,7 +1026,10 @@ void StructuredPdeModel3D::advance_transient_nutrient(double dt) {
         const double discriminant = std::max(
             0.0, b * b + 4.0 * half * diffused);
         const double consumed = 0.5 * (-b + std::sqrt(discriminant));
-        nutrient_next_[here] = std::clamp(consumed, 0.0, source_value);
+        nutrient_next_[here] = config_.schema_version >= 7
+            ? continuum::resource_after_uptake(diffused, consumers, nutrient.K_consumption_rate_per_hour,
+                half, dt, source_value)
+            : std::clamp(consumed, 0.0, source_value);
     });
     nutrient_.swap(nutrient_next_);
     if (moving_front) {
@@ -1423,7 +1427,9 @@ double StructuredPdeModel3D::normal_diffusion(
         : (base.initial_K_migration_rate_model == "fixed"
                ? base.initial_K_migration_rate
                : beta_mean(base.initial_K_migration_beta));
-    double result = kFixed26DiffusionFactor * rate *
+    double result = (base.thin_layer &&
+        config_.continuum.migration.mapping == "shared_fixed_lattice_means_v2"
+        ? 3.0 / 8.0 : kFixed26DiffusionFactor) * rate *
         config_.continuum.migration.diffusion_scale;
     if (stage == StructuredStage3D::large) {
         result *= config_.continuum.migration.large_mobility_multiplier;
@@ -1826,6 +1832,9 @@ std::vector<double> StructuredPdeModel3D::guided_direction_weights(
             const double directional_resource =
                 resource / static_cast<double>(resource_sites);
             double gradient = directional_resource - local_resource;
+            if (base.direction_guidance_model == "nutrient_gradient_shared_resource_v3") {
+                gradient *= continuum.nutrient.vessel_value;
+            }
             if (std::abs(gradient) <
                 config_.migration.zero_gradient_tolerance) {
                 gradient = 0.0;

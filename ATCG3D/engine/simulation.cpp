@@ -238,8 +238,7 @@ void validate_restored_cell_schedule(const CellInit& cell,
             "restored thin-layer crowding exchange has a 3D direction");
     }
 
-    const bool growth_active =
-        cell.density_growth_rate > config.death_growth_rate_threshold;
+    const bool growth_active = cell.density_growth_rate > config.death_growth_rate_threshold;
     if ((cell.next_division_time > 0.0) != growth_active ||
         (cell.death_deadline > 0.0) == growth_active) {
         throw std::runtime_error(
@@ -939,6 +938,10 @@ void Simulation3D::initialize_environment() {
             (void)refresh_growth_state(
                 slot, clock_.time_hours, cells_, density_, config_,
                 environment_.get(), false);
+            if (environment_->individual_refractory()) {
+                (void)apply_migration_activation_class(slot,
+                    migration_activation_class(migration_activation_query_block(cells_.anchor(slot))));
+            }
         }
     }
     schedule_environment_refresh();
@@ -1504,6 +1507,7 @@ void Simulation3D::process_non_migration(const Event& event) {
     }
     if (expire_migration_activation_state(
             event.slot, clock_.time_hours, cells_, config_)) {
+        if (environment_) environment_->activation_expired(cells_.uid(event.slot), clock_.time_hours);
         const double rate = effective_migration_rate(
             event.slot, cells_, config_);
         cells_.set_next_migration_time(
@@ -1538,8 +1542,7 @@ void Simulation3D::process_deaths(const std::vector<Event>& events) {
         const Event& event = pending[index];
         const double rate = density_growth_rate_for_cell(
             cells_, event.slot, density_, config_, influence);
-        decisions[index] = {
-            event, rate <= config_.death_growth_rate_threshold};
+        decisions[index] = {event, rate <= config_.death_growth_rate_threshold};
     });
     for (const DeathDecision& decision : decisions) {
         const Event& event = decision.event;
@@ -1819,7 +1822,7 @@ void Simulation3D::process_migrations(const std::vector<Event>& events) {
             if (std::find(swap_directions.begin(), swap_directions.end(),
                           direction) == swap_directions.end()) {
                 direction = select_crowding_swap_direction(
-                    item.event.slot, cells_, grid_, config_, item.sequence);
+                    item.event.slot, cells_, grid_, config_, item.sequence, density_modifier());
             }
             if (direction != kStayDirection) {
                 proposals[index] = make_crowding_swap_proposal(
@@ -1879,7 +1882,7 @@ void Simulation3D::process_migrations(const std::vector<Event>& events) {
                     const DirectionId retry_direction =
                         select_crowding_swap_direction(
                             proposal.slot, cells_, grid_, config_,
-                            cells_.event_sequence(proposal.slot));
+                            cells_.event_sequence(proposal.slot), density_modifier());
                     if (rate > 0.0 &&
                         retry_direction != kStayDirection) {
                         cells_.set_swap_wait_state(proposal.slot, 1);
@@ -1950,7 +1953,7 @@ void Simulation3D::process_migrations(const std::vector<Event>& events) {
                 const DirectionId direction =
                     select_crowding_swap_direction(
                         proposal.slot, cells_, grid_, config_,
-                        cells_.event_sequence(proposal.slot));
+                        cells_.event_sequence(proposal.slot), density_modifier());
                 if (direction != kStayDirection) {
                     cells_.set_swap_wait_state(proposal.slot, 1);
                     cells_.set_pending_swap_direction(
@@ -3459,6 +3462,15 @@ void Simulation3D::rebuild_migration_activation_class_cache() {
 bool Simulation3D::apply_migration_activation_class(
     Slot slot, std::uint8_t classes) {
     if (!cells_.valid(slot)) return false;
+    if (environment_ && environment_->individual_refractory()) {
+        if (cells_.type(slot) != CellType::r ||
+            (cells_.flags(slot) & static_cast<std::uint8_t>(kMigrationActive)) != 0) return false;
+        const double density = migration_activation_density(density_, cells_.anchor(slot), cells_.stage(slot),
+            config_.migration_activation_window_edge, config_.migration_activation_block_edge, config_.thin_layer);
+        if (!environment_->activation_ready(cells_.uid(slot), clock_.time_hours, density) ||
+            density < config_.migration_activation_threshold) return false;
+        return activate_migration_state_if_density_high(slot, clock_.time_hours, cells_, config_);
+    }
     const std::uint8_t stage_class = cells_.stage(slot) == CellStage::large
         ? kLargeMigrationActivationClass
         : kSmallMigrationActivationClass;

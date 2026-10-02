@@ -188,7 +188,8 @@ void Model3DConfig::validate() const {
     }
     if (direction_guidance_model != "density_gate_uniform_v1" &&
         direction_guidance_model != "low_density_high_resource_v1" &&
-        direction_guidance_model != "low_density_high_resource_bounded_v2") {
+        direction_guidance_model != "low_density_high_resource_bounded_v2" &&
+        direction_guidance_model != "nutrient_gradient_shared_resource_v3") {
         throw std::invalid_argument("unsupported direction.guidance.model");
     }
     if ((direction_guidance_model == "low_density_high_resource_v1" ||

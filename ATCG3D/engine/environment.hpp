@@ -30,6 +30,11 @@ public:
         (void)site;
         return true;
     }
+    virtual double shared_density_limit() const noexcept { return 0.0; }
+    virtual double shared_carrying_capacity() const noexcept { return 0.0; }
+    virtual double growth_resource_scale(Vec3i) const noexcept { return 1.0; }
+    virtual bool pure_nutrient_guidance() const noexcept { return false; }
+    virtual double nutrient_direction_weight(Vec3i, DirectionId) const { return 1.0; }
 };
 
 struct EnvironmentInitializationResult3D {
@@ -56,6 +61,9 @@ public:
     virtual std::uint64_t refresh_count() const noexcept = 0;
     virtual std::size_t allocated_bytes() const noexcept = 0;
     virtual std::uint64_t field_checksum() const noexcept = 0;
+    virtual bool individual_refractory() const noexcept { return false; }
+    virtual bool activation_ready(CellUid, double, double) { return true; }
+    virtual void activation_expired(CellUid, double) {}
 };
 
 }  // namespace atcg3d

@@ -113,6 +113,14 @@ std::array<double, 27> guided_direction_weights(
     const LocalDensityModifier3D* environment,
     bool use_density = true) {
     std::array<double, 27> result{};
+    if (environment != nullptr && environment->pure_nutrient_guidance()) {
+        for (const auto direction : candidates) {
+            const double length = std::sqrt(static_cast<double>(squared_length(direction_vector(direction))));
+            result[direction] = std::pow(length, -config.distance_weight_exponent) *
+                environment->nutrient_direction_weight(anchor, direction);
+        }
+        return result;
+    }
     const auto directional_densities =
         density.estimate_all_directional_densities(
             anchor, config.direction_density_radius,
@@ -181,12 +189,35 @@ DirectionId select_from_candidates(
     DirectionCandidates3D candidates,
     const CellStore3D& cells,
     const Model3DConfig& config,
-    std::uint64_t event_sequence) {
+    std::uint64_t event_sequence,
+    const LocalDensityModifier3D* environment) {
     if (candidates.empty()) return kStayDirection;
     const CellUid uid = cells.uid(slot);
     const bool activated = config.migration_activation_enabled &&
         (cells.flags(slot) & static_cast<std::uint8_t>(kMigrationActive)) != 0;
     const DirectionId previous = cells.last_direction(slot);
+    if (cells.type(slot) == CellType::r && activated && environment != nullptr &&
+        environment->pure_nutrient_guidance()) {
+        std::array<double, 27> weights{};
+        DirectionCandidates3D choices;
+        const bool forward_available = std::find(candidates.begin(), candidates.end(), previous) != candidates.end();
+        for (const auto direction : candidates) {
+            if (previous == kStayDirection || direction == previous ||
+                direction_angle_degrees(previous, direction) <= config.turn_half_angle_degrees + 1.0e-10) choices.push_back(direction);
+        }
+        const std::size_t turn_count = choices.size() - (forward_available ? 1U : 0U);
+        for (const auto direction : choices) {
+            const double length = std::sqrt(static_cast<double>(squared_length(direction_vector(direction))));
+            double prior = 1.0;
+            if (previous != kStayDirection) {
+                prior = direction == previous ? (turn_count == 0 ? 1.0 : config.continue_probability)
+                    : (forward_available ? 1.0 - config.continue_probability : 1.0) / turn_count;
+            }
+            weights[direction] = prior * std::pow(length, -config.distance_weight_exponent) *
+                environment->nutrient_direction_weight(cells.anchor(slot), direction);
+        }
+        return weighted_guided_choice(choices, weights, config.seed, uid, event_sequence, 0);
+    }
     if (cells.type(slot) == CellType::K || !activated ||
         previous == kStayDirection) {
         return weighted_choice(candidates, config.distance_weight_exponent,
@@ -271,7 +302,8 @@ DirectionId select_migration_direction(Slot slot,
 
     if (config.direction_guidance_model ==
         "low_density_high_resource_v1" || config.direction_guidance_model ==
-        "low_density_high_resource_bounded_v2") {
+        "low_density_high_resource_bounded_v2" || config.direction_guidance_model ==
+        "nutrient_gradient_shared_resource_v3") {
         const auto guidance = guided_direction_weights(
             feasible, cells.anchor(slot), density, config, environment,
             config.direction_guidance_model == "low_density_high_resource_v1" ||
@@ -384,12 +416,13 @@ DirectionId select_crowding_swap_direction(
     const CellStore3D& cells,
     const SparseChunkGrid3D& grid,
     const Model3DConfig& config,
-    std::uint64_t event_sequence) {
+    std::uint64_t event_sequence,
+    const LocalDensityModifier3D* environment) {
     return select_from_candidates(
         slot,
         feasible_crowding_swap_directions(
             slot, cells, grid, config.thin_layer),
-        cells, config, event_sequence);
+        cells, config, event_sequence, environment);
 }
 
 MoveProposal make_move_proposal(Slot slot,

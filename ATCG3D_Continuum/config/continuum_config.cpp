@@ -478,7 +478,8 @@ void ContinuumModelConfig3D::validate() const {
         time_step_hours > end_time_hours - start_time_hours) {
         throw std::invalid_argument("continuum grid/time parameters are invalid");
     }
-    if (migration.mapping != "fixed_26_from_base_means_v1" ||
+    if ((migration.mapping != "fixed_26_from_base_means_v1" &&
+         migration.mapping != "shared_fixed_lattice_means_v2") ||
         !(migration.diffusion_scale > 0.0) ||
         !(migration.large_mobility_multiplier > 0.0) ||
         !(migration.activated_r_mobility_multiplier >= 1.0) ||
