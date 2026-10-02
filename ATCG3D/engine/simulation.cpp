@@ -3485,7 +3485,8 @@ bool Simulation3D::apply_migration_activation_class(
         if (cells_.type(slot) != CellType::r ||
             (cells_.flags(slot) & static_cast<std::uint8_t>(kMigrationActive)) != 0) return false;
         const double density = migration_activation_density(density_, cells_.anchor(slot), cells_.stage(slot),
-            config_.migration_activation_window_edge, config_.migration_activation_block_edge, config_.thin_layer);
+            config_.migration_activation_window_edge, config_.migration_activation_block_edge, config_.thin_layer) +
+            environment_->external_activation_density(cells_.anchor(slot),cells_.stage(slot));
         if (!environment_->activation_ready(cells_.uid(slot), clock_.time_hours, density) ||
             density < config_.migration_activation_threshold) return false;
         return activate_migration_state_if_density_high(slot, clock_.time_hours, cells_, config_);

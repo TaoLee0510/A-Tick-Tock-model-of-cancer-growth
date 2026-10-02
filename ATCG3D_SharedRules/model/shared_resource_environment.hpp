@@ -2,6 +2,7 @@
 
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <memory>
 #include <vector>
@@ -10,11 +11,14 @@
 #include "model/moving_tumor_front.hpp"
 #include "config/structured_config.hpp"
 
+namespace atcg3d::hybrid { class HybridModel3D; }
+
 namespace atcg3d::shared_rules {
 
 Model3DConfig abm_config(const structured_pde::StructuredPdeConfig3D& config);
 
 class SharedResourceEnvironment3D final : public EnvironmentCoupling3D {
+    friend class atcg3d::hybrid::HybridModel3D;
 public:
     explicit SharedResourceEnvironment3D(structured_pde::StructuredPdeConfig3D config);
     EnvironmentInitializationResult3D initialize(double now, const CellStore3D& cells,
@@ -28,6 +32,9 @@ public:
     bool contains_resource_site(Vec3i site) const noexcept override;
     bool pure_nutrient_guidance() const noexcept override { return true; }
     double nutrient_direction_weight(Vec3i site, DirectionId direction) const override;
+    std::array<double,2> external_growth_counts(Vec3i site) const override { return external_counts_ ? external_counts_(site) : std::array<double,2>{}; }
+    double external_activation_density(Vec3i site, CellStage stage) const override { return external_activation_ ? external_activation_(site,stage) : 0.0; }
+    bool destination_available(Vec3i site) const noexcept override { return !external_destination_ || external_destination_(site); }
     bool individual_refractory() const noexcept override { return true; }
     bool activation_ready(CellUid uid, double now, double density) override;
     void activation_expired(CellUid uid, double now) override;
@@ -43,6 +50,10 @@ public:
     void load_checkpoint(const std::filesystem::path& path, std::uint64_t abm_checksum);
 
 private:
+    bool externally_driven_{};
+    std::function<std::array<double,2>(Vec3i)> external_counts_;
+    std::function<double(Vec3i,CellStage)> external_activation_;
+    std::function<bool(Vec3i)> external_destination_;
     struct Refractory { double until{}; bool armed{true}; };
     struct RowSpan { int dy{}, dx0{}, dx1{}; };
     std::unique_ptr<continuum::AngiogenesisField3D> angiogenesis_;

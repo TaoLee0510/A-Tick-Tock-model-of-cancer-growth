@@ -179,6 +179,7 @@ bool SharedResourceEnvironment3D::source(int x, int y, int z, std::size_t here) 
 
 EnvironmentInitializationResult3D SharedResourceEnvironment3D::initialize(double now, const CellStore3D& cells,
                                                                           const SparseVesselGrid3D& vessels) {
+    if (externally_driven_) return {false};
     if (restored_) {
         if (now < last_refresh_ - 1.0e-10 || now > next_refresh_ + 1.0e-10) throw std::runtime_error("shared resource restore time mismatch");
         restored_ = false;

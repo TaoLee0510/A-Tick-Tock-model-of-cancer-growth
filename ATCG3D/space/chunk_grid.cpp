@@ -1,4 +1,5 @@
 #include "space/chunk_grid.hpp"
+#include "engine/environment.hpp"
 
 #include <algorithm>
 #include <stdexcept>
@@ -92,7 +93,8 @@ bool SparseChunkGrid3D::available(Vec3i site) const {
 bool SparseChunkGrid3D::blocked_by_vessel(Vec3i site) const {
     return (static_vasculature_ != nullptr &&
             (!static_vasculature_->contains(site) || static_vasculature_->source(site))) ||
-        (vessels_ != nullptr && vessels_->occupied(site));
+        (vessels_ != nullptr && vessels_->occupied(site)) ||
+        (external_blocker_ != nullptr && !external_blocker_->destination_available(site));
 }
 
 bool SparseChunkGrid3D::place_single(Vec3i site, Slot slot) {

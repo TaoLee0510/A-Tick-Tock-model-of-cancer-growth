@@ -372,7 +372,8 @@ double StructuredPdeModel3D::occupied_fraction(
         StructuredStage3D::small, location) + K_[0][location];
     const double large = r_normal_[1][location] + r_active(
         StructuredStage3D::large, location) + K_[1][location];
-    return small + large_cell_volume_ * large;
+    const double own=small+large_cell_volume_*large;
+    return external_occupied_.empty() ? own : own+external_occupied_[location];
 }
 
 std::array<double, 3> StructuredPdeModel3D::coordinate(
@@ -524,9 +525,10 @@ void StructuredPdeModel3D::shrink_population_bounds() {
         for (int y = old.y0; y < old.y1; ++y) {
             for (int x = old.x0; x < old.x1; ++x) {
                 const std::size_t location = index(x, y, z);
-                const double total = r_normal_[0][location] + r_normal_[1][location] +
+                double total = r_normal_[0][location] + r_normal_[1][location] +
                     active_total_[0][location] + active_total_[1][location] +
                     K_[0][location] + K_[1][location];
+                if(!external_occupied_.empty()) total+=external_occupied_[location];
                 if (total < config_.migration.minimum_density) continue;
                 if (!next.valid) {
                     next = {x, y, z, x + 1, y + 1, z + 1, true};
@@ -783,6 +785,7 @@ void StructuredPdeModel3D::advance_angiogenesis(double dt) {
     std::vector<double> consumers(voxel_count_,0.0);
     for(std::size_t here=0;here<voxel_count_;++here) {
         for(std::size_t stage=0;stage<2;++stage) consumers[here]+=r_normal_[stage][here]+active_total_[stage][here]+K_[stage][here];
+        if(!external_r_.empty()) consumers[here]+=external_r_[here]+external_K_[here];
     }
     angiogenesis_->advance(dt,consumers,nutrient_,config_.continuum.nutrient.vessel_value);
     vessel_=angiogenesis_->vessels();
@@ -1033,11 +1036,12 @@ void StructuredPdeModel3D::advance_transient_nutrient(double dt) {
         // Schema v3 consumption is per biological cell, independent of
         // phenotype and footprint. Solve the local Michaelis-Menten sink
         // implicitly so consumption cannot drive the field negative.
-        const double consumers = r_normal_[0][here] +
+        double consumers = r_normal_[0][here] +
             r_active(StructuredStage3D::small, here) +
             r_normal_[1][here] +
             r_active(StructuredStage3D::large, here) +
             K_[0][here] + K_[1][here];
+        if(!external_r_.empty()) consumers+=external_r_[here]+external_K_[here];
         const double demand =
             nutrient.K_consumption_rate_per_hour * consumers;
         const double half = nutrient.K_consumption_half_saturation;
@@ -1217,6 +1221,7 @@ void StructuredPdeModel3D::build_activation_density() {
                         r_active(StructuredStage3D::small, source) +
                         r_active(StructuredStage3D::large, source) +
                         K_[0][source] + K_[1][source]) * voxel_measure_;
+                if(!external_r_.empty()) row+=(external_r_[source]+external_K_[source])*voxel_measure_;
                 prefix[static_cast<std::size_t>(y) * pitch + x] = row;
             }
         }
@@ -1292,10 +1297,11 @@ void StructuredPdeModel3D::build_activation_density() {
         for (int y = 1; y <= ny; ++y) {
             for (int x = 1; x <= nx; ++x) {
                 const std::size_t source = index(x - 1, y - 1, z - 1);
-                const double value = (r_normal_[0][source] + r_normal_[1][source] +
+                double value = (r_normal_[0][source] + r_normal_[1][source] +
                     r_active(StructuredStage3D::small, source) +
                     r_active(StructuredStage3D::large, source) +
                     K_[0][source] + K_[1][source]) * voxel_measure_;
+                if(!external_r_.empty()) value+=(external_r_[source]+external_K_[source])*voxel_measure_;
                 prefix[pindex(x, y, z)] = value
                     + prefix[pindex(x - 1, y, z)]
                     + prefix[pindex(x, y - 1, z)]
@@ -2643,6 +2649,7 @@ void StructuredPdeModel3D::build_local_counts(
                     r_active(StructuredStage3D::small, source) +
                     r_active(StructuredStage3D::large, source)) * voxel_measure_;
                 K_row += (K_[0][source] + K_[1][source]) * voxel_measure_;
+                if(!external_r_.empty()) { r_row+=external_r_[source]*voxel_measure_;K_row+=external_K_[source]*voxel_measure_; }
                 const std::size_t here = static_cast<std::size_t>(y) * pitch + x;
                 r_prefix[here] = r_row;
                 K_prefix[here] = K_row;
@@ -2698,10 +2705,11 @@ void StructuredPdeModel3D::build_local_counts(
                 const std::size_t source = index(
                     bounds.x0 + x - 1, bounds.y0 + y - 1,
                     bounds.z0 + z - 1);
-                const double r_value = (r_normal_[0][source] + r_normal_[1][source] +
+                double r_value = (r_normal_[0][source] + r_normal_[1][source] +
                     r_active(StructuredStage3D::small, source) +
                     r_active(StructuredStage3D::large, source)) * voxel_measure_;
-                const double K_value = (K_[0][source] + K_[1][source]) * voxel_measure_;
+                double K_value = (K_[0][source] + K_[1][source]) * voxel_measure_;
+                if(!external_r_.empty()) { r_value+=external_r_[source]*voxel_measure_;K_value+=external_K_[source]*voxel_measure_; }
                 const auto update = [&](std::vector<double>& prefix, double value) {
                     prefix[pindex(x, y, z)] = value
                         + prefix[pindex(x - 1, y, z)]
@@ -2924,7 +2932,8 @@ void StructuredPdeModel3D::react(double dt) {
                 (positive_r[stage] + positive_K[stage]);
         }
         const double available = std::max(
-            0.0, continuum.reaction.maximum_occupied_fraction - base_occupied);
+            0.0, continuum.reaction.maximum_occupied_fraction - base_occupied -
+                (external_occupied_.empty()?0.0:external_occupied_[location]));
         const double scale = positive_occupied > available && positive_occupied > 0.0
             ? available / positive_occupied : 1.0;
         for (std::size_t stage = 0; stage < 2; ++stage) {
@@ -2973,6 +2982,7 @@ bool StructuredPdeModel3D::step() {
     }
     const double dt = target - time_hours_;
     advance_angiogenesis(dt);
+    if(external_after_vascular_advance_) external_after_vascular_advance_();
     // Density is only the trigger. Active cohorts keep their own remaining
     // clock and therefore do not deactivate when this field later falls.
     refresh_activation(dt);

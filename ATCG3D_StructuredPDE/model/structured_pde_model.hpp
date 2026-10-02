@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -12,6 +13,7 @@
 
 namespace atcg3d {
 class Simulation3D;
+namespace hybrid { class HybridModel3D; }
 }
 
 namespace atcg3d::structured_pde {
@@ -80,6 +82,7 @@ struct StructuredDirectionRowSpan3D {
 };
 
 class StructuredPdeModel3D {
+    friend class atcg3d::hybrid::HybridModel3D;
 public:
     explicit StructuredPdeModel3D(StructuredPdeConfig3D config);
 
@@ -169,6 +172,10 @@ private:
 
     StructuredPdeConfig3D config_;
     std::unique_ptr<continuum::AngiogenesisField3D> angiogenesis_;
+    // Derived external-agent fields are populated only by hybrid v1. They
+    // participate in local rates/resources, never in PDE transported mass.
+    std::vector<double> external_r_,external_K_,external_occupied_;
+    std::function<void()> external_after_vascular_advance_;
     std::size_t voxel_count_{};
     double voxel_measure_{};
     double large_cell_volume_{};

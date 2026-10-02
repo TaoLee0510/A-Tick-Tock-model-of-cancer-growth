@@ -27,6 +27,7 @@
 #include "vasculature/vessel_store.hpp"
 
 namespace atcg3d {
+namespace hybrid { class HybridModel3D; }
 
 // Numeric order is the deterministic within-time-bucket biological priority.
 enum class EventKind : std::uint8_t {
@@ -133,6 +134,7 @@ AngiogenesisProcessState3D aggregate_angiogenesis_process_states(
     double snapshot_time_hours);
 
 class Simulation3D {
+    friend class hybrid::HybridModel3D;
 public:
     explicit Simulation3D(Model3DConfig config);
     Simulation3D(Model3DConfig config,

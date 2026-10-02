@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 
 #include <cstddef>
 #include <cstdint>
@@ -35,6 +36,9 @@ public:
     virtual double growth_resource_scale(Vec3i) const noexcept { return 1.0; }
     virtual bool pure_nutrient_guidance() const noexcept { return false; }
     virtual double nutrient_direction_weight(Vec3i, DirectionId) const { return 1.0; }
+    virtual std::array<double,2> external_growth_counts(Vec3i) const { return {}; }
+    virtual double external_activation_density(Vec3i,CellStage) const { return 0.0; }
+    virtual bool destination_available(Vec3i) const noexcept { return true; }
 };
 
 struct EnvironmentInitializationResult3D {

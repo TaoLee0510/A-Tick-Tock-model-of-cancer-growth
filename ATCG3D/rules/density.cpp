@@ -105,8 +105,9 @@ double density_growth_rate_for_cell(const CellStore3D& cells,
     if (density_modifier != nullptr && density_modifier->shared_density_limit() > 0.0) {
         const double limit = density_modifier->shared_density_limit();
         const double capacity = density_modifier->shared_carrying_capacity();
+        const auto extra=density_modifier->external_growth_counts(cells.anchor(slot));
         const double raw = calculate_density_growth_rate_continuous(static_cast<int>(cells.type(slot)),
-                cells.inherent_growth_rate(slot), counts.rc, counts.kc, counts.cells_number,
+                cells.inherent_growth_rate(slot), counts.rc+extra[0], counts.kc+extra[1], counts.cells_number+extra[0]+extra[1],
                 limit, limit, config.alpha, config.beta, capacity, capacity);
         return raw > 0.0 ? raw * density_modifier->growth_resource_scale(cells.anchor(slot)) : raw;
     }
