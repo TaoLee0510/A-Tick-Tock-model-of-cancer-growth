@@ -10,6 +10,7 @@ option(ATCG_BUILD_LEGACY_2D "Build the existing 2D ATCG executable" ON)
 option(ATCG_BUILD_3D "Build the sparse event-driven 3D executable" ON)
 option(ATCG_BUILD_3D_NUTRIENT "Build the nutrient-coupled 3D executable" ON)
 option(ATCG_BUILD_3D_CONTINUUM "Build the population-density continuum executable" ON)
+option(ATCG_BUILD_3D_STRUCTURED_PDE "Build the ABM-aligned structured PDE executable" ON)
 option(ATCG3D_ENABLE_VTKHDF "Build VTK-HDF visualization output" OFF)
 option(ATCG3D_ENABLE_HDF5_CHECKPOINT "Build HDF5 checkpoint support" OFF)
 option(ATCG3D_ENABLE_LARGE_TESTS "Enable opt-in million/ten-million-cell tests" OFF)
@@ -205,7 +206,9 @@ if(ATCG_BUILD_3D)
 
         foreach(nutrient_config_name IN ITEMS
                 nutrient_smoke_v1.yaml
-                nutrient_legacy_v1.yaml)
+                nutrient_legacy_v1.yaml
+                nutrient_smoke_per_cell_r12_guided_v2.yaml
+                nutrient_legacy_per_cell_r12_guided_v2.yaml)
             configure_file(
                 ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_Nutrient/config/${nutrient_config_name}
                 ${CMAKE_CURRENT_BINARY_DIR}/configs/${nutrient_config_name}
@@ -217,6 +220,7 @@ if(ATCG_BUILD_3D)
     if(ATCG_BUILD_3D_CONTINUUM)
         add_library(atcg3d_continuum_core
             ATCG3D_Continuum/config/continuum_config.cpp
+            ATCG3D_Continuum/model/moving_tumor_front.cpp
             ATCG3D_Continuum/model/continuum_model.cpp
             ATCG3D_Continuum/io/continuum_output.cpp
         )
@@ -236,6 +240,53 @@ if(ATCG_BUILD_3D)
             configure_file(
                 ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_Continuum/config/${continuum_config_name}
                 ${CMAKE_CURRENT_BINARY_DIR}/configs/${continuum_config_name}
+                COPYONLY
+            )
+        endforeach()
+    endif()
+
+    if(ATCG_BUILD_3D_STRUCTURED_PDE)
+        if(NOT ATCG_BUILD_3D_CONTINUUM)
+            message(FATAL_ERROR
+                "ATCG_BUILD_3D_STRUCTURED_PDE requires ATCG_BUILD_3D_CONTINUUM")
+        endif()
+        add_library(atcg3d_structured_pde_core
+            ATCG3D_StructuredPDE/config/structured_config.cpp
+            ATCG3D_StructuredPDE/model/structured_pde_model.cpp
+            ATCG3D_StructuredPDE/io/structured_pde_output.cpp
+        )
+        target_include_directories(atcg3d_structured_pde_core PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_StructuredPDE
+        )
+        target_link_libraries(atcg3d_structured_pde_core
+            PUBLIC atcg3d_continuum_core
+            PRIVATE ${ATCG3D_YAML_TARGET})
+
+        add_executable(atcg3d_structured_pde
+            ATCG3D_StructuredPDE/app/main.cpp)
+        target_link_libraries(atcg3d_structured_pde PRIVATE
+            atcg3d_structured_pde_core)
+
+        foreach(structured_config_name IN ITEMS
+                continuum_legacy_2d_2000_r20_aligned_v1.yaml
+                structured_legacy_2d_2000_r20_v1.yaml
+                continuum_smoke_r20_v1.yaml
+                structured_smoke_r20_v1.yaml
+                continuum_benchmark_2d_2000_24h_r20_v1.yaml
+                structured_benchmark_2d_2000_24h_r20_v1.yaml
+                continuum_legacy_2d_2000_r20_resource_guided_v2.yaml
+                structured_legacy_2d_2000_r20_resource_guided_v2.yaml
+                continuum_smoke_r20_resource_guided_v2.yaml
+                structured_smoke_r20_resource_guided_v2.yaml
+                continuum_benchmark_2d_2000_24h_resource_guided_v2.yaml
+                structured_benchmark_2d_2000_24h_resource_guided_v2.yaml
+                continuum_legacy_2d_2000_r20_exchange_v3.yaml
+                structured_legacy_2d_2000_r20_exchange_v3.yaml
+                continuum_smoke_r20_exchange_v3.yaml
+                structured_smoke_r20_exchange_v3.yaml)
+            configure_file(
+                ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_StructuredPDE/config/${structured_config_name}
+                ${CMAKE_CURRENT_BINARY_DIR}/configs/${structured_config_name}
                 COPYONLY
             )
         endforeach()
@@ -262,7 +313,8 @@ if(ATCG_BUILD_3D)
             atcg3d_legacy_2d_mapped_v3.yaml
             atcg3d_smoke_test_v3.yaml
             single_r_stage0_2160h_density_vascular_v5.yaml
-            single_r_stage0_2160h_seed1.yaml)
+            single_r_stage0_2160h_seed1.yaml
+            atcg2d_legacy_native_r20_aligned_v3.yaml)
         configure_file(
             ${CMAKE_CURRENT_SOURCE_DIR}/configs/${config_name}
             ${CMAKE_CURRENT_BINARY_DIR}/configs/${config_name}
@@ -298,6 +350,12 @@ if(ATCG_BUILD_3D)
         if(ATCG_BUILD_3D_CONTINUUM)
             vtk_module_autoinit(
                 TARGETS atcg3d_continuum
+                MODULES VTK::CommonCore VTK::CommonDataModel VTK::IOHDF
+            )
+        endif()
+        if(ATCG_BUILD_3D_STRUCTURED_PDE)
+            vtk_module_autoinit(
+                TARGETS atcg3d_structured_pde
                 MODULES VTK::CommonCore VTK::CommonDataModel VTK::IOHDF
             )
         endif()
@@ -370,11 +428,31 @@ if(BUILD_TESTING)
                 ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
             add_test(NAME atcg3d_continuum_test COMMAND atcg3d_continuum_test)
         endif()
+        if(ATCG_BUILD_3D_STRUCTURED_PDE)
+            add_executable(atcg3d_structured_pde_test
+                tests/3d/structured_pde_test.cpp)
+            target_link_libraries(atcg3d_structured_pde_test PRIVATE
+                atcg3d_structured_pde_core)
+            target_compile_options(atcg3d_structured_pde_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_structured_pde_test PRIVATE
+                ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME atcg3d_structured_pde_test
+                COMMAND atcg3d_structured_pde_test)
+        endif()
         if(ATCG3D_ENABLE_HDF5_CHECKPOINT)
             add_executable(atcg3d_checkpoint_test tests/3d/checkpoint_test.cpp)
             target_link_libraries(atcg3d_checkpoint_test PRIVATE atcg3d_core)
             target_compile_options(atcg3d_checkpoint_test PRIVATE -UNDEBUG)
             add_test(NAME atcg3d_checkpoint_test COMMAND atcg3d_checkpoint_test)
+        endif()
+        if(ATCG_BUILD_3D_NUTRIENT AND ATCG_BUILD_3D_STRUCTURED_PDE)
+            add_executable(atcg3d_compatibility_test tests/3d/compatibility_test.cpp)
+            target_link_libraries(atcg3d_compatibility_test PRIVATE
+                atcg3d_nutrient_core atcg3d_structured_pde_core ${ATCG3D_YAML_TARGET})
+            target_compile_options(atcg3d_compatibility_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_compatibility_test PRIVATE
+                ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME atcg3d_compatibility_test COMMAND atcg3d_compatibility_test)
         endif()
         if(ATCG3D_ENABLE_VTKHDF)
             add_executable(atcg3d_vtkhdf_test tests/3d/vtkhdf_test.cpp)

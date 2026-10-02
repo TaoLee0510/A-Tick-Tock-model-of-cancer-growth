@@ -57,35 +57,55 @@ r_effective = r_count / M(N),
 K_effective = K_count / M(N).
 ```
 
-Mean division intensity is derived from the ABM work clock:
+Mean division intensity is derived from the ABM work clock. A newly initialized
+ABM cycle stores mean work `T_cycle`; density growth depletes that work directly,
+so the v2 reaction is
 
 ```text
-b_i = max(g_i,0) / (T_cycle g_i_inherent).
+b_i = max(g_i,0) / T_cycle.
 ```
+
+The legacy v1 reaction retains the earlier normalized-rate closure for exact
+reproduction of old continuum runs.
 
 The deterministic reaction operator contains same-size daughters when space is
 available, large-to-two-small shape reduction when it is not, density-gated
 r-to-K daughter conversion, and the configured delayed-death mean hazard.
-Positive reaction increments are capacity limited so `phi <= phi_max`.
+For a small cell, the ABM succeeds when at least one neighbour is free. The v2
+mean-field closure is therefore `P_success = 1 - phi^m`, with `m=8` in a thin
+layer and `m=26` in 3D. Positive reaction increments are capacity limited so
+`phi <= phi_max`.
 
 This reaction closure preserves the average rule structure, not the exact
 distribution of individual event times or geometric division conflicts.
 
 ## Nutrient equation
 
-The v1 field uses the same vascular-surplus convention as
-`ATCG3D_Nutrient`:
+Both schema versions use the same vascular-surplus convention as
+`ATCG3D_Nutrient`. In v2, the consumer fields are cell-number densities,
+
+```text
+c_r = u_rs + u_rl,
+c_K = u_Ks + u_Kl,
+```
+
+and the nutrient equation is
 
 ```text
 0 = D_N Laplacian(N) - lambda_N N
-    - q_r phi_r N/(K_r+N)
-    - q_K phi_K N/(K_K+N)
+    - q_r c_r N/(K_N+N)
+    - q_K c_K N/(K_N+N)
     + kappa_v V(x,t)(N_v-N).
 ```
 
 `V` is the fraction of an image voxel occupied by a perfused ABM vessel or a
 configured synthetic line. The field uses zero exterior values and fixed-count
 relaxed Jacobi iterations. It is refreshed at exact configured times.
+
+The supplied v2 profiles set `q_K=0.010` and `q_r=1.2 q_K=0.012`. Because
+`u_l` integrates to large-cell number, large and small cells of the same type
+have equal total demand. The legacy v1 equation instead uses volume-weighted
+consumer density and remains available for reproducibility.
 
 The capacity multiplier is
 
@@ -96,6 +116,28 @@ M(N) = 1 + (M_max-1)
 
 Thus `N=0` reproduces baseline carrying capacity and `M_max=2` matches the old
 maximum density relief of `0.5`.
+
+### Transient shared nutrient (schema v3)
+
+Schema v3 instead advances
+
+```text
+partial_t N = D_N Laplacian(N) - lambda_N N
+              - q C N/(K_N+N),
+C = u_rs + u_rl + u_Ks + u_Kl.
+```
+
+The supplied v3 profile has `q_r=q_K=q`; large and small fields already
+integrate biological cell number, so phenotype and footprint do not change
+integrated demand. The initial value is explicit (`N(x,0)=N_v` in v5).
+Configured planar-edge and vessel sources obey `N=N_v`; a disabled planar
+source leaves a zero-flux outer boundary. Diffusion and decay are explicit and
+CFL checked, while the local Michaelis--Menten sink is solved implicitly to
+preserve `0 <= N <= N_v`.
+
+Schema v3 fixes `M(N)=1`, uses one common r/K density limit and carrying
+capacity, and scales only positive growth by `N/(K_g+N)`. Thus nutrient supply
+does not alter hard occupancy capacity. Schemas v1/v2 remain unchanged.
 
 ## Conservative ABM coarse-graining
 

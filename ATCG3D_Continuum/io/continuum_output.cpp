@@ -155,7 +155,15 @@ void ContinuumOutput3D::write_field(const ContinuumModel3D& model) {
     stream << "time_hours,x,y,z,r_small,r_large,K_small,K_large,r_total,K_total,"
               "occupied_fraction,nutrient,vessel_fraction\n"
            << std::setprecision(10);
+    const int nx = config_.grid.shape[0];
+    const int ny = config_.grid.shape[1];
+    const int stride = config_.output.field_stride;
     for (std::size_t location = 0; location < model.voxel_count(); ++location) {
+        const int x = static_cast<int>(location % static_cast<std::size_t>(nx));
+        const std::size_t yz = location / static_cast<std::size_t>(nx);
+        const int y = static_cast<int>(yz % static_cast<std::size_t>(ny));
+        const int z = static_cast<int>(yz / static_cast<std::size_t>(ny));
+        if (x % stride != 0 || y % stride != 0 || z % stride != 0) continue;
         const double total = model.population(PopulationField3D::r_small)[location] +
             model.population(PopulationField3D::r_large)[location] +
             model.population(PopulationField3D::K_small)[location] +

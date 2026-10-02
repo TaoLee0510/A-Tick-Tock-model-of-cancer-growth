@@ -8,6 +8,7 @@
 
 #include "config/model_config.hpp"
 #include "core/cell_store.hpp"
+#include "engine/environment.hpp"
 #include "space/chunk_grid.hpp"
 #include "space/density_index.hpp"
 
@@ -83,7 +84,8 @@ DirectionId select_migration_direction(Slot slot,
                                        const SparseChunkGrid3D& grid,
                                        const BlockDensityIndex3D& density,
                                        const Model3DConfig& config,
-                                       std::uint64_t event_sequence);
+                                       std::uint64_t event_sequence,
+                                       const LocalDensityModifier3D* environment = nullptr);
 
 // Crowding exchange is deliberately limited to two singleton stage-1 cells.
 // Large footprints and co-location groups require a different many-site
@@ -120,7 +122,8 @@ MoveProposal make_move_proposal(Slot slot,
                                 const BlockDensityIndex3D& density,
                                 const Model3DConfig& config,
                                 std::uint64_t event_sequence,
-                                std::uint64_t time_bucket);
+                                std::uint64_t time_bucket,
+                                const LocalDensityModifier3D* environment = nullptr);
 
 MoveProposal make_crowding_swap_proposal(
     Slot slot,

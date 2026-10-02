@@ -188,6 +188,14 @@ struct Model3DConfig {
     double direction_density_threshold{0.60};
     bool persistence_uses_density{false};
     double distance_weight_exponent{0.0};
+    // Activated-r direction selection.  The legacy model gates initial
+    // directions by density and samples the survivors uniformly (apart from
+    // the distance weight).  The resource-guided model additionally weights
+    // eligible directions by low density and normalized resource supply.
+    std::string direction_guidance_model{"density_gate_uniform_v1"};
+    double direction_density_guidance_exponent{1.0};
+    double direction_resource_guidance_exponent{1.0};
+    double direction_minimum_guidance_weight{1.0e-6};
     bool migration_activation_enabled{true};
     int migration_activation_window_edge{70};
     int migration_activation_block_edge{32};
@@ -200,6 +208,10 @@ struct Model3DConfig {
     std::string activated_r_migration_rate_model{"beta"};
     BetaRateConfig activated_r_migration_beta{
         0.01, 0.0566666667, 1.0, true, 0.5, 0.25};
+    // Alternative rule-aligned mode: the active rate is this multiplier times
+    // the same cell's ordinary low-density rate.  Existing beta profiles keep
+    // their historical behaviour unless they explicitly select this mode.
+    double activated_r_normal_multiplier{1.0};
     double migration_activation_duration_alpha{0.005};
     double migration_activation_duration_mean_fraction{0.30};
     double migration_activation_duration_beta{0.011666666666666667};

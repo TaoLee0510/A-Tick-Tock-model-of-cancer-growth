@@ -37,6 +37,10 @@ fields and couples them to the same effective-nutrient concept. Spatial fields,
 radial profiles, exact continuum restarts, equations, and build instructions
 are in [`ATCG3D_Continuum/`](ATCG3D_Continuum/README.md).
 
+All shipped configurations use distinct relative output directories. Use
+`--output-root PATH` on any 3D model executable to place results on an external
+volume without editing the repository; see [`docs/output_paths.md`](docs/output_paths.md).
+
 ```sh
 cmake -S . -B build-3d -DCMAKE_BUILD_TYPE=Release \
   -DATCG_BUILD_LEGACY_2D=OFF -DATCG_BUILD_3D=ON \

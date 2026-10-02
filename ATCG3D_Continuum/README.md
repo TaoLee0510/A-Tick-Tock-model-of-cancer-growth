@@ -32,7 +32,15 @@ build-continuum/atcg3d_continuum \
 The smoke profile uses the exact 64-cell ABM initialization and an off-centre
 synthetic vessel so nutrient-driven spatial heterogeneity is exercised in a
 short run. `continuum_legacy_v1.yaml` uses the production mapped biology on a
-coarser continuum grid.
+coarser three-dimensional continuum grid.
+
+`continuum_legacy_2d_2000_v1.yaml` is the native legacy-plane profile. It uses
+a `2000 x 2000 x 1` unit-spaced lattice, runs to 2160 hours, and represents the
+synthetic vessel as a y-directed line at `x = -40`. Its r population uses a
+20-fold mobility multiplier on faces at or above 0.9 occupied fraction; the
+exclusion mobility on those faces remains active. The corresponding base
+configuration is `configs/atcg2d_legacy_native_v3.yaml`; its unscaled 2D density
+limits and carrying capacities are used by the reaction term.
 
 ## ABM-derived initialization
 
@@ -57,6 +65,21 @@ HDF5 support must be enabled at build time. The configured continuum domain
 must contain every imported cell footprint. `abm_plus_synthetic_line` can be
 used for a controlled vascular perturbation on top of imported vessels.
 
+Continuum schema v2 changes the nutrient sink from occupied-volume demand to
+cell-number demand. A large and small cell of the same type therefore consume
+the same integrated amount, while the supplied v2 structured profile sets r
+demand to 1.2 times K. Occupancy, exclusion and carrying-capacity calculations
+remain volume-weighted. The simple continuum model does not carry persistent
+direction states; use `ATCG3D_StructuredPDE` for the aligned directed-migration
+rule.
+
+Continuum schema v3 is the shared-nutrient closure used by structured-PDE v5.
+It evolves nutrient transiently, starts from an explicit configured value, and
+holds selected planar edges and/or vessel voxels at maximum supply. Every cell
+has the same per-cell demand, r and K use common density limits/carrying
+capacity, and nutrient scales positive growth instead of changing hard spatial
+capacity. Older schemas keep their previous equations.
+
 ## Output
 
 The output directory contains:
@@ -73,7 +96,10 @@ final.json                          final summary and checksum
 
 `metrics.csv` reports r/K totals, size-resolved totals, occupied volume,
 maximum occupied fraction, r/K mean nutrient exposure, r/K mean radius, vessel
-volume, and a state checksum. Field snapshots contain only nonzero rows.
+volume, and a state checksum. Field snapshots contain only nonzero rows. The
+optional `output.field_stride` integer samples every Nth grid coordinate in
+each dimension when writing CSV fields; it reduces output size without changing
+the simulated grid or dynamics.
 
 To resume, keep the same dynamics and set:
 

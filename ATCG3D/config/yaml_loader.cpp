@@ -318,7 +318,7 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
         root, "direction", "$", {"set", "continue_probability", "turn_half_angle_deg",
                                    "density_radius", "density_half_angle_deg",
                                    "density_threshold", "persistence_uses_density",
-                                   "distance_weight_exponent"});
+                                   "distance_weight_exponent", "guidance"});
     config.direction_set = strict_string(required(direction, "set", "$.direction"), "direction.set");
     config.continue_probability = strict_double(
         required(direction, "continue_probability", "$.direction"),
@@ -340,6 +340,23 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     config.distance_weight_exponent = strict_double(
         required(direction, "distance_weight_exponent", "$.direction"),
         "direction.distance_weight_exponent");
+    if (const YAML::Node guidance = direction["guidance"]) {
+        check_map(guidance, "$.direction.guidance",
+                  {"model", "density_exponent", "resource_exponent",
+                   "minimum_weight"});
+        config.direction_guidance_model = strict_string(
+            required(guidance, "model", "$.direction.guidance"),
+            "direction.guidance.model");
+        config.direction_density_guidance_exponent = strict_double(
+            required(guidance, "density_exponent", "$.direction.guidance"),
+            "direction.guidance.density_exponent");
+        config.direction_resource_guidance_exponent = strict_double(
+            required(guidance, "resource_exponent", "$.direction.guidance"),
+            "direction.guidance.resource_exponent");
+        config.direction_minimum_guidance_weight = strict_double(
+            required(guidance, "minimum_weight", "$.direction.guidance"),
+            "direction.guidance.minimum_weight");
+    }
 
     const YAML::Node migration = checked_section(
         root, "migration", "$", {"activation_enabled", "activation_window_edge",
@@ -380,19 +397,34 @@ Model3DConfig Model3DConfig::load(const std::filesystem::path& path) {
     config.normal_r_migration_beta.lower_clamp_threshold = 0.0;
     config.normal_r_migration_beta.lower_clamp_value = 0.0;
 
-    const YAML::Node activated_r_rate = checked_section(
-        migration, "activated_r_rate", "$.migration",
-        {"model", "alpha", "beta", "scale", "lower_clamp"});
+    const YAML::Node activated_r_rate = required(
+        migration, "activated_r_rate", "$.migration");
+    if (!activated_r_rate.IsMap()) {
+        config_error(activated_r_rate, "$.migration.activated_r_rate",
+                     "must be a mapping");
+    }
     config.activated_r_migration_rate_model = strict_string(
         required(activated_r_rate, "model", "$.migration.activated_r_rate"),
         "migration.activated_r_rate.model");
-    if (config.activated_r_migration_rate_model != "beta") {
+    if (config.activated_r_migration_rate_model == "beta") {
+        check_map(activated_r_rate, "$.migration.activated_r_rate",
+                  {"model", "alpha", "beta", "scale", "lower_clamp"});
+        config.activated_r_migration_beta = parse_beta_rate_fields(
+            activated_r_rate, "migration.activated_r_rate");
+        config.activated_r_normal_multiplier = 1.0;
+    } else if (config.activated_r_migration_rate_model ==
+               "normal_multiplier") {
+        check_map(activated_r_rate, "$.migration.activated_r_rate",
+                  {"model", "multiplier"});
+        config.activated_r_normal_multiplier = strict_double(
+            required(activated_r_rate, "multiplier",
+                     "$.migration.activated_r_rate"),
+            "migration.activated_r_rate.multiplier");
+    } else {
         config_error(required(activated_r_rate, "model",
                               "$.migration.activated_r_rate"),
                      "migration.activated_r_rate.model", "unsupported model");
     }
-    config.activated_r_migration_beta = parse_beta_rate_fields(
-        activated_r_rate, "migration.activated_r_rate");
 
     const YAML::Node activation_duration = checked_section(
         migration, "activation_duration", "$.migration",

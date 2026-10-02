@@ -62,7 +62,7 @@ vascular:
 
 output:
   enabled: true
-  directory: atcg3d_continuum_legacy_run
+  directory: atcg3d_continuum_legacy_v1_run
   metrics_every_hours: 4.0
   field_every_hours: 24.0
   radial_profile_every_hours: 24.0

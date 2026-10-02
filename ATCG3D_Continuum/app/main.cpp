@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <string>
 
+#include "config/output_paths.hpp"
+
 #include "config/continuum_config.hpp"
 #include "engine/simulation.hpp"
 #include "io/continuum_output.hpp"
@@ -17,7 +19,7 @@ namespace {
 
 void help(const char* executable) {
     std::cout
-        << "Usage: " << executable << " --config PATH [--dry-run]\n\n"
+        << "Usage: " << executable << " --config PATH [--dry-run] [--output-root PATH]\n\n"
         << "Runs the four-population ATCG3D continuum reduction coupled to "
            "an effective-nutrient PDE.\n";
 }
@@ -54,6 +56,7 @@ std::unique_ptr<atcg3d::Simulation3D> source_abm(
 int main(int argc, char** argv) {
     try {
         std::filesystem::path config_path;
+        std::filesystem::path output_root;
         bool dry_run = false;
         for (int index = 1; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -63,6 +66,11 @@ int main(int argc, char** argv) {
             }
             if (argument == "--config" && index + 1 < argc) {
                 config_path = argv[++index];
+            } else if (argument == "--output-root" && index + 1 < argc) {
+                output_root = argv[++index];
+                if (output_root.empty()) {
+                    throw std::invalid_argument("--output-root must not be empty");
+                }
             } else if (argument == "--dry-run") {
                 dry_run = true;
             } else {
@@ -76,6 +84,8 @@ int main(int argc, char** argv) {
 
         atcg3d::continuum::ContinuumModelConfig3D config =
             atcg3d::continuum::ContinuumModelConfig3D::load(config_path);
+        config.output.directory = atcg3d::resolve_output_directory(
+            config.output.directory, output_root);
         if (dry_run) {
             std::cout << config.to_json();
             return 0;

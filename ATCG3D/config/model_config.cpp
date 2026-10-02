@@ -185,6 +185,27 @@ void Model3DConfig::validate() const {
     if (distance_weight_exponent < 0.0) {
         throw std::invalid_argument("distance weight exponent must be non-negative");
     }
+    if (direction_guidance_model != "density_gate_uniform_v1" &&
+        direction_guidance_model != "low_density_high_resource_v1") {
+        throw std::invalid_argument("unsupported direction.guidance.model");
+    }
+    if (direction_guidance_model == "low_density_high_resource_v1" &&
+        !(direction_density_threshold > 0.0)) {
+        throw std::invalid_argument(
+            "resource-guided migration requires a positive density threshold");
+    }
+    require_finite(direction_density_guidance_exponent,
+                   "direction.guidance.density_exponent");
+    require_finite(direction_resource_guidance_exponent,
+                   "direction.guidance.resource_exponent");
+    require_finite(direction_minimum_guidance_weight,
+                   "direction.guidance.minimum_weight");
+    if (direction_density_guidance_exponent < 0.0 ||
+        direction_resource_guidance_exponent < 0.0 ||
+        !(direction_minimum_guidance_weight > 0.0) ||
+        direction_minimum_guidance_weight > 1.0) {
+        throw std::invalid_argument("direction guidance parameters are invalid");
+    }
     if (migration_activation_window_edge <= 0 || migration_activation_window_edge > 4096 ||
         migration_activation_block_edge <= 0 ||
         migration_activation_block_edge > migration_activation_window_edge) {
@@ -192,11 +213,19 @@ void Model3DConfig::validate() const {
     }
     require_probability(migration_activation_threshold, "migration.activation_threshold");
     validate_beta_rate(normal_r_migration_beta, "migration.normal_r_rate");
-    if (activated_r_migration_rate_model != "beta") {
+    if (activated_r_migration_rate_model == "beta") {
+        validate_beta_rate(activated_r_migration_beta,
+                           "migration.activated_r_rate");
+    } else if (activated_r_migration_rate_model == "normal_multiplier") {
+        require_finite(activated_r_normal_multiplier,
+                       "migration.activated_r_rate.multiplier");
+        if (activated_r_normal_multiplier < 1.0) {
+            throw std::invalid_argument(
+                "migration.activated_r_rate.multiplier must be at least one");
+        }
+    } else {
         throw std::invalid_argument("unsupported migration.activated_r_rate.model");
     }
-    validate_beta_rate(activated_r_migration_beta,
-                       "migration.activated_r_rate");
     require_finite(migration_activation_duration_alpha,
                    "migration.activation_duration.alpha");
     require_probability(migration_activation_duration_mean_fraction,
@@ -515,10 +544,13 @@ void Model3DConfig::validate() const {
     // the two raw configuration numbers would mix moves/hour with
     // voxels/hour. Enforce the user's biological ordering against the
     // activated-r distribution's conservative path-speed supremum.
-    const double activated_r_rate_upper_bound = std::max(
-        activated_r_migration_beta.scale,
-        activated_r_migration_beta.lower_clamp_enabled
-            ? activated_r_migration_beta.lower_clamp_value : 0.0);
+    const double activated_r_rate_upper_bound =
+        activated_r_migration_rate_model == "normal_multiplier"
+        ? normal_r_migration_beta.scale * activated_r_normal_multiplier
+        : std::max(
+              activated_r_migration_beta.scale,
+              activated_r_migration_beta.lower_clamp_enabled
+                  ? activated_r_migration_beta.lower_clamp_value : 0.0);
     const double activated_r_path_speed_upper_bound =
         std::sqrt(3.0) * activated_r_rate_upper_bound;
     if (angiogenesis.enabled &&
@@ -582,7 +614,10 @@ void Model3DConfig::validate() const {
     const double finite_values[] = {
         continue_probability, turn_half_angle_degrees,
         direction_density_half_angle_degrees, direction_density_threshold,
-        distance_weight_exponent, r_limit, K_limit, carrying_capacity_r,
+        distance_weight_exponent, direction_density_guidance_exponent,
+        direction_resource_guidance_exponent,
+        direction_minimum_guidance_weight,
+        r_limit, K_limit, carrying_capacity_r,
         carrying_capacity_K, alpha, beta, initial_r_growth_rate,
         initial_K_growth_rate, initial_K_migration_rate,
         initial_r_growth_truncated_normal.mean,
@@ -623,6 +658,7 @@ void Model3DConfig::validate() const {
         activated_r_migration_beta.scale,
         activated_r_migration_beta.lower_clamp_threshold,
         activated_r_migration_beta.lower_clamp_value,
+        activated_r_normal_multiplier,
         migration_activation_duration_alpha,
         migration_activation_duration_mean_fraction,
         migration_activation_duration_beta,
@@ -708,6 +744,14 @@ std::string Model3DConfig::to_json() const {
         << "\"direction_density_threshold\":" << direction_density_threshold << ','
         << "\"persistence_uses_density\":" << json_bool(persistence_uses_density) << ','
         << "\"distance_weight_exponent\":" << distance_weight_exponent << ','
+        << "\"direction_guidance_model\":\""
+        << json_escape(direction_guidance_model) << "\","
+        << "\"direction_density_guidance_exponent\":"
+        << direction_density_guidance_exponent << ','
+        << "\"direction_resource_guidance_exponent\":"
+        << direction_resource_guidance_exponent << ','
+        << "\"direction_minimum_guidance_weight\":"
+        << direction_minimum_guidance_weight << ','
         << "\"migration_activation_enabled\":" << json_bool(migration_activation_enabled) << ','
         << "\"migration_activation_window_edge\":" << migration_activation_window_edge << ','
         << "\"migration_activation_block_edge\":" << migration_activation_block_edge << ','
@@ -722,6 +766,7 @@ std::string Model3DConfig::to_json() const {
         << "\"activated_r_migration_beta_lower_clamp_enabled\":" << json_bool(activated_r_migration_beta.lower_clamp_enabled) << ','
         << "\"activated_r_migration_beta_lower_clamp_threshold\":" << activated_r_migration_beta.lower_clamp_threshold << ','
         << "\"activated_r_migration_beta_lower_clamp_value\":" << activated_r_migration_beta.lower_clamp_value << ','
+        << "\"activated_r_normal_multiplier\":" << activated_r_normal_multiplier << ','
         << "\"migration_activation_duration_alpha\":" << migration_activation_duration_alpha << ','
         << "\"migration_activation_duration_mean_fraction\":" << migration_activation_duration_mean_fraction << ','
         << "\"migration_activation_duration_beta\":" << migration_activation_duration_beta << ','
@@ -1036,6 +1081,28 @@ std::string Model3DConfig::dynamics_json() const {
     erase_member("control_enabled");
     erase_member("control_status_wall_interval_seconds");
     erase_member("control_poll_wall_interval_seconds");
+    // Default guidance and beta-rate settings preserve the identity written
+    // before these optional models were introduced.
+    const Model3DConfig defaults;
+    if (direction_guidance_model == defaults.direction_guidance_model) {
+        erase_member("direction_guidance_model");
+    }
+    if (direction_density_guidance_exponent ==
+        defaults.direction_density_guidance_exponent) {
+        erase_member("direction_density_guidance_exponent");
+    }
+    if (direction_resource_guidance_exponent ==
+        defaults.direction_resource_guidance_exponent) {
+        erase_member("direction_resource_guidance_exponent");
+    }
+    if (direction_minimum_guidance_weight ==
+        defaults.direction_minimum_guidance_weight) {
+        erase_member("direction_minimum_guidance_weight");
+    }
+    if (activated_r_migration_rate_model == "beta" &&
+        activated_r_normal_multiplier == 1.0) {
+        erase_member("activated_r_normal_multiplier");
+    }
     return json;
 }
 

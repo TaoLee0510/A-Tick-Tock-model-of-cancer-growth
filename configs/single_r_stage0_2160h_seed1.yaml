@@ -270,7 +270,7 @@ output:
   preview_mode: stable_uid_hash_v1
   full_format: vtkhdf_points_v1
   checkpoint_format: hdf5_base_v6_slot_journal_v8
-  directory: /Volumes/Work_Active/simulation/ver7/run_single_r_stage0_2160h_seed1
+  directory: run_single_r_stage0_2160h_seed1
   preview_every_hours: 1.0
   full_every_hours: 24.0
   checkpoint_every_hours: 1.0

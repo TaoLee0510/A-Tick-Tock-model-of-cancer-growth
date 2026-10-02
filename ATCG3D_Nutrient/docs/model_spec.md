@@ -34,9 +34,11 @@ Q_cells(x, N, cell_state)
 ```
 
 `I_vessel` is evaluated from the existing rasterized perfused-vessel capsule,
-not from a smoothed replacement of the vascular graph. `K_epsilon` distributes
-one cell's sink over its biological footprint or a separately specified local
-kernel.
+not from a smoothed replacement of the vascular graph. In v2, `q_max` is a
+total per-cell rate and `K_epsilon` is normalized to sum to one over the
+biological footprint. Changing from a small to a large stage therefore does
+not change integrated demand. The supplied profiles use `q_r = 1.2 q_K`, with
+`q_K=0.010` and a shared half-saturation of `0.25`.
 
 The v1 solver uses the quasi-steady form obtained by setting `dN/dt` to zero.
 `solver: deterministic_quasi_steady_jacobi_v1` selects fixed-count relaxed
@@ -92,8 +94,14 @@ For every living cell the refresh must:
    exact refresh time;
 2. evaluate the new local nutrient value and density-growth rate;
 3. reschedule division or death without redrawing the division cycle;
-4. preserve migration rules unless the configured nutrient scope explicitly
-   includes migration.
+4. expose the refreshed normalized resource field to the explicitly enabled
+   activated-r direction rule.
+
+For `low_density_high_resource_v1`, an activated r cell first rejects
+directional cones above density 0.6. Remaining directions are weighted by
+decreasing density and increasing cone-mean nutrient. The existing 0.9
+persistence prior is multiplied by the same environmental weight. Ordinary r
+and all K migration remain unchanged.
 
 The v1 model uses a fixed configured refresh interval. Adaptive
 refreshing may be added only with deterministic thresholding and checkpointed

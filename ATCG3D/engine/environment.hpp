@@ -17,6 +17,15 @@ class LocalDensityModifier3D {
 public:
     virtual ~LocalDensityModifier3D() = default;
     virtual double retained_density(Vec3i site) const noexcept = 0;
+
+    // Normalized effective resource supply used only by explicitly
+    // resource-guided migration profiles.  Density-only environments and the
+    // uncoupled ABM expose a spatially uniform value, preserving their legacy
+    // direction probabilities.
+    virtual double normalized_resource(Vec3i site) const noexcept {
+        (void)site;
+        return 1.0;
+    }
 };
 
 struct EnvironmentInitializationResult3D {

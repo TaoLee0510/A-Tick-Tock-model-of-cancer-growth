@@ -951,6 +951,11 @@ void Simulation3D::schedule_environment_refresh() {
 void Simulation3D::process_environment_refresh(const Event& event) {
     if (!environment_ || !current(event)) return;
     environment_->refresh(clock_.time_hours, cells_, vessel_grid_);
+    // Resource-guided migration proposals depend on the continuous field even
+    // when no discrete occupancy changed, so proposals computed before this
+    // refresh cannot be reused afterwards.
+    migration_proposal_cache_.clear();
+    proposal_cache_horizon_ = -1.0;
     std::vector<Slot> slots = cells_.alive_slots();
     std::sort(slots.begin(), slots.end(), [this](Slot lhs, Slot rhs) {
         return cells_.uid(lhs) < cells_.uid(rhs);
@@ -1374,6 +1379,12 @@ void Simulation3D::prefetch_proposal_window() {
         if (event.kind == EventKind::angiogenesis_seed) {
             // Root placement is selected from an entire lesion surface.
             global_spatial_barrier = true;
+            continue;
+        }
+        if (event.kind == EventKind::environment_refresh) {
+            // All later resource-guided migration proposals must observe the
+            // newly solved nutrient field.
+            global_spatial_barrier = true;
         }
     }
     if (work.empty()) return;
@@ -1390,7 +1401,7 @@ void Simulation3D::prefetch_proposal_window() {
             : std::bit_cast<std::uint64_t>(item.event.time);
         item.proposal = make_move_proposal(
             item.event.slot, cells_, grid_, density_, config_, item.sequence,
-            time_bucket);
+            time_bucket, environment_.get());
     });
     for (WorkItem& item : work) {
         migration_proposal_cache_.emplace(
@@ -1787,7 +1798,7 @@ void Simulation3D::process_migrations(const std::vector<Event>& events) {
         if (proposal_needs_compute[index] != 0) {
             proposals[index] = make_move_proposal(
                 item.event.slot, cells_, grid_, density_, config_,
-                item.sequence, time_bucket);
+                item.sequence, time_bucket, environment_.get());
         }
         if (config_.migration_swap_enabled &&
             proposals[index].direction == kStayDirection &&

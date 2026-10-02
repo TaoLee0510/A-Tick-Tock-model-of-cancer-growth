@@ -17,8 +17,9 @@ struct NutrientFieldConfig3D {
     double decay_per_hour{1.0 / 144.0};
     double vessel_exchange_per_hour{10.0};
     double vessel_value{1.0};
-    double r_consumption_per_voxel_hour{0.01};
-    double K_consumption_per_voxel_hour{0.01};
+    std::string consumption_model{"per_occupied_voxel_v1"};
+    double r_consumption_rate_per_hour{0.01};
+    double K_consumption_rate_per_hour{0.01};
     double r_consumption_half_saturation{0.25};
     double K_consumption_half_saturation{0.25};
     double capacity_half_saturation{0.25};

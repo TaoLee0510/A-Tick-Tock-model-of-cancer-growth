@@ -1,6 +1,7 @@
 #include "rules/migration.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <unordered_set>
 #include <vector>
@@ -62,6 +63,98 @@ DirectionCandidates3D density_filtered(
         }
     }
     return result;
+}
+
+double directional_resource(
+    Vec3i anchor,
+    DirectionId direction,
+    const Model3DConfig& config,
+    const LocalDensityModifier3D* environment) {
+    if (environment == nullptr) return 1.0;
+    const Vec3i forward = direction_vector(direction);
+    const double forward_length =
+        std::sqrt(static_cast<double>(squared_length(forward)));
+    const double minimum_cosine = std::cos(
+        config.direction_density_half_angle_degrees * std::acos(-1.0) / 180.0);
+    const int radius = config.direction_density_radius;
+    double total = 0.0;
+    std::size_t sites = 0;
+    for (int dz = config.thin_layer ? 0 : -radius;
+         dz <= (config.thin_layer ? 0 : radius); ++dz) {
+        for (int dy = -radius; dy <= radius; ++dy) {
+            for (int dx = -radius; dx <= radius; ++dx) {
+                const int distance = std::max(
+                    {std::abs(dx), std::abs(dy), std::abs(dz)});
+                if (distance == 0 || distance > radius) continue;
+                const Vec3i offset{dx, dy, dz};
+                const double offset_length =
+                    std::sqrt(static_cast<double>(squared_length(offset)));
+                const double cosine = static_cast<double>(dot(offset, forward)) /
+                    (offset_length * forward_length);
+                if (cosine + 1.0e-12 < minimum_cosine) continue;
+                total += std::clamp(
+                    environment->normalized_resource(anchor + offset), 0.0, 1.0);
+                ++sites;
+            }
+        }
+    }
+    return sites > 0 ? total / static_cast<double>(sites) : 0.0;
+}
+
+std::array<double, 27> guided_direction_weights(
+    const DirectionCandidates3D& candidates,
+    Vec3i anchor,
+    const BlockDensityIndex3D& density,
+    const Model3DConfig& config,
+    const LocalDensityModifier3D* environment) {
+    std::array<double, 27> result{};
+    const auto directional_densities =
+        density.estimate_all_directional_densities(
+            anchor, config.direction_density_radius,
+            config.direction_density_half_angle_degrees, config.thin_layer);
+    const double floor = config.direction_minimum_guidance_weight;
+    for (const DirectionId direction : candidates) {
+        const double local_density = directional_densities[direction];
+        if (local_density > config.direction_density_threshold) continue;
+        const double density_fraction = std::clamp(
+            local_density / config.direction_density_threshold, 0.0, 1.0);
+        const double density_score = floor + (1.0 - floor) *
+            (1.0 - density_fraction);
+        const double resource_score = floor + (1.0 - floor) *
+            directional_resource(anchor, direction, config, environment);
+        const double length = std::sqrt(static_cast<double>(
+            squared_length(direction_vector(direction))));
+        result[direction] =
+            std::pow(length, -config.distance_weight_exponent) *
+            std::pow(density_score,
+                     config.direction_density_guidance_exponent) *
+            std::pow(resource_score,
+                     config.direction_resource_guidance_exponent);
+    }
+    return result;
+}
+
+DirectionId weighted_guided_choice(
+    const DirectionCandidates3D& candidates,
+    const std::array<double, 27>& weights,
+    std::uint64_t seed,
+    CellUid uid,
+    std::uint64_t event_sequence,
+    std::uint64_t draw) {
+    double total = 0.0;
+    for (const DirectionId direction : candidates) {
+        total += std::max(0.0, weights[direction]);
+    }
+    if (!(total > 0.0)) return kStayDirection;
+    const double target = rng_unit(
+        seed, uid, static_cast<std::uint64_t>(RngEventKind::migration_direction),
+        event_sequence, draw) * total;
+    double cumulative = 0.0;
+    for (const DirectionId direction : candidates) {
+        cumulative += std::max(0.0, weights[direction]);
+        if (target <= cumulative) return direction;
+    }
+    return candidates[candidates.size() - 1];
 }
 
 DirectionId select_from_candidates(
@@ -137,7 +230,8 @@ DirectionId select_migration_direction(Slot slot,
                                        const SparseChunkGrid3D& grid,
                                        const BlockDensityIndex3D& density,
                                        const Model3DConfig& config,
-                                       std::uint64_t event_sequence) {
+                                       std::uint64_t event_sequence,
+                                       const LocalDensityModifier3D* environment) {
     DirectionCandidates3D feasible =
         feasible_directions(slot, cells, grid, config.thin_layer);
     if (feasible.empty()) {
@@ -148,6 +242,52 @@ DirectionId select_migration_direction(Slot slot,
         (cells.flags(slot) & static_cast<std::uint8_t>(kMigrationActive)) != 0;
     if (cells.type(slot) == CellType::K || !activated) {
         return weighted_choice(feasible, config.distance_weight_exponent, config.seed, uid, event_sequence, 0);
+    }
+
+    if (config.direction_guidance_model ==
+        "low_density_high_resource_v1") {
+        const auto guidance = guided_direction_weights(
+            feasible, cells.anchor(slot), density, config, environment);
+        DirectionCandidates3D eligible;
+        for (const DirectionId direction : feasible) {
+            if (guidance[direction] > 0.0) eligible.push_back(direction);
+        }
+        const DirectionId previous = cells.last_direction(slot);
+        if (previous == kStayDirection) {
+            return weighted_guided_choice(
+                eligible, guidance, config.seed, uid, event_sequence, 0);
+        }
+
+        const bool forward_available =
+            std::find(eligible.begin(), eligible.end(), previous) !=
+            eligible.end();
+        DirectionCandidates3D turns;
+        for (const DirectionId direction : eligible) {
+            if (direction != previous &&
+                direction_angle_degrees(previous, direction) <=
+                    config.turn_half_angle_degrees + 1.0e-10) {
+                turns.push_back(direction);
+            }
+        }
+        if (forward_available && turns.empty()) return previous;
+        if (!forward_available && turns.empty()) return kStayDirection;
+
+        DirectionCandidates3D choices;
+        std::array<double, 27> persistent_weights{};
+        if (forward_available) {
+            choices.push_back(previous);
+            persistent_weights[previous] =
+                config.continue_probability * guidance[previous];
+        }
+        const double turn_prior = turns.empty() ? 0.0 :
+            (forward_available ? 1.0 - config.continue_probability : 1.0) /
+                static_cast<double>(turns.size());
+        for (const DirectionId direction : turns) {
+            choices.push_back(direction);
+            persistent_weights[direction] = turn_prior * guidance[direction];
+        }
+        return weighted_guided_choice(
+            choices, persistent_weights, config.seed, uid, event_sequence, 0);
     }
 
     const DirectionId previous = cells.last_direction(slot);
@@ -230,14 +370,16 @@ MoveProposal make_move_proposal(Slot slot,
                                 const BlockDensityIndex3D& density,
                                 const Model3DConfig& config,
                                 std::uint64_t event_sequence,
-                                std::uint64_t time_bucket) {
+                                std::uint64_t time_bucket,
+                                const LocalDensityModifier3D* environment) {
     MoveProposal proposal;
     if (!cells.valid(slot)) {
         return proposal;
     }
     proposal.slot = slot;
     proposal.uid = cells.uid(slot);
-    proposal.direction = select_migration_direction(slot, cells, grid, density, config, event_sequence);
+    proposal.direction = select_migration_direction(
+        slot, cells, grid, density, config, event_sequence, environment);
     proposal.from = cells.anchor(slot);
     proposal.to = proposal.from + direction_vector(proposal.direction);
     proposal.priority = rng_word(config.seed, proposal.uid,

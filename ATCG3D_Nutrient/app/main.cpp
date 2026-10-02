@@ -8,6 +8,8 @@
 #include <string>
 
 #include "app/run_controller.hpp"
+#include "config/output_paths.hpp"
+
 #include "config/nutrient_config.hpp"
 #include "engine/simulation.hpp"
 #include "field/nutrient_field.hpp"
@@ -21,7 +23,7 @@ namespace {
 
 void print_help(const char* executable) {
     std::cout
-        << "Usage: " << executable << " --config PATH [--dry-run]\n\n"
+        << "Usage: " << executable << " --config PATH [--dry-run] [--output-root PATH]\n\n"
         << "Runs the individual-cell ATCG3D PDMP coupled to the effective-"
            "nutrient reaction-diffusion field.\n";
 }
@@ -70,6 +72,7 @@ std::uint64_t combined_checksum(std::uint64_t base,
 int main(int argc, char** argv) {
     try {
         std::filesystem::path config_path;
+        std::filesystem::path output_root;
         bool dry_run = false;
         for (int index = 1; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -79,6 +82,11 @@ int main(int argc, char** argv) {
             }
             if (argument == "--config" && index + 1 < argc) {
                 config_path = argv[++index];
+            } else if (argument == "--output-root" && index + 1 < argc) {
+                output_root = argv[++index];
+                if (output_root.empty()) {
+                    throw std::invalid_argument("--output-root must not be empty");
+                }
             } else if (argument == "--dry-run") {
                 dry_run = true;
             } else {
@@ -92,6 +100,8 @@ int main(int argc, char** argv) {
 
         atcg3d::nutrient::NutrientModelConfig3D config =
             atcg3d::nutrient::NutrientModelConfig3D::load(config_path);
+        config.base.output_directory = atcg3d::resolve_output_directory(
+            config.base.output_directory, output_root);
         if (dry_run) {
             std::cout << config.to_json();
             return 0;

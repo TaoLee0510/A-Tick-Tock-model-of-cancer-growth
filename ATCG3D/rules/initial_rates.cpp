@@ -205,6 +205,11 @@ double sample_initial_migration_rate(const Model3DConfig& config,
                                      std::uint64_t seed,
                                      CellUid uid) {
     if (type == CellType::r) {
+        if (config.activated_r_migration_rate_model == "normal_multiplier") {
+            // The exact active rate is set after the ordinary per-cell rate is
+            // drawn.  Zero is only a temporary initialization sentinel.
+            return 0.0;
+        }
         if (config.activated_r_migration_rate_model != "beta") {
             throw std::invalid_argument(
                 "unsupported activated r migration-rate model");

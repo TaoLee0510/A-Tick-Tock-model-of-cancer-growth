@@ -96,6 +96,10 @@ float sample_cycle_inherent_migration_rate(CellType type,
                                            const Model3DConfig& config,
                                            CellUid uid,
                                            std::uint64_t event_sequence) {
+    if (type == CellType::r &&
+        config.activated_r_migration_rate_model == "normal_multiplier") {
+        return 0.0F;
+    }
     if (type == CellType::K && config.initial_K_migration_rate_model == "fixed") {
         return static_cast<float>(config.initial_K_migration_rate);
     }
@@ -115,13 +119,17 @@ void reset_migration_for_new_cycle(Slot slot,
                                    CellStore3D& cells,
                                    const Model3DConfig& config,
                                    std::uint64_t event_sequence) {
-    const float inherent = sample_cycle_inherent_migration_rate(
+    float inherent = sample_cycle_inherent_migration_rate(
         cells.type(slot), config, cells.uid(slot), event_sequence);
+    const float normal = sample_normal_migration_rate(
+        cells.type(slot), inherent, config, cells.uid(slot), event_sequence);
+    if (cells.type(slot) == CellType::r &&
+        config.activated_r_migration_rate_model == "normal_multiplier") {
+        inherent = static_cast<float>(
+            normal * config.activated_r_normal_multiplier);
+    }
     cells.set_migration_rate(slot, inherent);
-    cells.set_normal_migration_rate(
-        slot, sample_normal_migration_rate(
-                  cells.type(slot), inherent, config, cells.uid(slot),
-                  event_sequence));
+    cells.set_normal_migration_rate(slot, normal);
     cells.set_migration_activation_end_time(slot, 0.0);
     cells.set_flags(slot, cells.flags(slot) &
         static_cast<std::uint8_t>(~kMigrationActive));
@@ -344,10 +352,17 @@ bool expire_migration_activation_state(Slot slot,
     const double end_time = cells.migration_activation_end_time(slot);
     if (!(end_time > 0.0) || now + 1.0e-10 < end_time) return false;
     const std::uint64_t sequence = cells.consume_event_sequence(slot);
-    cells.set_normal_migration_rate(
-        slot, sample_normal_migration_rate(
-                  cells.type(slot), cells.migration_rate(slot), config,
-                  cells.uid(slot), sequence));
+    const float normal = sample_normal_migration_rate(
+        cells.type(slot), cells.migration_rate(slot), config,
+        cells.uid(slot), sequence);
+    cells.set_normal_migration_rate(slot, normal);
+    if (cells.type(slot) == CellType::r &&
+        config.activated_r_migration_rate_model == "normal_multiplier") {
+        // Expiry draws a new ordinary r rate. Keep the stored active rate tied
+        // to that same per-cell baseline for any later reactivation.
+        cells.set_migration_rate(slot, static_cast<float>(
+            normal * config.activated_r_normal_multiplier));
+    }
     cells.set_flags(slot, cells.flags(slot) &
         static_cast<std::uint8_t>(~kMigrationActive));
     cells.set_migration_activation_end_time(slot, 0.0);

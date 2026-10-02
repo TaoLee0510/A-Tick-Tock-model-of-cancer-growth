@@ -21,6 +21,8 @@ struct NutrientFieldDiagnostics3D {
     std::size_t active_voxel_count{};
     std::size_t perfused_source_voxels{};
     std::size_t consuming_voxels{};
+    double assembled_r_consumption_per_hour{};
+    double assembled_K_consumption_per_hour{};
     double minimum{};
     double maximum{};
     double mean{};
@@ -45,6 +47,7 @@ public:
                  const SparseVesselGrid3D& vessels) override;
 
     double retained_density(Vec3i site) const noexcept override;
+    double normalized_resource(Vec3i site) const noexcept override;
     double next_refresh_time_hours() const noexcept override {
         return next_refresh_time_hours_;
     }

@@ -126,9 +126,14 @@ CellInit initial_cell(CellUid uid, CellType type, CellStage stage, Vec3i anchor,
         sample_initial_cell_rates(config, type, config.seed, uid);
     cell.inherent_growth_rate = static_cast<float>(rates.inherent_growth_rate);
     cell.density_growth_rate = cell.inherent_growth_rate;
-    cell.migration_rate = static_cast<float>(rates.migration_rate);
+    const float sampled_inherent = static_cast<float>(rates.migration_rate);
     cell.normal_migration_rate = sample_normal_migration_rate(
-        type, cell.migration_rate, config, uid, 0);
+        type, sampled_inherent, config, uid, 0);
+    cell.migration_rate = type == CellType::r &&
+            config.activated_r_migration_rate_model == "normal_multiplier"
+        ? static_cast<float>(cell.normal_migration_rate *
+                             config.activated_r_normal_multiplier)
+        : sampled_inherent;
     cell.last_update_time = 0.0;
     return cell;
 }
@@ -143,11 +148,15 @@ void apply_initial_type(CellStore3D& cells,
     const float growth = static_cast<float>(rates.inherent_growth_rate);
     cells.set_inherent_growth_rate(slot, growth);
     cells.set_density_growth_rate(slot, growth);
-    cells.set_migration_rate(slot, static_cast<float>(rates.migration_rate));
-    cells.set_normal_migration_rate(
-        slot, sample_normal_migration_rate(
-                  type, static_cast<float>(rates.migration_rate), config,
-                  cells.uid(slot), 0));
+    const float sampled_inherent = static_cast<float>(rates.migration_rate);
+    const float normal = sample_normal_migration_rate(
+        type, sampled_inherent, config, cells.uid(slot), 0);
+    const float active = type == CellType::r &&
+            config.activated_r_migration_rate_model == "normal_multiplier"
+        ? static_cast<float>(normal * config.activated_r_normal_multiplier)
+        : sampled_inherent;
+    cells.set_migration_rate(slot, active);
+    cells.set_normal_migration_rate(slot, normal);
     cells.set_migration_activation_end_time(slot, 0.0);
     cells.set_flags(slot, cells.flags(slot) &
         static_cast<std::uint8_t>(~kMigrationActive));

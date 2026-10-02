@@ -133,6 +133,11 @@ double NutrientEnvironment3D::retained_density(Vec3i site) const noexcept {
     return 1.0 / capacity_multiplier(site);
 }
 
+double NutrientEnvironment3D::normalized_resource(Vec3i site) const noexcept {
+    return std::clamp(
+        static_cast<double>(value(site)) / config_.vessel_value, 0.0, 1.0);
+}
+
 void NutrientEnvironment3D::rebuild_sources_and_sinks(
     const CellStore3D& cells,
     const SparseVesselGrid3D& vessels) {
@@ -186,26 +191,35 @@ void NutrientEnvironment3D::rebuild_sources_and_sinks(
     }
     blocks_ = std::move(rebuilt);
 
-    const auto add_consumption = [&](Vec3i site, CellType type) {
+    const auto add_consumption = [&](Vec3i site, CellType type, double weight) {
         if (!active_site(site)) return;
         const Address location = address(site);
         Block* block = find_block(location.block);
         if (block == nullptr) return;
         if (type == CellType::r) {
             block->r_consumption[location.index] += static_cast<float>(
-                config_.r_consumption_per_voxel_hour);
+                weight * config_.r_consumption_rate_per_hour);
         } else {
             block->K_consumption[location.index] += static_cast<float>(
-                config_.K_consumption_per_voxel_hour);
+                weight * config_.K_consumption_rate_per_hour);
         }
     };
     for (const Slot slot : cells.alive_slots()) {
         if (cells.stage(slot) == CellStage::large) {
+            std::vector<Vec3i> sites;
             for (const Vec3i site : large_footprint(cells.anchor(slot))) {
-                add_consumption(site, cells.type(slot));
+                if (thin_layer_ && site.z != cells.anchor(slot).z) continue;
+                sites.push_back(site);
+            }
+            const double weight = config_.consumption_model ==
+                    "per_cell_ratio_v2"
+                ? 1.0 / static_cast<double>(sites.size())
+                : 1.0;
+            for (const Vec3i site : sites) {
+                add_consumption(site, cells.type(slot), weight);
             }
         } else {
-            add_consumption(cells.anchor(slot), cells.type(slot));
+            add_consumption(cells.anchor(slot), cells.type(slot), 1.0);
         }
     }
     for (const Vec3i site : vessel_sites) {
@@ -272,6 +286,8 @@ void NutrientEnvironment3D::update_diagnostics() {
     diagnostics_.active_voxel_count = 0;
     diagnostics_.perfused_source_voxels = 0;
     diagnostics_.consuming_voxels = 0;
+    diagnostics_.assembled_r_consumption_per_hour = 0.0;
+    diagnostics_.assembled_K_consumption_per_hour = 0.0;
     diagnostics_.minimum = std::numeric_limits<double>::infinity();
     diagnostics_.maximum = 0.0;
     long double sum = 0.0L;
@@ -289,6 +305,10 @@ void NutrientEnvironment3D::update_diagnostics() {
                 block.K_consumption[index] > 0.0F) {
                 ++diagnostics_.consuming_voxels;
             }
+            diagnostics_.assembled_r_consumption_per_hour +=
+                block.r_consumption[index];
+            diagnostics_.assembled_K_consumption_per_hour +=
+                block.K_consumption[index];
         }
     }
     if (diagnostics_.active_voxel_count == 0) {

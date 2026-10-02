@@ -28,16 +28,14 @@ cmake -S . -B build-nutrient -DCMAKE_BUILD_TYPE=Release \
 cmake --build build-nutrient --parallel
 
 build-nutrient/atcg3d_nutrient \
-  --config build-nutrient/configs/nutrient_smoke_v1.yaml \
+  --config build-nutrient/configs/nutrient_smoke_per_cell_r12_guided_v2.yaml \
   --dry-run
-
-build-nutrient/atcg3d_nutrient \
-  --config build-nutrient/configs/nutrient_smoke_v1.yaml
 ```
 
-Use `nutrient_legacy_v1.yaml` for the full production base profile. The smoke
-profile deliberately uses a shorter halo, fewer fixed solver iterations, and a
-four-hour refresh interval so end-to-end validation remains fast.
+Use `nutrient_legacy_per_cell_r12_guided_v2.yaml` for the full production base
+profile. The configuration-smoke profile uses a shorter halo and fewer fixed
+solver iterations for loading and solver checks; the registered nutrient test
+is the quick end-to-end validation path.
 
 Wrapper paths are resolved relative to the wrapper file. For a copied or
 mirrored bundle, if that relative path is unavailable, the loader also accepts
@@ -66,7 +64,7 @@ coupling contract, and implementation boundaries.
 ```text
 ATCG3D_Nutrient/
   app/          `atcg3d_nutrient` entry point
-  config/       strict schema-v1 wrapper and supplied profiles
+  config/       strict schema-v1/v2 wrappers and supplied profiles
   field/        sparse deterministic nutrient grid and PDE solver
   io/           metrics, field snapshots, and checkpoint sidecars
   docs/         model and numerical specification
@@ -93,7 +91,11 @@ the baseline model while giving the coupled model exact continuation.
 - quasi-steady reaction-diffusion equation;
 - fixed-count relaxed Jacobi iterations for deterministic results;
 - sparse blocks allocated around cells and perfused vessel voxels plus a halo;
-- Michaelis-Menten r/K consumption assembled from individual footprints;
+- Michaelis-Menten r/K consumption with equal total demand for small and large
+  cells, distributed over each footprint;
+- r per-cell demand fixed at 1.2 times K in the supplied v2 profiles;
+- activated-r direction probabilities weighted toward low density and high
+  normalized nutrient after the 0.9 density trigger;
 - vessel exchange assembled from the existing perfused capsule voxels;
 - capacity multiplier in `[1, M_max]`, with `M_max=2` reproducing the old
   maximum relief of `0.5`;
@@ -101,6 +103,7 @@ the baseline model while giving the coupled model exact continuation.
   work before rescheduling growth and death;
 - optional nutrient metrics and nonzero-voxel CSV snapshots.
 
-The v1 model is a compatibility model: nutrition represents vascular support
-above the unresolved avascular baseline. It does not yet make below-baseline
+The v1 model remains a compatibility model with its historical per-footprint-
+voxel sink. In v2, nutrition still represents vascular support above the
+unresolved avascular baseline. It does not yet make below-baseline
 starvation a separate phenotype.
