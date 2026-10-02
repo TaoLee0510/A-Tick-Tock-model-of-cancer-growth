@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -18,7 +19,9 @@ int main(int argc, char**) {
         "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_smoke_2d_256_v5.yaml",
         "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_smoke_2d_256_24h_v6.yaml"
     };
-    std::ifstream fixture(root / "tests/3d/fixtures/legacy_pde_checksums.txt");
+    const char* native_fixture = std::getenv("ATCG_LEGACY_PDE_FIXTURE");
+    std::ifstream fixture(root / (native_fixture ? native_fixture :
+        "tests/3d/fixtures/legacy_pde_checksums.txt"));
     if (argc == 1) assert(fixture);
     for (const char* wrapper : wrappers) {
         auto config = StructuredPdeConfig3D::load(root / wrapper);

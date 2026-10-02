@@ -12,12 +12,32 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libyaml-cpp-dev libhdf5-dev
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
         run: brew install yaml-cpp libomp hdf5
+      - name: Build pinned legacy reference on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-legacy-base
+          git archive e9c37820e113e2703407871459870b16ff74936b | tar -x -C ci-legacy-base
+          cp tests/3d/legacy_pde_regression_test.cpp ci-legacy-base/legacy_reference.cpp
+          cat >> ci-legacy-base/CMakeLists.txt <<'CMAKE'
+          add_executable(atcg_legacy_native_reference legacy_reference.cpp)
+          target_link_libraries(atcg_legacy_native_reference PRIVATE atcg3d_structured_pde_core)
+          target_compile_options(atcg_legacy_native_reference PRIVATE -UNDEBUG)
+          target_compile_definitions(atcg_legacy_native_reference PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+          CMAKE
+          cmake -S ci-legacy-base -B build-legacy-ci -DCMAKE_BUILD_TYPE=Release -DATCG_BUILD_LEGACY_2D=OFF -DATCG3D_ENABLE_HDF5_CHECKPOINT=ON
+          cmake --build build-legacy-ci --target atcg_legacy_native_reference --parallel 4
+          build-legacy-ci/atcg_legacy_native_reference --dump > build-legacy-ci/native_checksums.txt
+          echo "ATCG_LEGACY_PDE_FIXTURE=build-legacy-ci/native_checksums.txt" >> "$GITHUB_ENV"
       - name: Configure
         run: cmake -S . -B build-ci -DCMAKE_BUILD_TYPE=Release -DATCG_BUILD_LEGACY_2D=OFF -DATCG3D_ENABLE_HDF5_CHECKPOINT=ON
       - name: Build
@@ -38,3 +58,4 @@ jobs:
             build-ci/validation-active-r200/
             build-ci/validation-vascular-nonlinear/
             build-ci/Testing/Temporary/LastTest.log
+            build-legacy-ci/native_checksums.txt
