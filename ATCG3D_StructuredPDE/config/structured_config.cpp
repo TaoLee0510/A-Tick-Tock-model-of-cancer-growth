@@ -120,7 +120,8 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
     }
     mapping(root, "$", {"schema", "profile", "continuum_config",
                          "structured_migration", "output", "storage", "division_clock",
-                         "operators", "growth_rate_closure", "normal_transport", "small_daughter_placement"});
+                         "operators", "growth_rate_closure", "normal_transport", "small_daughter_placement",
+                         "sector_mean_model"});
     const YAML::Node schema = required(root, "schema", "$");
     mapping(schema, "$.schema", {"name", "version"});
     if (text(required(schema, "name", "$.schema"), "$.schema.name") !=
@@ -282,12 +283,16 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
         if (result.schema_version < 14) fail("$.small_daughter_placement", "requires schema v14");
         result.small_daughter_placement = text(root["small_daughter_placement"], "$.small_daughter_placement");
     }
+    if (root["sector_mean_model"]) {
+        if (result.schema_version < 16) fail("$.sector_mean_model", "requires schema v16");
+        result.sector_mean_model = text(root["sector_mean_model"], "$.sector_mean_model");
+    }
     result.validate();
     return result;
 }
 
 void StructuredPdeConfig3D::validate() const {
-    if ((schema_version < 1 || schema_version > 15) || profile.empty()) {
+    if ((schema_version < 1 || schema_version > 16) || profile.empty()) {
         throw std::invalid_argument("structured PDE schema/profile is invalid");
     }
     if (continuum.angiogenesis.model == "shared_vegf_lattice_v2" && schema_version < 15) {
@@ -296,8 +301,10 @@ void StructuredPdeConfig3D::validate() const {
     if (schema_version < 9 && storage_model != "dense_v1") {
         throw std::invalid_argument("sparse storage requires structured v9");
     }
-    if ((storage_model != "dense_v1" && storage_model != "sparse_zero_pages_v1") ||
-        maximum_active_voxels < 1 || maximum_active_voxels > 1000000) {
+    if ((storage_model != "dense_v1" && storage_model != "sparse_zero_pages_v1" &&
+         storage_model != "sparse_zero_pages_3d_v2") ||
+        maximum_active_voxels < 1 || maximum_active_voxels >
+            (storage_model == "sparse_zero_pages_3d_v2" ? 100000000ULL : 1000000ULL)) {
         throw std::invalid_argument("invalid structured storage model/budget");
     }
     if (storage_model == "sparse_zero_pages_v1" &&
@@ -305,6 +312,13 @@ void StructuredPdeConfig3D::validate() const {
         throw std::invalid_argument(
             "sparse zero pages v1 requires thin layer and static vasculature");
     }
+    if (storage_model == "sparse_zero_pages_3d_v2" && schema_version < 16)
+        throw std::invalid_argument("3D dynamic vascular sparse storage requires schema v16");
+    if ((sector_mean_model != "published_sector_sums_v1" &&
+         sector_mean_model != "prepared_prefix_fft_v2") ||
+        (sector_mean_model != "published_sector_sums_v1" &&
+         (schema_version < 16 || !close(continuum.grid.spacing_voxels, 1.0))))
+        throw std::invalid_argument("prepared sector means require unit spacing and schema v16");
     continuum.validate();
     const bool switched = !migration_operator_enabled || !activation_operator_enabled ||
         !division_operator_enabled || !exchange_operator_enabled;
@@ -486,7 +500,8 @@ void StructuredPdeConfig3D::validate() const {
          (base.direction_guidance_model != "low_density_high_resource_v1" &&
           base.direction_guidance_model != "low_density_high_resource_bounded_v2" &&
           base.direction_guidance_model != "nutrient_gradient_shared_resource_v3" &&
-        base.direction_guidance_model != "nutrient_gradient_shared_resource_v4") ||
+        base.direction_guidance_model != "nutrient_gradient_shared_resource_v4" &&
+        base.direction_guidance_model != "nutrient_gradient_prefix_3d_v5") ||
          migration.direction_nutrient_window_edge != 70 ||
          !(migration.chemotaxis_strength > 0.0) ||
          !(migration.zero_gradient_tolerance > 0.0) ||
@@ -572,6 +587,7 @@ std::uint64_t StructuredPdeConfig3D::dynamics_fingerprint() const {
         hash_text(state, normal_transport);
         if (small_daughter_placement != "local_growth_v1") hash_text(state, small_daughter_placement);
     }
+    if (schema_version >= 16) hash_text(state, sector_mean_model);
     return state;
 }
 
@@ -641,6 +657,8 @@ std::string StructuredPdeConfig3D::to_json() const {
                << ",\"division\":" << (division_operator_enabled ? "true" : "false")
                << ",\"exchange\":" << (exchange_operator_enabled ? "true" : "false") << '}';
     }
+    if (schema_version >= 16)
+        stream << ",\"sector_mean_model\":\"" << sector_mean_model << '"';
     stream << '}';
     return stream.str();
 }

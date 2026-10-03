@@ -409,6 +409,7 @@ void HybridModel3D::synchronize_environment(bool refresh_rates) {
     environment_->vessels_ = p.vessel_;
     environment_->tumour_mask_ = p.tumour_mask_;
     environment_->rebuild_prefix();
+    environment_->prepare_guidance(abm_->cells_, pde_->step_count_ + 1);
     environment_->last_refresh_ = abm_->clock_.time_hours;
     environment_->next_refresh_ = 1.0e100;
     environment_->refreshes_ = 1;

@@ -232,6 +232,7 @@ if(ATCG_BUILD_3D)
         add_library(atcg3d_continuum_core
             ATCG3D_Continuum/model/angiogenesis_field.cpp
             ATCG3D_Continuum/model/shared_angiogenesis.cpp
+            ATCG3D_Continuum/model/sector_mean_field.cpp
             ATCG3D_Continuum/config/continuum_config.cpp
             ATCG3D_Continuum/model/moving_tumor_front.cpp
             ATCG3D_Continuum/model/continuum_model.cpp
@@ -292,6 +293,8 @@ if(ATCG_BUILD_3D)
         target_link_libraries(atcg3d_structured_pde PRIVATE atcg3d_shared_rules_core)
         add_executable(atcg3d_shared_abm ATCG3D_SharedRules/app/main.cpp)
         target_link_libraries(atcg3d_shared_abm PRIVATE atcg3d_shared_rules_core)
+        add_executable(atcg3d_shared_3d_benchmark benchmarks/atcg3d_shared_3d.cpp)
+        target_link_libraries(atcg3d_shared_3d_benchmark PRIVATE atcg3d_shared_rules_core)
 
         add_library(atcg3d_hybrid_core
             ATCG3D_Hybrid/model/hybrid_model.cpp
@@ -430,7 +433,29 @@ endif()
 include(CTest)
 
 if(BUILD_TESTING)
+    if(ATCG_BUILD_3D_CONTINUUM)
+        add_executable(atcg3d_sector_mean_test tests/3d/sector_mean_test.cpp)
+        target_link_libraries(atcg3d_sector_mean_test PRIVATE atcg3d_continuum_core)
+        target_compile_options(atcg3d_sector_mean_test PRIVATE -UNDEBUG)
+        add_test(NAME atcg3d_sector_mean_test COMMAND atcg3d_sector_mean_test)
+        set_tests_properties(atcg3d_sector_mean_test PROPERTIES TIMEOUT 600)
+    endif()
+    if(ATCG_BUILD_3D_STRUCTURED_PDE)
+        add_executable(atcg3d_three_dimensional_shared_test tests/3d/three_dimensional_shared_test.cpp)
+        target_link_libraries(atcg3d_three_dimensional_shared_test PRIVATE atcg3d_shared_rules_core)
+        target_compile_options(atcg3d_three_dimensional_shared_test PRIVATE -UNDEBUG)
+        target_compile_definitions(atcg3d_three_dimensional_shared_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+        add_test(NAME atcg3d_three_dimensional_shared_test COMMAND atcg3d_three_dimensional_shared_test)
+        set_tests_properties(atcg3d_three_dimensional_shared_test PROPERTIES TIMEOUT 600)
+    endif()
     find_package(Python3 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND AND ATCG_BUILD_3D_STRUCTURED_PDE AND ATCG3D_ENABLE_LARGE_TESTS)
+        add_test(NAME atcg3d_shared_3d_benchmark
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/benchmark_shared_3d.py
+                --exe $<TARGET_FILE:atcg3d_shared_3d_benchmark>
+                --output ${CMAKE_CURRENT_BINARY_DIR}/benchmark-shared-3d.json --repeat 1)
+        set_tests_properties(atcg3d_shared_3d_benchmark PROPERTIES LABELS "benchmark;benchmark_3d" TIMEOUT 3600)
+    endif()
     add_executable(stateless_rng_test
         ATCG/stateless_rng.cpp
         tests/stateless_rng_test.cpp

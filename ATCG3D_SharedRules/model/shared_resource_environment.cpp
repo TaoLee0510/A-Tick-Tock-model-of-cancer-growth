@@ -35,7 +35,9 @@ template <class T> T read(std::istream& in) {
 Model3DConfig abm_config(const structured_pde::StructuredPdeConfig3D& config) {
     if (config.schema_version < 5) throw std::invalid_argument("shared ABM requires structured schema v5+");
     auto base = config.continuum.base;
-    if (base.direction_guidance_model != "nutrient_gradient_shared_resource_v4")
+    if (config.sector_mean_model == "prepared_prefix_fft_v2")
+        base.direction_guidance_model = "nutrient_gradient_prefix_3d_v5";
+    else if (base.direction_guidance_model != "nutrient_gradient_shared_resource_v4")
         base.direction_guidance_model = "nutrient_gradient_shared_resource_v3";
     base.static_vasculature = config.continuum.shared_vascular_geometry();
     const double mapping_scale = base.legacy_mapping.density_count_scale_2d_to_3d;
@@ -90,6 +92,13 @@ SharedResourceEnvironment3D::SharedResourceEnvironment3D(structured_pde::Structu
         }
     }
     const int edge = config_.migration.direction_nutrient_window_edge;
+    if (config_.sector_mean_model == "prepared_prefix_fft_v2") {
+        sector_mean_ = std::make_unique<continuum::SectorMeanField3D>(
+            grid.shape, geometry_.thin_layer, edge,
+            config_.continuum.base.direction_density_half_angle_degrees,
+            config_.continuum.base.threads);
+        return;
+    }
     const int lower = (edge - 1) / 2;
     const int upper = edge - lower - 1;
     const double cosine_limit = std::cos(config_.continuum.base.direction_density_half_angle_degrees * std::acos(-1.0) / 180.0);
@@ -247,6 +256,7 @@ EnvironmentInitializationResult3D SharedResourceEnvironment3D::initialize(double
     if (restored_) {
         if (now < last_refresh_ - 1.0e-10 || now > next_refresh_ + 1.0e-10) throw std::runtime_error("shared resource restore time mismatch");
         restored_ = false;
+        prepare_guidance(cells, refreshes_);
         return {false};
     }
     assemble(cells, vessels);
@@ -262,6 +272,7 @@ EnvironmentInitializationResult3D SharedResourceEnvironment3D::initialize(double
     next_refresh_ = now + config_.continuum.time_step_hours;
     refreshes_ = 1;
     rebuild_prefix();
+    prepare_guidance(cells, refreshes_);
     return {true};
 }
 
@@ -305,9 +316,43 @@ void SharedResourceEnvironment3D::refresh(double now, const CellStore3D& cells, 
     ++generation_;
     ++refreshes_;
     rebuild_prefix();
+    prepare_guidance(cells, refreshes_);
+}
+
+void SharedResourceEnvironment3D::prepare_guidance(
+    const CellStore3D& cells, std::uint64_t field_epoch) {
+    if (!sector_mean_) return;
+    const auto& base = config_.continuum.base;
+    const double maximum_rate = base.normal_r_migration_beta.scale *
+        std::max(1.0, base.activated_r_normal_multiplier);
+    const int margin = static_cast<int>(std::ceil(
+        maximum_rate * config_.continuum.time_step_hours)) +
+        base.division_shell_radius + 2;
+    std::vector<continuum::SectorQueryBox3D> boxes;
+    boxes.reserve(cells.alive_count());
+    for (const auto slot : cells.alive_slots()) {
+        if (cells.type(slot) != CellType::r) continue;
+        const auto site = cells.anchor(slot);
+        const std::array<int, 3> coordinate{site.x, site.y, site.z};
+        continuum::SectorQueryBox3D box;
+        for (int axis = 0; axis < 3; ++axis) {
+            const int center = static_cast<int>(std::floor(
+                coordinate[axis] - geometry_.origin[axis]));
+            box.lower[axis] = center - margin;
+            box.upper[axis] = center + margin + 1;
+        }
+        if (geometry_.thin_layer) {
+            box.lower[2] = 0;
+            box.upper[2] = 1;
+        }
+        boxes.push_back(box);
+    }
+    sector_mean_->prepare(nutrient_, config_.continuum.nutrient.vessel_value,
+        boxes, field_epoch);
 }
 
 void SharedResourceEnvironment3D::rebuild_prefix() {
+    if (sector_mean_) return;
     if (!geometry_.thin_layer) return;
     const int nx = geometry_.shape[0], ny = geometry_.shape[1];
     row_prefix_.assign(static_cast<std::size_t>(nx + 1) * ny, 0.0);
@@ -323,6 +368,14 @@ void SharedResourceEnvironment3D::rebuild_prefix() {
 double SharedResourceEnvironment3D::nutrient_direction_weight(Vec3i site, DirectionId direction) const {
     if (direction == 0 || direction > 26 || !contains_resource_site(site)) return 0.0;
     const auto here = location(site);
+    if (sector_mean_) {
+        if (sector_mean_->count(here, direction) == 0) return 0.0;
+        double gradient = sector_mean_->mean(here, direction) *
+            config_.continuum.nutrient.vessel_value - nutrient_[here];
+        if (std::abs(gradient) <= config_.migration.zero_gradient_tolerance)
+            gradient = 0.0;
+        return std::exp(std::clamp(config_.migration.chemotaxis_strength * gradient, -40.0, 40.0));
+    }
     const int nx = geometry_.shape[0], ny = geometry_.shape[1];
     const int x = static_cast<int>(here % nx), y = static_cast<int>((here / nx) % ny);
     double sum = 0.0;
@@ -361,6 +414,7 @@ std::size_t SharedResourceEnvironment3D::allocated_bytes() const noexcept {
         vessels_.capacity() + row_prefix_.capacity()) * sizeof(double) + tumour_mask_.capacity();
     for (const auto& offsets : sector_offsets_) result += offsets.capacity() * sizeof(Vec3i);
     if (angiogenesis_) result += angiogenesis_->allocated_bytes();
+    if (sector_mean_) result += sector_mean_->allocated_bytes();
     return result + refractory_.size() * sizeof(std::pair<CellUid, Refractory>);
 }
 std::uint64_t SharedResourceEnvironment3D::field_checksum() const noexcept {

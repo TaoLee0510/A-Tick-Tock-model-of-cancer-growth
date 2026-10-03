@@ -1,0 +1,497 @@
+{
+  "report_version": 1,
+  "tests": {
+    "release": {
+      "tests": 62,
+      "failures": 0,
+      "seconds": 5047.04,
+      "validation_tests": 12,
+      "validation_seconds": 4945.79
+    },
+    "hdf5": {
+      "tests": 65,
+      "failures": 0,
+      "seconds": 5046.45,
+      "validation_tests": 12,
+      "validation_seconds": 4944.6
+    }
+  },
+  "exact_arithmetic": {
+    "published": {
+      "records_per_build": 416,
+      "differences": [],
+      "baseline_sha256": "f6d771b02b3b06f0166658414ea78ae26449bc19a92203037559d26e4e3cf92d"
+    },
+    "schema14": {
+      "records_per_build": 96,
+      "differences": [],
+      "baseline_sha256": "fe473c012e4e9f66ebc85759360ca9f1003e005630ae8e0ec63e69f2ae8e43df"
+    },
+    "schema15_vascular": {
+      "records_per_build": 48,
+      "differences": []
+    },
+    "invasion_v4": {
+      "records_per_build": 176,
+      "differences": []
+    }
+  },
+  "source_sha256": {
+    "ATCG3D/config/model_config.cpp": "38c906c4cb82ee77b0eea081f598befd96f6496e381bdb692493116ab8d10aa6",
+    "ATCG3D/rules/migration.cpp": "90fbcfc44fe57e19601d4547d9acc403096a02f95e92792ce42bb538f0ec553c",
+    "ATCG3D_Continuum/model/sector_mean_field.cpp": "e7d6411bb85f1d1db87d033f30a378e7de8fd2a1bfb673d1a7e7939988a46c9d",
+    "ATCG3D_Continuum/model/sector_mean_field.hpp": "a73082b3ce0ae385742251b054e78d31c69baeacc883825ce0d9ebe95c568f5f",
+    "ATCG3D_Hybrid/model/hybrid_model.cpp": "f5c1238503787be40876e5765a925990174250399b61b780140255a8eee1464d",
+    "ATCG3D_SharedRules/config/continuum_3d_r20_prefix_v8.yaml": "afcf3ee99fafd4d842fbd60f30940a1dce4ac7824e81475622a695ab4bb35552",
+    "ATCG3D_SharedRules/config/three_dimensional_r20_v16.yaml": "cab7067d526b5bc009c95554cb7761b0bb40d2efe5d7f825ad237667b45e2539",
+    "ATCG3D_SharedRules/model/shared_resource_environment.cpp": "f91f5e579eeff8b3c9d69ef65fc22470afbcd227f6e99c98120598d1056e8fc5",
+    "ATCG3D_SharedRules/model/shared_resource_environment.hpp": "f70673d9d1b94a22bf4d249f90b318a4f2299a5159d863a382d14aa9e54ee816",
+    "ATCG3D_StructuredPDE/config/structured_config.cpp": "8bacc184ef35bfe50e976720515ec417837a837db18b05da1282554351b29b2a",
+    "ATCG3D_StructuredPDE/config/structured_config.hpp": "4b3763e0fd147b3ebb593ab537de71e510933f4a77703e243492ec71bd60e49b",
+    "ATCG3D_StructuredPDE/model/division_renewal.cpp": "8fadd3fa4c5d17244a9bc0689a145c66a63dc61c5e432dcb0509d4d25c1c618d",
+    "ATCG3D_StructuredPDE/model/division_renewal.hpp": "dfb99bf1486e72b4ac2760379413aabe3bdc06822f0b159eb9a4725be522e48f",
+    "ATCG3D_StructuredPDE/model/structured_pde_model.cpp": "334e6f9934c63e8fa1a24ef161d8fa271094467a31f2998c46c13dbe0a7d934d",
+    "ATCG3D_StructuredPDE/model/structured_pde_model.hpp": "8a6e339456529d262727b8240177750f774984adcafb514c30e899fbc41ecf80",
+    "CMakeLists.txt": "1fa3767cea4a66da068a8af5005d879c11b1a4c94048e2cae7147711498f5779",
+    "apps/config_migrate.cpp": "5943ac5bf36f31e3786ef3aee3d1e2ca277c93a4e65f251493aa89de16224c56",
+    "benchmarks/atcg3d_shared_3d.cpp": "863689135c76cb20eb3f39e6c1b44fe5de9e57576acee46b34208a1d88d43946",
+    "configs/shared_3d_r20_prefix_v5.yaml": "15ee8f2aaff70345ff4d0160c40d4cf4a0c727cefd9d556772b2daa14389d3ce",
+    "docs/three_dimensional_sector_contract.md": "713e9d380c546fb8cd4818b43b0e1de224056bff658b9dd7d09fd49b8a5b03f8",
+    "scripts/benchmark_shared_3d.py": "05a870b0ef2228c42feaf62458654497c44c7db802d0af264a70f90fc496b320",
+    "tests/3d/product_cli_test.cpp": "6b371b9e0969f26827d0b0bfa71efd8a994f2e21bd4b1529090d69d3e5446176",
+    "tests/3d/sector_mean_test.cpp": "364053c4db1f3ba0acff586e5ccdd95589db0797d3c9cad5ede8efc2f50e037f",
+    "tests/3d/three_dimensional_shared_test.cpp": "f16fa158a13c72d5d7e9bebddbedbfe071157d5e2d260a593640291447764f1b"
+  },
+  "precision": [
+    {
+      "thin": true,
+      "edge": 8,
+      "extent": 16,
+      "maximum_mean_error": 1.2989609388114332e-14,
+      "allocated_bytes": 206080
+    },
+    {
+      "thin": false,
+      "edge": 8,
+      "extent": 16,
+      "maximum_mean_error": 1.6181500583911657e-13,
+      "allocated_bytes": 16495360
+    },
+    {
+      "thin": false,
+      "edge": 70,
+      "extent": 17,
+      "maximum_mean_error": 6.625255899450622e-13,
+      "allocated_bytes": 123398072
+    },
+    {
+      "thin": false,
+      "edge": 70,
+      "extent": 128,
+      "maximum_mean_error": 1.2086454059812013e-10,
+      "allocated_bytes": 1095239680
+    }
+  ],
+  "benchmark": {
+    "protocol": "three_dimensional_sector_contract.md",
+    "config": "three_dimensional_r20_v16.yaml",
+    "passed": true,
+    "repetitions": 3,
+    "groups": {
+      "abm_1": {
+        "model": "abm",
+        "threads": 1,
+        "median_wall_seconds": 82.891666458,
+        "maximum_peak_resident_bytes": 4435918848,
+        "speedup": 1.0
+      },
+      "abm_4": {
+        "model": "abm",
+        "threads": 4,
+        "median_wall_seconds": 24.356374708,
+        "maximum_peak_resident_bytes": 4738252800,
+        "speedup": 3.4032842511153243
+      },
+      "abm_8": {
+        "model": "abm",
+        "threads": 8,
+        "median_wall_seconds": 13.043498458,
+        "maximum_peak_resident_bytes": 5141200896,
+        "speedup": 6.355017921373683
+      },
+      "pde_1": {
+        "model": "pde",
+        "threads": 1,
+        "median_wall_seconds": 1065.031624458,
+        "maximum_peak_resident_bytes": 13064814592,
+        "speedup": 1.0
+      },
+      "pde_4": {
+        "model": "pde",
+        "threads": 4,
+        "median_wall_seconds": 677.232565375,
+        "maximum_peak_resident_bytes": 13369917440,
+        "speedup": 1.572623170990406
+      },
+      "pde_8": {
+        "model": "pde",
+        "threads": 8,
+        "median_wall_seconds": 602.862700916,
+        "maximum_peak_resident_bytes": 13775110144,
+        "speedup": 1.766623847917233
+      }
+    },
+    "records": [
+      {
+        "model": "abm",
+        "threads": 1,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 82.814966625,
+        "peak_resident_bytes": 4435902464,
+        "mass": 475,
+        "active_mass": 146,
+        "vascular_roots": 92,
+        "vascular_length": 223,
+        "state_checksum": 17185381434236664832,
+        "field_checksum": 9486803310450670894,
+        "repetition": 1
+      },
+      {
+        "model": "abm",
+        "threads": 4,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 24.411438959,
+        "peak_resident_bytes": 4738220032,
+        "mass": 475,
+        "active_mass": 146,
+        "vascular_roots": 92,
+        "vascular_length": 223,
+        "state_checksum": 17185381434236664832,
+        "field_checksum": 9486803310450670894,
+        "repetition": 1
+      },
+      {
+        "model": "abm",
+        "threads": 8,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 13.043498458,
+        "peak_resident_bytes": 5141200896,
+        "mass": 475,
+        "active_mass": 146,
+        "vascular_roots": 92,
+        "vascular_length": 223,
+        "state_checksum": 17185381434236664832,
+        "field_checksum": 9486803310450670894,
+        "repetition": 1
+      },
+      {
+        "model": "abm",
+        "threads": 1,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 82.891666458,
+        "peak_resident_bytes": 4435836928,
+        "mass": 475,
+        "active_mass": 146,
+        "vascular_roots": 92,
+        "vascular_length": 223,
+        "state_checksum": 17185381434236664832,
+        "field_checksum": 9486803310450670894,
+        "repetition": 2
+      },
+      {
+        "model": "abm",
+        "threads": 4,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 24.356374708,
+        "peak_resident_bytes": 4738220032,
+        "mass": 475,
+        "active_mass": 146,
+        "vascular_roots": 92,
+        "vascular_length": 223,
+        "state_checksum": 17185381434236664832,
+        "field_checksum": 9486803310450670894,
+        "repetition": 2
+      },
+      {
+        "model": "abm",
+        "threads": 8,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 12.947250709,
+        "peak_resident_bytes": 5141184512,
+        "mass": 475,
+        "active_mass": 146,
+        "vascular_roots": 92,
+        "vascular_length": 223,
+        "state_checksum": 17185381434236664832,
+        "field_checksum": 9486803310450670894,
+        "repetition": 2
+      },
+      {
+        "model": "abm",
+        "threads": 1,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 83.197777417,
+        "peak_resident_bytes": 4435918848,
+        "mass": 475,
+        "active_mass": 146,
+        "vascular_roots": 92,
+        "vascular_length": 223,
+        "state_checksum": 17185381434236664832,
+        "field_checksum": 9486803310450670894,
+        "repetition": 3
+      },
+      {
+        "model": "abm",
+        "threads": 4,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 23.920976875,
+        "peak_resident_bytes": 4738252800,
+        "mass": 475,
+        "active_mass": 146,
+        "vascular_roots": 92,
+        "vascular_length": 223,
+        "state_checksum": 17185381434236664832,
+        "field_checksum": 9486803310450670894,
+        "repetition": 3
+      },
+      {
+        "model": "abm",
+        "threads": 8,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 13.077173791,
+        "peak_resident_bytes": 5141200896,
+        "mass": 475,
+        "active_mass": 146,
+        "vascular_roots": 92,
+        "vascular_length": 223,
+        "state_checksum": 17185381434236664832,
+        "field_checksum": 9486803310450670894,
+        "repetition": 3
+      },
+      {
+        "model": "pde",
+        "threads": 1,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 1066.051783333,
+        "peak_resident_bytes": 13064650752,
+        "mass": 511.9999900785948,
+        "active_mass": 79.31926642242504,
+        "vascular_roots": 100,
+        "vascular_length": 278.578779372377,
+        "state_checksum": 6924990288887117941,
+        "field_checksum": 2700684879161137722,
+        "repetition": 1
+      },
+      {
+        "model": "pde",
+        "threads": 4,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 682.168429208,
+        "peak_resident_bytes": 13367066624,
+        "mass": 511.9999900785948,
+        "active_mass": 79.31926642242504,
+        "vascular_roots": 100,
+        "vascular_length": 278.578779372377,
+        "state_checksum": 6924990288887117941,
+        "field_checksum": 2700684879161137722,
+        "repetition": 1
+      },
+      {
+        "model": "pde",
+        "threads": 8,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 604.28722275,
+        "peak_resident_bytes": 13775110144,
+        "mass": 511.9999900785948,
+        "active_mass": 79.31926642242504,
+        "vascular_roots": 100,
+        "vascular_length": 278.578779372377,
+        "state_checksum": 6924990288887117941,
+        "field_checksum": 2700684879161137722,
+        "repetition": 1
+      },
+      {
+        "model": "pde",
+        "threads": 1,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 1065.031624458,
+        "peak_resident_bytes": 13064814592,
+        "mass": 511.9999900785948,
+        "active_mass": 79.31926642242504,
+        "vascular_roots": 100,
+        "vascular_length": 278.578779372377,
+        "state_checksum": 6924990288887117941,
+        "field_checksum": 2700684879161137722,
+        "repetition": 2
+      },
+      {
+        "model": "pde",
+        "threads": 4,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 672.514822667,
+        "peak_resident_bytes": 13369917440,
+        "mass": 511.9999900785948,
+        "active_mass": 79.31926642242504,
+        "vascular_roots": 100,
+        "vascular_length": 278.578779372377,
+        "state_checksum": 6924990288887117941,
+        "field_checksum": 2700684879161137722,
+        "repetition": 2
+      },
+      {
+        "model": "pde",
+        "threads": 8,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 601.868051208,
+        "peak_resident_bytes": 13767376896,
+        "mass": 511.9999900785948,
+        "active_mass": 79.31926642242504,
+        "vascular_roots": 100,
+        "vascular_length": 278.578779372377,
+        "state_checksum": 6924990288887117941,
+        "field_checksum": 2700684879161137722,
+        "repetition": 2
+      },
+      {
+        "model": "pde",
+        "threads": 1,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 1062.203604875,
+        "peak_resident_bytes": 13063979008,
+        "mass": 511.9999900785948,
+        "active_mass": 79.31926642242504,
+        "vascular_roots": 100,
+        "vascular_length": 278.578779372377,
+        "state_checksum": 6924990288887117941,
+        "field_checksum": 2700684879161137722,
+        "repetition": 3
+      },
+      {
+        "model": "pde",
+        "threads": 4,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 677.232565375,
+        "peak_resident_bytes": 13364789248,
+        "mass": 511.9999900785948,
+        "active_mass": 79.31926642242504,
+        "vascular_roots": 100,
+        "vascular_length": 278.578779372377,
+        "state_checksum": 6924990288887117941,
+        "field_checksum": 2700684879161137722,
+        "repetition": 3
+      },
+      {
+        "model": "pde",
+        "threads": 8,
+        "grid_shape": [
+          256,
+          256,
+          256
+        ],
+        "hours": 1,
+        "wall_seconds": 602.862700916,
+        "peak_resident_bytes": 13771063296,
+        "mass": 511.9999900785948,
+        "active_mass": 79.31926642242504,
+        "vascular_roots": 100,
+        "vascular_length": 278.578779372377,
+        "state_checksum": 6924990288887117941,
+        "field_checksum": 2700684879161137722,
+        "repetition": 3
+      }
+    ],
+    "system": "Darwin",
+    "release": "27.0.0",
+    "machine": "arm64",
+    "timing_scope": "construction, coupled initialization, all operators, diagnostics and teardown"
+  },
+  "unexecuted": [
+    "long-time 3D statistical equivalence",
+    "full-domain 3D memory bound"
+  ]
+}

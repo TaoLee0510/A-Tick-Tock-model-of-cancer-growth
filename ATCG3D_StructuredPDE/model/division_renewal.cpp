@@ -23,8 +23,9 @@ template<class T> T read(std::istream& in) {
 }
 
 DivisionRenewal3D::DivisionRenewal3D(DivisionTimingConfig timing, double width,
-                                   double maximum, std::array<double, 2> inherent)
-    : width_(width) {
+                                   double maximum, std::array<double, 2> inherent,
+                                   bool compact_channels)
+    : width_(width), compact_channels_(compact_channels) {
     if (!(width > 0.0) || !(maximum > width) || !std::isfinite(width) ||
         !std::isfinite(maximum) || maximum / width > 4096 ||
         !(timing.base_cycle_hours > 0.0) || !(timing.stochastic_time_quantum_hours > 0.0)) {

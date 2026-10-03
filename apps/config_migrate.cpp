@@ -38,7 +38,9 @@ struct Migrator {
                 throw std::invalid_argument(
                     "structured v1-v4 migration requires explicit "
                     "shared-resource parameter calibration");
-            latest = 15;
+            latest = 16;
+            if (!y["sector_mean_model"])
+                y["sector_mean_model"] = "published_sector_sums_v1";
             y["structured_migration"]["activation_stop"] =
                 "cohort_clock_refractory_hysteresis_v3";
             if (!y["storage"]) {

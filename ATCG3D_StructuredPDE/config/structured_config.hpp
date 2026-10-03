@@ -45,6 +45,7 @@ struct StructuredPdeConfig3D {
     bool exchange_operator_enabled{true};
     std::string growth_rate_closure{"clipped_location_mean_v1"};
     std::string normal_transport{"axial_diffusion_v1"};
+    std::string sector_mean_model{"published_sector_sums_v1"};
     std::string small_daughter_placement{"local_growth_v1"};
     std::filesystem::path source_path;
     std::filesystem::path continuum_config_path;

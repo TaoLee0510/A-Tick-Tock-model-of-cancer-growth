@@ -304,7 +304,8 @@ DirectionId select_migration_direction(Slot slot,
         "low_density_high_resource_v1" || config.direction_guidance_model ==
         "low_density_high_resource_bounded_v2" || config.direction_guidance_model ==
         "nutrient_gradient_shared_resource_v3" || config.direction_guidance_model ==
-        "nutrient_gradient_shared_resource_v4") {
+        "nutrient_gradient_shared_resource_v4" || config.direction_guidance_model ==
+        "nutrient_gradient_prefix_3d_v5") {
         const auto guidance = guided_direction_weights(
             feasible, cells.anchor(slot), density, config, environment,
             config.direction_guidance_model == "low_density_high_resource_v1" ||

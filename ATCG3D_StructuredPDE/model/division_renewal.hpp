@@ -18,7 +18,7 @@ namespace atcg3d::structured_pde {
 class DivisionRenewal3D {
 public:
     DivisionRenewal3D(DivisionTimingConfig timing, double width, double maximum,
-                      std::array<double, 2> inherent);
+                      std::array<double, 2> inherent, bool compact_channels = false);
     DivisionRenewal3D(double width, double maximum,
                       std::array<std::vector<double>, 2> kernel);
     void add(std::size_t location, std::size_t channel, double mass, double work);

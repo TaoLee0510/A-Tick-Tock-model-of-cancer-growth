@@ -9,6 +9,7 @@
 
 #include "engine/environment.hpp"
 #include "model/moving_tumor_front.hpp"
+#include "model/sector_mean_field.hpp"
 #include "config/structured_config.hpp"
 
 namespace atcg3d::hybrid { class HybridModel3D; }
@@ -32,6 +33,10 @@ public:
     bool contains_resource_site(Vec3i site) const noexcept override;
     bool pure_nutrient_guidance() const noexcept override { return true; }
     double nutrient_direction_weight(Vec3i site, DirectionId direction) const override;
+    void prepare_guidance(const CellStore3D& cells, std::uint64_t field_epoch = 0);
+    std::size_t prepared_sector_tiles() const noexcept {
+        return sector_mean_ ? sector_mean_->prepared_tiles() : 0;
+    }
     std::array<double,2> external_growth_counts(Vec3i site) const override { return external_counts_ ? external_counts_(site) : std::array<double,2>{}; }
     double external_activation_density(Vec3i site, CellStage stage) const override { return external_activation_ ? external_activation_(site,stage) : 0.0; }
     bool destination_available(Vec3i site) const noexcept override;
@@ -68,6 +73,7 @@ private:
     struct Refractory { double until{}; bool armed{true}; };
     struct RowSpan { int dy{}, dx0{}, dx1{}; };
     std::unique_ptr<continuum::AngiogenesisField3D> angiogenesis_;
+    std::unique_ptr<continuum::SectorMeanField3D> sector_mean_;
     std::size_t index(int x, int y, int z) const noexcept;
     std::size_t location(Vec3i site) const noexcept;
     void assemble(const CellStore3D& cells, const SparseVesselGrid3D& vessels);

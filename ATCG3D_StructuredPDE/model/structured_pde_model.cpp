@@ -276,7 +276,14 @@ StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
             }
         }
     }
-    const bool sparse = config_.storage_model == "sparse_zero_pages_v1";
+    if (config_.sector_mean_model == "prepared_prefix_fft_v2") {
+        sector_mean_ = std::make_unique<continuum::SectorMeanField3D>(
+            continuum.grid.shape, continuum.base.thin_layer,
+            config_.migration.direction_nutrient_window_edge,
+            continuum.base.direction_density_half_angle_degrees,
+            continuum.base.threads);
+    }
+    const bool sparse = config_.storage_model != "dense_v1";
     for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
         for (auto* field : {&r_normal_[stage], &K_[stage],
                             &r_normal_work_[stage], &K_work_[stage],
@@ -342,7 +349,8 @@ StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
     if (config_.division_clock_model == "transported_shifted_geometric_v1") {
         renewal_ = std::make_unique<DivisionRenewal3D>(continuum.base.division_timing,
             config_.division_work_bin_width, config_.division_maximum_work,
-            std::array<double, 2>{mean_growth_rate(CellType::r), mean_growth_rate(CellType::K)});
+            std::array<double, 2>{mean_growth_rate(CellType::r), mean_growth_rate(CellType::K)},
+            config_.storage_model == "sparse_zero_pages_3d_v2");
     }
     if (config_.migration.activation_clock == "beta_duration_distribution_v2") {
         const auto& base = continuum.base;
@@ -1937,6 +1945,32 @@ std::vector<std::size_t> StructuredPdeModel3D::eligible_initial_directions(
 void StructuredPdeModel3D::build_guidance_prefix(double dt) {
     guidance_prefix_bounds_ = {};
     guidance_prefix_pitch_ = 0;
+    if (sector_mean_) {
+        std::vector<continuum::SectorQueryBox3D> boxes;
+        const auto& continuum = config_.continuum;
+        for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
+            const auto& bounds = active_bounds_[stage];
+            if (!bounds.valid) continue;
+            const double rate = velocity_
+                ? continuum.base.normal_r_migration_beta.scale *
+                    continuum.migration.activated_r_mobility_multiplier *
+                    (stage == 1 ? continuum.migration.large_mobility_multiplier : 1.0)
+                : active_rate(static_cast<StructuredStage3D>(stage));
+            const int margin = static_cast<int>(std::ceil(rate * dt /
+                -std::log1p(-config_.migration.maximum_move_probability_per_substep))) + 1;
+            continuum::SectorQueryBox3D box{
+                {bounds.x0 - margin, bounds.y0 - margin, bounds.z0 - margin},
+                {bounds.x1 + margin, bounds.y1 + margin, bounds.z1 + margin}};
+            if (continuum.base.thin_layer) {
+                box.lower[2] = 0;
+                box.upper[2] = 1;
+            }
+            boxes.push_back(box);
+        }
+        sector_mean_->prepare(nutrient_, continuum.nutrient.vessel_value,
+            boxes, step_count_ + 1);
+        return;
+    }
     if (config_.schema_version < 3 ||
         !config_.continuum.base.thin_layer) return;
 
@@ -2045,6 +2079,18 @@ std::vector<double> StructuredPdeModel3D::guided_direction_weights(
         }
         const double forward_length =
             std::sqrt(static_cast<double>(squared_length(forward)));
+        if (sector_mean_) {
+            if (sector_mean_->count(location, direction_ids_[direction_index]) == 0) continue;
+            double gradient = (sector_mean_->mean(location, direction_ids_[direction_index]) -
+                std::clamp(nutrient_[location] / continuum.nutrient.vessel_value, 0.0, 1.0)) *
+                continuum.nutrient.vessel_value;
+            if (std::abs(gradient) < config_.migration.zero_gradient_tolerance)
+                gradient = 0.0;
+            result[direction_index + 1] =
+                std::pow(forward_length, -base.distance_weight_exponent) *
+                std::exp(std::clamp(config_.migration.chemotaxis_strength * gradient, -40.0, 40.0));
+            continue;
+        }
         double count = 0.0;
         double resource = 0.0;
         std::size_t sites = 0;
@@ -3543,7 +3589,7 @@ double StructuredPdeModel3D::refractory_mean_hours(
 
 bool StructuredPdeModel3D::step() {
     if (!initialized_) throw std::logic_error("structured PDE is not initialized");
-    if (config_.storage_model == "sparse_zero_pages_v1" &&
+    if (config_.storage_model != "dense_v1" &&
         bounds_size(expanded_bounds(population_bounds_)) > config_.maximum_active_voxels) {
         throw std::runtime_error("sparse PDE active-region memory budget exceeded");
     }
@@ -3627,13 +3673,16 @@ StructuredPdeDiagnostics3D StructuredPdeModel3D::diagnostics() const {
     std::vector<long double> radial_mass(
         static_cast<std::size_t>(std::floor(maximum_radius / width)) + 1, 0.0L);
     for (std::size_t location = 0; location < voxel_count_; ++location) {
-        if (config_.storage_model == "sparse_zero_pages_v1") {
+        if (config_.storage_model != "dense_v1") {
             const int nx = config_.continuum.grid.shape[0];
+            const int ny = config_.continuum.grid.shape[1];
             const int x = static_cast<int>(location % nx);
-            const int y = static_cast<int>(location / nx);
+            const int y = static_cast<int>((location / nx) % ny);
+            const int z = static_cast<int>(location / (static_cast<std::size_t>(nx) * ny));
             const bool populated = population_bounds_.valid &&
                 x >= population_bounds_.x0 && x < population_bounds_.x1 &&
-                y >= population_bounds_.y0 && y < population_bounds_.y1;
+                y >= population_bounds_.y0 && y < population_bounds_.y1 &&
+                z >= population_bounds_.z0 && z < population_bounds_.z1;
             if (!populated && tumour_mask_[location] == 0U) {
                 // Preserve full-domain resource sums without faulting empty
                 // population mappings into resident memory during reporting.

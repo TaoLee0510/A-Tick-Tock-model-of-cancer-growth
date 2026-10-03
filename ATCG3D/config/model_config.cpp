@@ -222,7 +222,8 @@ void Model3DConfig::validate() const {
         direction_guidance_model != "low_density_high_resource_v1" &&
         direction_guidance_model != "low_density_high_resource_bounded_v2" &&
         direction_guidance_model != "nutrient_gradient_shared_resource_v3" &&
-        direction_guidance_model != "nutrient_gradient_shared_resource_v4") {
+        direction_guidance_model != "nutrient_gradient_shared_resource_v4" &&
+        direction_guidance_model != "nutrient_gradient_prefix_3d_v5") {
         throw std::invalid_argument("unsupported direction.guidance.model");
     }
     if ((direction_guidance_model == "low_density_high_resource_v1" ||

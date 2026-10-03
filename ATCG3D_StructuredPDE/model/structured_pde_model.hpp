@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "config/structured_config.hpp"
+#include "model/sector_mean_field.hpp"
 #include "model/paged_field.hpp"
 #include "model/division_renewal.hpp"
 #include "model/moving_tumor_front.hpp"
@@ -208,6 +209,7 @@ private:
 
     StructuredPdeConfig3D config_;
     std::unique_ptr<continuum::AngiogenesisField3D> angiogenesis_;
+    std::unique_ptr<continuum::SectorMeanField3D> sector_mean_;
     // Derived external-agent fields are populated by hybrid models. They
     // participate in local rates/resources, never in PDE transported mass.
     std::vector<double> external_r_,external_K_,external_occupied_;
