@@ -64,7 +64,8 @@ class SeriesCatalog:
             relative = str(entry["name"])
             if relative.endswith(".tmp") or ".tmp/" in relative:
                 raise ValueError(f"series references temporary output: {relative}")
-            frames.append(Frame(self.run_directory / relative, float(entry["time"])))
+            frames.append(Frame(self.run_directory / relative, float(entry["time"]),
+                                "pde_vtkhdf" if name == "fields.vtkhdf.series" else "vtkhdf"))
         frames.sort(key=lambda frame: frame.time_hours)
         return frames
 
@@ -98,12 +99,14 @@ class SeriesCatalog:
         vessel_path = self.run_directory / "vessels.vtkhdf.series"
         live_vessel_path = self.run_directory / "live-vessels.vtkhdf.series"
         checkpoint_path = self.run_directory / "checkpoints"
+        fields_path = self.run_directory / "fields.vtkhdf.series"
         signature = (self._file_signature(preview_path),
                      self._file_signature(live_path),
                      self._file_signature(full_path),
                      self._file_signature(vessel_path),
                      self._file_signature(live_vessel_path),
-                     self._file_signature(checkpoint_path))
+                     self._file_signature(checkpoint_path),
+                     self._file_signature(fields_path))
         if signature == self._signature:
             return False
         archived_preview = self._read("preview.vtkhdf.series")
@@ -116,6 +119,9 @@ class SeriesCatalog:
         ]
         self.preview.sort(key=lambda frame: frame.time_hours)
         self.full = self._read("full.vtkhdf.series")
+        if not self.preview:
+            self.preview = self._read("fields.vtkhdf.series")
+            self.full = self.preview.copy()
         archived_vessels = self._read("vessels.vtkhdf.series")
         live_vessels = self._read("live-vessels.vtkhdf.series")
         self.vessels = archived_vessels + [

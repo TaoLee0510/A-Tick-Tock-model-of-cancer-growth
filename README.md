@@ -1,5 +1,8 @@
 # ![image](Tick-Tock_1.gif) A Tick-Tock model of cancer growth
 
+The unified simulator entry is `atcg_sim --model abm|ode|pde|hybrid --config YAML`.
+Build, validation, configuration migration, VTK-HDF fields, sparse storage and
+model-version boundaries are indexed in [docs/simulator.md](docs/simulator.md).
 
 Cancer growth model with phenotypic trade-offs between proliferation and survival; colonization and competition.
 
@@ -29,13 +32,17 @@ every cell and vessel as a discrete actor while solving a sparse quasi-steady
 effective-nutrient reaction-diffusion field supplied by perfused vessel voxels
 and consumed by individual cell footprints. Its source, strict wrapper
 configuration, checkpoint-sidecar contract, and build instructions are in
-[`ATCG3D_Nutrient/`](ATCG3D_Nutrient/README.md).
+[`ATCG3D_Nutrient/`](docs/nutrient_model.md).
 
 A separate population-level reduction is available as `atcg3d_continuum`. It
 coarse-grains the ABM or one of its HDF5 checkpoints into four size/type density
 fields and couples them to the same effective-nutrient concept. Spatial fields,
 radial profiles, exact continuum restarts, equations, and build instructions
-are in [`ATCG3D_Continuum/`](ATCG3D_Continuum/README.md).
+are in [`ATCG3D_Continuum/`](docs/continuum_model.md).
+
+All shipped configurations use distinct relative output directories. Use
+`--output-root PATH` on any 3D model executable to place results on an external
+volume without editing the repository; see [`docs/output_paths.md`](docs/output_paths.md).
 
 ```sh
 cmake -S . -B build-3d -DCMAKE_BUILD_TYPE=Release \
@@ -48,21 +55,21 @@ build-3d/atcg3d --config configs/atcg3d_legacy_2d_mapped_v3.yaml --dry-run
 For a long run that must survive the terminal or Codex task ending, use a
 detached `screen` session. The foreground managed wrapper records the actual
 simulation PID, forwards session termination, and atomically writes its
-eventual exit code. On the older macOS `/usr/bin/screen`, configure its PTY log
+eventual exit code. On the older macOS `screen`, configure its PTY log
 in a small screenrc; `logfile flush 1` publishes output at one-second cadence:
 
 ```sh
-CONTROL=/path/to/control/atcg3d_run
-SCREENRC=/path/to/control/atcg3d.screenrc
+CONTROL=control/atcg3d_run
+SCREENRC=control/atcg3d.screenrc
 printf '%s\n' \
   'deflog on' \
-  'logfile /path/to/control/atcg3d_run.log' \
+  'logfile control/atcg3d_run.log' \
   'logfile flush 1' > "$SCREENRC"
 
-/usr/bin/screen -c "$SCREENRC" -dmS atcg3d_run \
-  /absolute/path/scripts/run_atcg3d_managed_foreground.sh \
-  /absolute/path/build-3d/atcg3d \
-  /absolute/path/config.yaml \
+screen -c "$SCREENRC" -dmS atcg3d_run \
+  scripts/run_atcg3d_managed_foreground.sh \
+  build-3d/atcg3d \
+  config.yaml \
   "$CONTROL"
 
 cat "${CONTROL}.pid"
@@ -131,14 +138,14 @@ packages through `PYTHONPATH`, then provide an ATCG3D output run directory:
 
 ```sh
 PYTHONPATH="$HOME/.pyenv/versions/atcg3d-paraview-3.12.7/lib/python3.12/site-packages" \
-/Applications/ParaView-6.1.1.app/Contents/bin/pvpython \
-visualization/viewer/app.py /path/to/run --port 8080
+pvpython \
+visualization/viewer/app.py run_directory --port 8080
 ```
 
 Open `http://localhost:8080` in a browser. The run directory must contain the
 generated `preview.vtkhdf.series`, `full.vtkhdf.series`, and
 `vessels.vtkhdf.series` catalogs. More viewer details are in
-[`visualization/viewer/README.md`](visualization/viewer/README.md).
+[`visualization/viewer/README.md`](docs/viewer.md).
 The viewer uses fixed green r cells, red K cells, and blue vessel tubes, with
 independent visibility switches. It offers whole, cut, adjustable X/Y/Z slab,
 and a frozen current-view-aligned plane; the camera remains freely rotatable.
@@ -151,9 +158,9 @@ native ParaView can open directly:
 
 ```sh
 PYTHONPATH="$HOME/.pyenv/versions/atcg3d-paraview-3.12.7/lib/python3.12/site-packages" \
-/Applications/ParaView-6.1.1.app/Contents/bin/pvpython \
+pvpython \
 visualization/viewer/checkpoint_materializer.py \
-/path/to/run /path/to/run/checkpoints/checkpoint_....h5 output.vtkhdf
+run_directory run_directory/checkpoints/checkpoint_....h5 output.vtkhdf
 ```
 
 Graphical abstract of a Tick-Tock model of cancer growth: 

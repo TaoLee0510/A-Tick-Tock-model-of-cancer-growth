@@ -7,6 +7,21 @@
 #include "space/chunk_grid.hpp"
 #include "space/density_index.hpp"
 
+namespace {
+
+class PositiveXResource final : public atcg3d::LocalDensityModifier3D {
+public:
+    double retained_density(atcg3d::Vec3i) const noexcept override {
+        return 1.0;
+    }
+
+    double normalized_resource(atcg3d::Vec3i site) const noexcept override {
+        return site.x > 0 ? 1.0 : 0.02;
+    }
+};
+
+}  // namespace
+
 int main() {
     using namespace atcg3d;
     Model3DConfig config;
@@ -67,6 +82,28 @@ int main() {
     assert(side_2 > 4500 && side_2 < 5500);
     assert(side_8 > 4500 && side_8 < 5500);
     assert(grid.remove(direction_vector(1), 99));
+
+    // With equal directional density, the v2 rule favors the resource-rich
+    // half-plane for an activated r cell.  Sampling many deterministic event
+    // keys tests the ABM probability law rather than one trajectory.
+    config.direction_guidance_model = "low_density_high_resource_v1";
+    config.direction_density_guidance_exponent = 1.0;
+    config.direction_resource_guidance_exponent = 1.0;
+    config.direction_minimum_guidance_weight = 1.0e-6;
+    cells.set_last_direction(slot, kStayDirection);
+    PositiveXResource resource;
+    std::uint64_t resource_positive_x = 0;
+    std::uint64_t resource_negative_x = 0;
+    for (std::uint64_t sequence = 0; sequence < 20000; ++sequence) {
+        const DirectionId direction = select_migration_direction(
+            slot, cells, grid, density, config, sequence, &resource);
+        const int dx = direction_vector(direction).x;
+        if (dx > 0) ++resource_positive_x;
+        if (dx < 0) ++resource_negative_x;
+    }
+    assert(resource_positive_x > 3 * resource_negative_x);
+    config.direction_guidance_model = "density_gate_uniform_v1";
+    cells.set_last_direction(slot, 1);
 
     // The same r cell in normal state ignores its persistence history and is
     // uniform over all feasible lattice directions.

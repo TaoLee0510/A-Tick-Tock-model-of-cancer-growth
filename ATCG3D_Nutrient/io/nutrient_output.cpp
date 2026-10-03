@@ -10,6 +10,19 @@
 #include "engine/simulation.hpp"
 
 namespace atcg3d::nutrient {
+namespace {
+
+constexpr const char* kMetricsHeader =
+    "time_hours,completed_events,refresh_count,blocks,active_voxels,"
+    "source_voxels,consuming_voxels,assembled_r_consumption_per_hour,"
+    "assembled_K_consumption_per_hour,minimum,maximum,mean,"
+    "last_max_update,field_checksum,base_checksum";
+constexpr const char* kLegacyMetricsHeader =
+    "time_hours,completed_events,refresh_count,blocks,active_voxels,"
+    "source_voxels,consuming_voxels,minimum,maximum,mean,"
+    "last_max_update,field_checksum,base_checksum";
+
+}  // namespace
 
 bool NutrientOutput3D::same_time(double lhs, double rhs) noexcept {
     return std::abs(lhs - rhs) <=
@@ -42,6 +55,18 @@ NutrientOutput3D::NutrientOutput3D(
     const std::filesystem::path metrics_path = directory_ / "metrics.csv";
     const bool append = resume_time_hours >= 0.0 &&
         std::filesystem::exists(metrics_path);
+    if (append) {
+        std::ifstream existing(metrics_path, std::ios::binary);
+        std::string header;
+        if (!std::getline(existing, header)) {
+            throw std::runtime_error("unable to read nutrient metrics header");
+        }
+        if (!header.empty() && header.back() == '\r') header.pop_back();
+        legacy_metrics_columns_ = header == kLegacyMetricsHeader;
+        if (!legacy_metrics_columns_ && header != kMetricsHeader) {
+            throw std::runtime_error("unrecognized nutrient metrics header");
+        }
+    }
     metrics_.open(metrics_path,
                   std::ios::binary |
                       (append ? std::ios::app : std::ios::trunc));
@@ -49,9 +74,7 @@ NutrientOutput3D::NutrientOutput3D(
         throw std::runtime_error("unable to open nutrient metrics output");
     }
     if (!append) {
-        metrics_ << "time_hours,completed_events,refresh_count,blocks,active_voxels,"
-                    "source_voxels,consuming_voxels,minimum,maximum,mean,"
-                    "last_max_update,field_checksum,base_checksum\n";
+        metrics_ << kMetricsHeader << '\n';
     }
     if (resume_time_hours >= 0.0) {
         next_metrics_ = advance(
@@ -92,8 +115,12 @@ void NutrientOutput3D::write_metrics(const Simulation3D& simulation) {
              << field.block_count << ','
              << field.active_voxel_count << ','
              << field.perfused_source_voxels << ','
-             << field.consuming_voxels << ','
-             << field.minimum << ',' << field.maximum << ',' << field.mean << ','
+             << field.consuming_voxels << ',';
+    if (!legacy_metrics_columns_) {
+        metrics_ << field.assembled_r_consumption_per_hour << ','
+                 << field.assembled_K_consumption_per_hour << ',';
+    }
+    metrics_ << field.minimum << ',' << field.maximum << ',' << field.mean << ','
              << field.last_max_update << ','
              << environment_.field_checksum() << ','
              << simulation.state_checksum() << '\n';

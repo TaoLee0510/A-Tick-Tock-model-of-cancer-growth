@@ -1,9 +1,12 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include "io/pde_vtkhdf_writer.hpp"
 #include <memory>
 #include <stdexcept>
 #include <string>
+
+#include "config/output_paths.hpp"
 
 #include "config/continuum_config.hpp"
 #include "engine/simulation.hpp"
@@ -17,7 +20,9 @@ namespace {
 
 void help(const char* executable) {
     std::cout
-        << "Usage: " << executable << " --config PATH [--dry-run]\n\n"
+        << "Usage: " << executable
+        << " --config PATH [--dry-run] [--output-root PATH] "
+           "[--vtkhdf-fields] [--field-vtkhdf FILE]\n\n"
         << "Runs the four-population ATCG3D continuum reduction coupled to "
            "an effective-nutrient PDE.\n";
 }
@@ -27,6 +32,10 @@ std::unique_ptr<atcg3d::Simulation3D> source_abm(
     atcg3d::Model3DConfig base = config.base;
     base.output_enabled = false;
     base.control_enabled = false;
+    if(base.angiogenesis.seed_process_model=="hypoxia_modulated_poisson_v2") {
+        if(config.initialization_mode != "base_model") throw std::invalid_argument("hypoxic ABM checkpoint import requires the shared-resource executable");
+        base.angiogenesis.enabled=false;
+    }
     auto simulation = std::make_unique<atcg3d::Simulation3D>(base);
     if (config.initialization_mode == "base_model") {
         simulation->initialize();
@@ -54,7 +63,9 @@ std::unique_ptr<atcg3d::Simulation3D> source_abm(
 int main(int argc, char** argv) {
     try {
         std::filesystem::path config_path;
+        std::filesystem::path output_root;
         bool dry_run = false;
+        bool vtkhdf_fields=false;std::filesystem::path field_path;
         for (int index = 1; index < argc; ++index) {
             const std::string argument = argv[index];
             if (argument == "--help" || argument == "-h") {
@@ -63,6 +74,13 @@ int main(int argc, char** argv) {
             }
             if (argument == "--config" && index + 1 < argc) {
                 config_path = argv[++index];
+            } else if (argument == "--output-root" && index + 1 < argc) {
+                output_root = argv[++index];
+                if (output_root.empty()) {
+                    throw std::invalid_argument("--output-root must not be empty");
+                }
+            } else if(argument=="--vtkhdf-fields") {vtkhdf_fields=true;
+            } else if(argument=="--field-vtkhdf"&&index+1<argc) {field_path=argv[++index];
             } else if (argument == "--dry-run") {
                 dry_run = true;
             } else {
@@ -76,6 +94,10 @@ int main(int argc, char** argv) {
 
         atcg3d::continuum::ContinuumModelConfig3D config =
             atcg3d::continuum::ContinuumModelConfig3D::load(config_path);
+        config.output.directory = atcg3d::resolve_output_directory(
+            config.output.directory, output_root);
+        if((vtkhdf_fields||!field_path.empty())&&!atcg3d::continuum::pde_vtkhdf_available())throw std::runtime_error("PDE VTK-HDF requires an HDF5-enabled build");
+        config.output.vtkhdf_fields=vtkhdf_fields;
         if (dry_run) {
             std::cout << config.to_json();
             return 0;
@@ -103,6 +125,7 @@ int main(int argc, char** argv) {
         output.checkpoint_now(model);
         output.finalize(model);
 
+        if(!field_path.empty())atcg3d::continuum::write_pde_vtkhdf(field_path,model);
         const auto value = model.diagnostics();
         std::cout << "ATCG3D Continuum completed\n"
                   << "time_hours=" << model.time_hours() << '\n'

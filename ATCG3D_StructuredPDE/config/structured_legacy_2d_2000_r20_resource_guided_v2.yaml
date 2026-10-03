@@ -1,0 +1,16 @@
+schema:
+  name: atcg3d.structured_pde_config
+  version: 2
+profile: structured_legacy_2d_2000_r20_resource_guided_v2
+continuum_config: continuum_legacy_2d_2000_r20_resource_guided_v2.yaml
+
+structured_migration:
+  model: abm_activation_clock_discrete_velocity_v1
+  activation_density: abm_anchor_box_v1
+  activation_clock: beta_mean_remaining_cycle_v1
+  direction_transport: guided_fixed_direction_jump_v2
+  maximum_move_probability_per_substep: 0.15
+  minimum_density: 1.0e-12
+
+output:
+  directory: atcg3d_structured_legacy_2d_2000_r20_resource_guided_v2_run

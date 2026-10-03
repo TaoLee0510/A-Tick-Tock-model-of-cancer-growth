@@ -258,7 +258,6 @@ int main() {
                single_cell_v5.activated_r_migration_beta.scale);
     assert(single_cell_v5.threads == 18);
     assert(single_cell_v5.output_directory ==
-           "/Volumes/Work_Active/simulation/ver7/"
            "run_single_r_stage0_2160h_seed1_density_vascular_v5");
 
     const Model3DConfig requested_single_cell =
@@ -292,7 +291,6 @@ int main() {
     assert(requested_single_cell.scheduler_backend ==
            "deterministic_exact_window_v3");
     assert(requested_single_cell.output_directory ==
-           "/Volumes/Work_Active/simulation/ver7/"
            "run_single_r_stage0_2160h_seed1");
 
     Model3DConfig changed_conversion = production;

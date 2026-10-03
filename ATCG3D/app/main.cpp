@@ -4,6 +4,8 @@
 #include <iostream>
 #include <string>
 
+#include "config/output_paths.hpp"
+
 #include "config/model_config.hpp"
 #include "app/run_controller.hpp"
 #include "engine/simulation.hpp"
@@ -16,7 +18,7 @@ namespace {
 
 void print_help(const char* executable) {
     std::cout << "Usage: " << executable
-              << " --config PATH [--dry-run]\n"
+              << " --config PATH [--dry-run] [--output-root PATH]\n"
               << "       " << executable
               << " --print-config-schema\n"
               << "\n"
@@ -78,6 +80,7 @@ void persist_run_config(
 int main(int argc, char** argv) {
     try {
         std::filesystem::path config_path;
+        std::filesystem::path output_root;
         bool dry_run = false;
         bool print_schema = false;
         for (int index = 1; index < argc; ++index) {
@@ -88,6 +91,11 @@ int main(int argc, char** argv) {
             }
             if (argument == "--config" && index + 1 < argc) {
                 config_path = argv[++index];
+            } else if (argument == "--output-root" && index + 1 < argc) {
+                output_root = argv[++index];
+                if (output_root.empty()) {
+                    throw std::invalid_argument("--output-root must not be empty");
+                }
             } else if (argument == "--dry-run") {
                 dry_run = true;
             } else if (argument == "--print-config-schema") {
@@ -98,7 +106,7 @@ int main(int argc, char** argv) {
         }
 
         if (print_schema) {
-            if (!config_path.empty() || dry_run) {
+            if (!config_path.empty() || dry_run || !output_root.empty()) {
                 throw std::invalid_argument(
                     "--print-config-schema cannot be combined with a run");
             }
@@ -110,6 +118,8 @@ int main(int argc, char** argv) {
         }
 
         atcg3d::Model3DConfig config = atcg3d::Model3DConfig::load(config_path);
+        config.output_directory = atcg3d::resolve_output_directory(
+            config.output_directory, output_root);
         if (dry_run) {
             std::cout << config.to_json();
             return 0;

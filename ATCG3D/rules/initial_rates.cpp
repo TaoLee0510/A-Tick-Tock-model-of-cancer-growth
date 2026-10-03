@@ -9,6 +9,30 @@
 #include "core/stateless_rng.hpp"
 
 namespace atcg3d {
+double expected_initial_growth_rate(const Model3DConfig& config, CellType type) {
+    if (config.initial_growth_rate_model == "fixed") {
+        return type == CellType::r ? config.initial_r_growth_rate : config.initial_K_growth_rate;
+    }
+    const auto& law = type == CellType::r
+        ? config.initial_r_growth_truncated_normal : config.initial_K_growth_truncated_normal;
+    const long double lower = (law.minimum - law.mean) / law.standard_deviation;
+    const long double upper = (law.maximum - law.mean) / law.standard_deviation;
+    const long double inverse_sqrt_two = 1.0L / std::sqrt(2.0L);
+    const auto cdf = [&](long double value) {
+        return 0.5L * std::erfc(-value * inverse_sqrt_two);
+    };
+    const long double probability = lower > 0.0L
+        ? cdf(-lower) - cdf(-upper) : cdf(upper) - cdf(lower);
+    if (!(probability > 0.0L)) {
+        throw std::invalid_argument("truncated-normal expectation has no representable probability mass");
+    }
+    const long double inverse_sqrt_two_pi = 1.0L / std::sqrt(2.0L * std::acos(-1.0L));
+    const long double shift = inverse_sqrt_two_pi *
+        (std::exp(-0.5L * lower * lower) - std::exp(-0.5L * upper * upper)) / probability;
+    return std::clamp(static_cast<double>(law.mean + law.standard_deviation * shift),
+                      law.minimum, law.maximum);
+}
+
 namespace {
 
 constexpr std::uint64_t kInitialGrowthDomain = 0x4154434733475257ULL;
@@ -205,6 +229,11 @@ double sample_initial_migration_rate(const Model3DConfig& config,
                                      std::uint64_t seed,
                                      CellUid uid) {
     if (type == CellType::r) {
+        if (config.activated_r_migration_rate_model == "normal_multiplier") {
+            // The exact active rate is set after the ordinary per-cell rate is
+            // drawn.  Zero is only a temporary initialization sentinel.
+            return 0.0;
+        }
         if (config.activated_r_migration_rate_model != "beta") {
             throw std::invalid_argument(
                 "unsupported activated r migration-rate model");

@@ -6,6 +6,7 @@
 //  Copyright © 2022 Tao Lee. All rights reserved.
 //
 
+#include "png_font_path.hpp"
 #include "save_data_free_living.hpp"
 
 #include <stdio.h>
@@ -26,7 +27,7 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
         char filedir5 [100] = {'\0'};
         snprintf(filedir5, sizeof(filedir5), "%.04d h",T);
         char filedir6 [100] = {'\0'};
-        snprintf(filedir6, sizeof(filedir6), "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+        snprintf(filedir6, sizeof(filedir6), "%s", legacy_png_font_path());
         FILE * fid4;
         fid4=fopen (filedir4,"wb");
         pngwriter image(Visual_range_x, Visual_range_y, 0, filedir4);
@@ -137,7 +138,7 @@ void save_data_free_living(int Visual_range_x, int Visual_range_y, int N0, int N
             char filedir8 [100] = {'\0'};
             snprintf(filedir8, sizeof(filedir8), "%.08d s",(int)TT);
             char filedir9 [100] = {'\0'};
-            snprintf(filedir9, sizeof(filedir9), "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+            snprintf(filedir9, sizeof(filedir9), "%s", legacy_png_font_path());
             FILE * fid5;
             fid5=fopen (filedir7,"wb");
             pngwriter image2(Visual_range_x, Visual_range_y, 0, filedir7);

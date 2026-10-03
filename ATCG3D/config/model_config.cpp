@@ -11,6 +11,38 @@
 namespace atcg3d {
 namespace {
 
+// Regularized incomplete beta via its continued fraction. This is evaluated
+// only during startup, including the configured lower-clamp contribution.
+double regularized_beta(double x, double a, double b) {
+    if (x <= 0.0) return 0.0;
+    if (x >= 1.0) return 1.0;
+    if (x > (a+1.0)/(a+b+2.0)) return 1.0-regularized_beta(1.0-x,b,a);
+    const double tiny=1.0e-300;
+    double c=1.0,d=1.0-(a+b)*x/(a+1.0);
+    if(std::abs(d)<tiny) d=tiny;
+    d=1.0/d; double fraction=d;
+    for(int m=1;m<=10000;++m) {
+        const double first=m*(b-m)*x/((a+2*m-1)*(a+2*m));
+        d=1.0+first*d; if(std::abs(d)<tiny) d=tiny;
+        c=1.0+first/c; if(std::abs(c)<tiny) c=tiny;
+        d=1.0/d; fraction*=d*c;
+        const double second=-(a+m)*(a+b+m)*x/((a+2*m)*(a+2*m+1));
+        d=1.0+second*d; if(std::abs(d)<tiny) d=tiny;
+        c=1.0+second/c; if(std::abs(c)<tiny) c=tiny;
+        d=1.0/d; const double change=d*c; fraction*=change;
+        if(std::abs(change-1.0)<1.0e-14) return std::clamp(
+            std::exp(std::lgamma(a+b)-std::lgamma(a)-std::lgamma(b)+a*std::log(x)+b*std::log1p(-x))*fraction/a,0.0,1.0);
+    }
+    throw std::invalid_argument("migration beta mean calculation did not converge");
+}
+double clamped_beta_mean(const BetaRateConfig& law) {
+    const double mean=law.scale*law.alpha/(law.alpha+law.beta);
+    if(!law.lower_clamp_enabled) return mean;
+    const double threshold=law.lower_clamp_threshold/law.scale;
+    return mean+law.lower_clamp_value*regularized_beta(threshold,law.alpha,law.beta)
+        -mean*regularized_beta(threshold,law.alpha+1,law.beta);
+}
+
 bool approximately_equal(double lhs, double rhs) {
     return std::abs(lhs - rhs) <=
         1e-12 * std::max({1.0, std::abs(lhs), std::abs(rhs)});
@@ -102,6 +134,7 @@ const char* json_bool(bool value) {
 }  // namespace
 
 void Model3DConfig::validate() const {
+    static_vasculature.validate();
     if (schema_name != "atcg3d.model_config" || schema_version != 3) {
         throw std::invalid_argument("unsupported model configuration schema");
     }
@@ -185,6 +218,32 @@ void Model3DConfig::validate() const {
     if (distance_weight_exponent < 0.0) {
         throw std::invalid_argument("distance weight exponent must be non-negative");
     }
+    if (direction_guidance_model != "density_gate_uniform_v1" &&
+        direction_guidance_model != "low_density_high_resource_v1" &&
+        direction_guidance_model != "low_density_high_resource_bounded_v2" &&
+        direction_guidance_model != "nutrient_gradient_shared_resource_v3" &&
+        direction_guidance_model != "nutrient_gradient_shared_resource_v4" &&
+        direction_guidance_model != "nutrient_gradient_prefix_3d_v5") {
+        throw std::invalid_argument("unsupported direction.guidance.model");
+    }
+    if ((direction_guidance_model == "low_density_high_resource_v1" ||
+         direction_guidance_model == "low_density_high_resource_bounded_v2") &&
+        !(direction_density_threshold > 0.0)) {
+        throw std::invalid_argument(
+            "resource-guided migration requires a positive density threshold");
+    }
+    require_finite(direction_density_guidance_exponent,
+                   "direction.guidance.density_exponent");
+    require_finite(direction_resource_guidance_exponent,
+                   "direction.guidance.resource_exponent");
+    require_finite(direction_minimum_guidance_weight,
+                   "direction.guidance.minimum_weight");
+    if (direction_density_guidance_exponent < 0.0 ||
+        direction_resource_guidance_exponent < 0.0 ||
+        !(direction_minimum_guidance_weight > 0.0) ||
+        direction_minimum_guidance_weight > 1.0) {
+        throw std::invalid_argument("direction guidance parameters are invalid");
+    }
     if (migration_activation_window_edge <= 0 || migration_activation_window_edge > 4096 ||
         migration_activation_block_edge <= 0 ||
         migration_activation_block_edge > migration_activation_window_edge) {
@@ -192,11 +251,19 @@ void Model3DConfig::validate() const {
     }
     require_probability(migration_activation_threshold, "migration.activation_threshold");
     validate_beta_rate(normal_r_migration_beta, "migration.normal_r_rate");
-    if (activated_r_migration_rate_model != "beta") {
+    if (activated_r_migration_rate_model == "beta") {
+        validate_beta_rate(activated_r_migration_beta,
+                           "migration.activated_r_rate");
+    } else if (activated_r_migration_rate_model == "normal_multiplier") {
+        require_finite(activated_r_normal_multiplier,
+                       "migration.activated_r_rate.multiplier");
+        if (activated_r_normal_multiplier < 1.0) {
+            throw std::invalid_argument(
+                "migration.activated_r_rate.multiplier must be at least one");
+        }
+    } else {
         throw std::invalid_argument("unsupported migration.activated_r_rate.model");
     }
-    validate_beta_rate(activated_r_migration_beta,
-                       "migration.activated_r_rate");
     require_finite(migration_activation_duration_alpha,
                    "migration.activation_duration.alpha");
     require_probability(migration_activation_duration_mean_fraction,
@@ -469,7 +536,8 @@ void Model3DConfig::validate() const {
         throw std::invalid_argument("angiogenesis trigger/biological volume configuration is invalid");
     }
     if ((angiogenesis.seed_process_model != "homogeneous_poisson" &&
-         angiogenesis.seed_process_model != "density_modulated_poisson_v1") ||
+         angiogenesis.seed_process_model != "density_modulated_poisson_v1" &&
+         angiogenesis.seed_process_model != "hypoxia_modulated_poisson_v2") ||
         angiogenesis.seed_process_scope != "per_eligible_lesion" ||
         angiogenesis.seed_rate_sites_per_30_days <= 0.0 ||
         !approximately_equal(angiogenesis.seed_rate_sites_per_hour,
@@ -515,17 +583,37 @@ void Model3DConfig::validate() const {
     // the two raw configuration numbers would mix moves/hour with
     // voxels/hour. Enforce the user's biological ordering against the
     // activated-r distribution's conservative path-speed supremum.
-    const double activated_r_rate_upper_bound = std::max(
-        activated_r_migration_beta.scale,
-        activated_r_migration_beta.lower_clamp_enabled
-            ? activated_r_migration_beta.lower_clamp_value : 0.0);
+    const double activated_r_rate_upper_bound =
+        activated_r_migration_rate_model == "normal_multiplier"
+        ? normal_r_migration_beta.scale * activated_r_normal_multiplier
+        : std::max(
+              activated_r_migration_beta.scale,
+              activated_r_migration_beta.lower_clamp_enabled
+                  ? activated_r_migration_beta.lower_clamp_value : 0.0);
     const double activated_r_path_speed_upper_bound =
         std::sqrt(3.0) * activated_r_rate_upper_bound;
+    if (angiogenesis.outward_speed_policy != "strict_supremum_v1" &&
+        angiogenesis.outward_speed_policy != "mean_path_speed_v1" &&
+        angiogenesis.outward_speed_policy != "disabled") throw std::invalid_argument("unknown outward vessel speed policy");
+    require_probability(angiogenesis.seed_hypoxia_threshold,"angiogenesis.seed_hypoxia_threshold");
+    const double nominal_rate = angiogenesis.outward_speed_policy != "mean_path_speed_v1" ? 0.0 :
+        (activated_r_migration_rate_model == "normal_multiplier"
+        ? clamped_beta_mean(normal_r_migration_beta)*activated_r_normal_multiplier
+        : clamped_beta_mean(activated_r_migration_beta));
+    double length_sum=0.0,weight_sum=0.0;
+    for(int z=thin_layer?0:-1;z<=(thin_layer?0:1);++z) for(int y=-1;y<=1;++y) for(int x=-1;x<=1;++x) {
+        if(x==0 && y==0 && z==0) continue;
+        const double length=std::sqrt(static_cast<double>(x*x+y*y+z*z));
+        const double weight=std::pow(length,-distance_weight_exponent);
+        length_sum+=length*weight; weight_sum+=weight;
+    }
+    const double compared_speed = angiogenesis.outward_speed_policy == "mean_path_speed_v1"
+        ? nominal_rate*length_sum/weight_sum : activated_r_path_speed_upper_bound;
     if (angiogenesis.enabled &&
         (!(angiogenesis.outward_speed_voxels_per_hour >
            angiogenesis.inward_speed_voxels_per_hour) ||
-         !(angiogenesis.outward_speed_voxels_per_hour >
-           activated_r_path_speed_upper_bound))) {
+         (angiogenesis.outward_speed_policy != "disabled" &&
+          !(angiogenesis.outward_speed_voxels_per_hour > compared_speed)))) {
         throw std::invalid_argument(
             "angiogenesis outward vessel speed must exceed both inward "
             "vessel speed and the maximum activated-r 3D path speed");
@@ -582,7 +670,10 @@ void Model3DConfig::validate() const {
     const double finite_values[] = {
         continue_probability, turn_half_angle_degrees,
         direction_density_half_angle_degrees, direction_density_threshold,
-        distance_weight_exponent, r_limit, K_limit, carrying_capacity_r,
+        distance_weight_exponent, direction_density_guidance_exponent,
+        direction_resource_guidance_exponent,
+        direction_minimum_guidance_weight,
+        r_limit, K_limit, carrying_capacity_r,
         carrying_capacity_K, alpha, beta, initial_r_growth_rate,
         initial_K_growth_rate, initial_K_migration_rate,
         initial_r_growth_truncated_normal.mean,
@@ -623,6 +714,7 @@ void Model3DConfig::validate() const {
         activated_r_migration_beta.scale,
         activated_r_migration_beta.lower_clamp_threshold,
         activated_r_migration_beta.lower_clamp_value,
+        activated_r_normal_multiplier,
         migration_activation_duration_alpha,
         migration_activation_duration_mean_fraction,
         migration_activation_duration_beta,
@@ -674,8 +766,11 @@ void Model3DConfig::validate() const {
 std::string Model3DConfig::to_json() const {
     std::ostringstream out;
     out << std::setprecision(17);
-    out << '{'
-        << "\"schema_name\":\"" << json_escape(schema_name) << "\","
+    out << '{';
+    if (static_vasculature.enabled()) {
+        out << "\"static_vasculature\":" << static_vasculature.to_json() << ',';
+    }
+    out << "\"schema_name\":\"" << json_escape(schema_name) << "\","
         << "\"schema_version\":" << schema_version << ','
         << "\"profile\":\"" << json_escape(profile) << "\","
         << "\"calibration_source_profile\":\"" << json_escape(legacy_mapping.source_profile) << "\","
@@ -708,6 +803,14 @@ std::string Model3DConfig::to_json() const {
         << "\"direction_density_threshold\":" << direction_density_threshold << ','
         << "\"persistence_uses_density\":" << json_bool(persistence_uses_density) << ','
         << "\"distance_weight_exponent\":" << distance_weight_exponent << ','
+        << "\"direction_guidance_model\":\""
+        << json_escape(direction_guidance_model) << "\","
+        << "\"direction_density_guidance_exponent\":"
+        << direction_density_guidance_exponent << ','
+        << "\"direction_resource_guidance_exponent\":"
+        << direction_resource_guidance_exponent << ','
+        << "\"direction_minimum_guidance_weight\":"
+        << direction_minimum_guidance_weight << ','
         << "\"migration_activation_enabled\":" << json_bool(migration_activation_enabled) << ','
         << "\"migration_activation_window_edge\":" << migration_activation_window_edge << ','
         << "\"migration_activation_block_edge\":" << migration_activation_block_edge << ','
@@ -722,6 +825,7 @@ std::string Model3DConfig::to_json() const {
         << "\"activated_r_migration_beta_lower_clamp_enabled\":" << json_bool(activated_r_migration_beta.lower_clamp_enabled) << ','
         << "\"activated_r_migration_beta_lower_clamp_threshold\":" << activated_r_migration_beta.lower_clamp_threshold << ','
         << "\"activated_r_migration_beta_lower_clamp_value\":" << activated_r_migration_beta.lower_clamp_value << ','
+        << "\"activated_r_normal_multiplier\":" << activated_r_normal_multiplier << ','
         << "\"migration_activation_duration_alpha\":" << migration_activation_duration_alpha << ','
         << "\"migration_activation_duration_mean_fraction\":" << migration_activation_duration_mean_fraction << ','
         << "\"migration_activation_duration_beta\":" << migration_activation_duration_beta << ','
@@ -905,6 +1009,8 @@ std::string Model3DConfig::to_json() const {
         << "\"angiogenesis_surface_min_local_cells\":" << angiogenesis.surface_min_local_cells << ','
         << "\"angiogenesis_diameter_voxels\":" << angiogenesis.diameter_voxels << ','
         << "\"angiogenesis_inward_speed_voxels_per_hour\":" << angiogenesis.inward_speed_voxels_per_hour << ','
+        << "\"angiogenesis_outward_speed_policy\":\"" << json_escape(angiogenesis.outward_speed_policy) << "\","
+        << "\"angiogenesis_seed_hypoxia_threshold\":" << angiogenesis.seed_hypoxia_threshold << ','
         << "\"angiogenesis_outward_speed_voxels_per_hour\":" << angiogenesis.outward_speed_voxels_per_hour << ','
         << "\"angiogenesis_inward_max_length_voxels\":" << angiogenesis.inward_max_length_voxels << ','
         << "\"angiogenesis_inward_length_tortuosity_factor\":"
@@ -1036,6 +1142,30 @@ std::string Model3DConfig::dynamics_json() const {
     erase_member("control_enabled");
     erase_member("control_status_wall_interval_seconds");
     erase_member("control_poll_wall_interval_seconds");
+    // Default guidance and beta-rate settings preserve the identity written
+    // before these optional models were introduced.
+    const Model3DConfig defaults;
+    if (angiogenesis.outward_speed_policy == "strict_supremum_v1") erase_member("angiogenesis_outward_speed_policy");
+    if (angiogenesis.seed_process_model != "hypoxia_modulated_poisson_v2") erase_member("angiogenesis_seed_hypoxia_threshold");
+    if (direction_guidance_model == defaults.direction_guidance_model) {
+        erase_member("direction_guidance_model");
+    }
+    if (direction_density_guidance_exponent ==
+        defaults.direction_density_guidance_exponent) {
+        erase_member("direction_density_guidance_exponent");
+    }
+    if (direction_resource_guidance_exponent ==
+        defaults.direction_resource_guidance_exponent) {
+        erase_member("direction_resource_guidance_exponent");
+    }
+    if (direction_minimum_guidance_weight ==
+        defaults.direction_minimum_guidance_weight) {
+        erase_member("direction_minimum_guidance_weight");
+    }
+    if (activated_r_migration_rate_model == "beta" &&
+        activated_r_normal_multiplier == 1.0) {
+        erase_member("activated_r_normal_multiplier");
+    }
     return json;
 }
 

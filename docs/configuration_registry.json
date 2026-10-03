@@ -1,0 +1,587 @@
+{
+  "registry_version": 1,
+  "recommended": {
+    "abm": "docs/recommended/abm/model.yaml",
+    "pde": "docs/recommended/pde/model.yaml",
+    "hybrid": "docs/recommended/hybrid/model.yaml",
+    "ode": "docs/recommended/ode/model.yaml"
+  },
+  "configurations": [
+    {
+      "path": "configs/atcg2d_legacy_native_r200_aligned_v4.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/atcg2d_legacy_native_r20_aligned_v3.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/atcg2d_legacy_native_v3.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/atcg2d_static_bounded_r200_v4.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/atcg2d_static_bounded_r20_v4.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/atcg3d_legacy_2d_mapped_v3.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/atcg3d_smoke_test_v3.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/production_2d_2000_r200_v5.yaml",
+      "status": "benchmark"
+    },
+    {
+      "path": "configs/shared_3d_r20_prefix_v5.yaml",
+      "status": "benchmark"
+    },
+    {
+      "path": "configs/shared_activation_r200_v1.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/shared_activation_r20_v1.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/shared_angiogenesis_controlled_v2.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/shared_angiogenesis_r200_v1.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/shared_angiogenesis_r20_v1.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/shared_resource_regular_cycle_v1.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/shared_resource_validation_v1.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/single_r_stage0_2160h_density_vascular_v4.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/single_r_stage0_2160h_density_vascular_v5.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "configs/single_r_stage0_2160h_seed1.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "ATCG3D_Nutrient/config/nutrient_legacy_per_cell_r12_guided_v2.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_Nutrient/config/nutrient_legacy_v1.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_Nutrient/config/nutrient_smoke_per_cell_r12_guided_v2.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_Nutrient/config/nutrient_smoke_static_guided_v3.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_Nutrient/config/nutrient_smoke_v1.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_Continuum/config/continuum_legacy_2d_2000_v1.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_Continuum/config/continuum_legacy_v1.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_Continuum/config/continuum_smoke_v1.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/continuum_benchmark_2d_2000_24h_r20_v1.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/continuum_benchmark_2d_2000_24h_resource_guided_v2.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/continuum_benchmark_r200_reaction_fixed_v4.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/continuum_calibration_2d_512_r20_reaction_fixed_v4.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/continuum_legacy_2d_2000_r200_reaction_fixed_v4.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/continuum_legacy_2d_2000_r200_reaction_fixed_v4_resume_720.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/continuum_legacy_2d_2000_r20_aligned_v1.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/continuum_legacy_2d_2000_r20_exchange_v3.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/continuum_legacy_2d_2000_r20_resource_guided_v2.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/continuum_smoke_r200_reaction_fixed_v4.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/continuum_smoke_r20_exchange_v3.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/continuum_smoke_r20_resource_guided_v2.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/continuum_smoke_r20_v1.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/continuum_sparse_v6.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/structured_benchmark_2d_2000_24h_r20_v1.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/structured_benchmark_2d_2000_24h_resource_guided_v2.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/structured_benchmark_r200_reaction_fixed_v4.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/structured_calibration_2d_512_r20_reaction_fixed_v4.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/structured_legacy_2d_2000_r200_reaction_fixed_v4.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/structured_legacy_2d_2000_r200_reaction_fixed_v4_resume_720.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/structured_legacy_2d_2000_r20_exchange_v3.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/structured_legacy_2d_2000_r20_resource_guided_v2.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/structured_legacy_2d_2000_r20_v1.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/structured_smoke_r200_reaction_fixed_v4.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/structured_smoke_r20_exchange_v3.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/structured_smoke_r20_resource_guided_v2.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/structured_smoke_r20_v1.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE/config/structured_sparse_v9.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/continuum_2d_10000_2160h_v6.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/continuum_2d_2000_2160h_v6.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/continuum_2d_2000_720h_v5.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/continuum_2d_2000_resume_720_to_2160h_v5.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/continuum_calibration_2d_512_360h_v5.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/continuum_calibration_2d_512_360h_v6.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/continuum_control_edges_2d_256_24h_v5.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/continuum_control_vessels_2d_256_24h_v5.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/continuum_equivalence_2d_256_24h_v6_optimized.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/continuum_equivalence_2d_256_24h_v6_reference.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/continuum_smoke_2d_256_24h_v6.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/continuum_smoke_2d_256_v5.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/continuum_smoke_2d_256_v7.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_2d_10000_2160h_v6.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_2d_2000_2160h_v6.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_2d_2000_720h_v5.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_2d_2000_resume_720_to_2160h_v5.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_calibration_2d_512_360h_v5.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_calibration_2d_512_360h_v6.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_control_edges_2d_256_24h_v5.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_control_vessels_2d_256_24h_v5.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_equivalence_2d_256_24h_v6_optimized.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_equivalence_2d_256_24h_v6_reference.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_smoke_2d_256_24h_v6.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_smoke_2d_256_v5.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_StructuredPDE_NutrientChemotaxis/config/structured_smoke_2d_256_v7.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/activation_ablation_v14.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/active_r200_ci_v11.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/active_r200_ci_v12.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/active_r200_ci_v8.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/active_r200_v11.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/active_r200_v12.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/active_r200_v8.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/active_r20_v11.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/active_r20_v12.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/active_r20_v14.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/active_r20_v8.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/angiogenesis_controlled_v15.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/angiogenesis_nonlinear_v8.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/angiogenesis_r200_v8.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/angiogenesis_v8.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_3d_r20_prefix_v8.yaml",
+      "status": "benchmark"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_activation_ablation_v14.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_active_r200_ci_v8.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_active_r200_v8.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_active_r20_v8.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_angiogenesis_controlled_v15.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_angiogenesis_nonlinear_v8.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_angiogenesis_r200_v8.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_angiogenesis_v8.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_long_r200_2000_720_v14.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_long_r200_512_360_v14.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_long_r20_2000_720_v14.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_long_r20_512_360_v14.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_production_2d_2000_r200_v8.yaml",
+      "status": "benchmark"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_regular_cycle_v10.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/continuum_validation_v7.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/long_r200_2000_720_v14.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/long_r200_512_360_v14.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/long_r20_2000_720_v14.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/long_r20_512_360_v14.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/production_abm_2d_2000_r200_v17.yaml",
+      "status": "benchmark"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/production_pde_2d_2000_r200_v17.yaml",
+      "status": "benchmark"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/regular_cycle_spatial_birth_v14.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/regular_cycle_v10.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/regular_cycle_v13.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/regular_cycle_v14.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/three_dimensional_r20_v16.yaml",
+      "status": "benchmark"
+    },
+    {
+      "path": "ATCG3D_SharedRules/config/validation_v7.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_ODE/config/ode_smoke_v1.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_Hybrid/config/hybrid_invasion_r20_v4.yaml",
+      "status": "reproduction"
+    },
+    {
+      "path": "ATCG3D_Hybrid/config/hybrid_regular_cycle_v2.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "ATCG3D_Hybrid/config/hybrid_regular_cycle_v3.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "ATCG3D_Hybrid/config/hybrid_smoke_v1.yaml",
+      "status": "legacy"
+    },
+    {
+      "path": "ATCG3D_Hybrid/config/production_2d_2000_r200_v5.yaml",
+      "status": "benchmark"
+    },
+    {
+      "path": "docs/recommended/abm/model.yaml",
+      "status": "recommended"
+    },
+    {
+      "path": "docs/recommended/abm/model_continuum_config.yaml",
+      "status": "recommended_dependency"
+    },
+    {
+      "path": "docs/recommended/abm/model_continuum_config_base_config.yaml",
+      "status": "recommended_dependency"
+    },
+    {
+      "path": "docs/recommended/hybrid/model.yaml",
+      "status": "recommended"
+    },
+    {
+      "path": "docs/recommended/hybrid/model_structured_config.yaml",
+      "status": "recommended_dependency"
+    },
+    {
+      "path": "docs/recommended/hybrid/model_structured_config_continuum_config.yaml",
+      "status": "recommended_dependency"
+    },
+    {
+      "path": "docs/recommended/hybrid/model_structured_config_continuum_config_base_config.yaml",
+      "status": "recommended_dependency"
+    },
+    {
+      "path": "docs/recommended/ode/model.yaml",
+      "status": "recommended"
+    },
+    {
+      "path": "docs/recommended/ode/model_structured_config.yaml",
+      "status": "recommended_dependency"
+    },
+    {
+      "path": "docs/recommended/ode/model_structured_config_continuum_config.yaml",
+      "status": "recommended_dependency"
+    },
+    {
+      "path": "docs/recommended/ode/model_structured_config_continuum_config_base_config.yaml",
+      "status": "recommended_dependency"
+    },
+    {
+      "path": "docs/recommended/pde/model.yaml",
+      "status": "recommended"
+    },
+    {
+      "path": "docs/recommended/pde/model_continuum_config.yaml",
+      "status": "recommended_dependency"
+    },
+    {
+      "path": "docs/recommended/pde/model_continuum_config_base_config.yaml",
+      "status": "recommended_dependency"
+    }
+  ]
+}

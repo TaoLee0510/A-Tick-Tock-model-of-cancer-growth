@@ -1,0 +1,10 @@
+schema: {name: atcg3d.hybrid_config, version: 3}
+model: hybrid_volume_coupling_v3
+structured_config: ../../ATCG3D_SharedRules/config/regular_cycle_v13.yaml
+hybrid:
+  mode: adaptive
+  exchange_every_hours: 1.0
+  smoothing_radius_voxels: 3
+  core_on: 0.10
+  core_off: 0.06
+output: {directory: atcg3d_hybrid_regular_cycle_v3_run}

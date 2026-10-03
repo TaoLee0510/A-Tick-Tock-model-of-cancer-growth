@@ -1,0 +1,31 @@
+schema: {name: atcg3d.structured_pde_config, version: 17}
+profile: shared_activation_r20_v1
+continuum_config: model_continuum_config.yaml
+structured_migration:
+  model: abm_activation_clock_discrete_velocity_v1
+  activation_density: abm_anchor_box_v1
+  activation_clock: beta_duration_distribution_v2
+  activation_time_bin_width_hours: 0.5
+  activation_maximum_hours: 32.0
+  activation_rate_model: beta_rate_distribution_v2
+  activation_rate_bins: 8
+  activation_stop: cohort_clock_refractory_hysteresis_v3
+  direction_transport: nutrient_gradient_feasible_direction_jump_exchange_v5
+  direction_nutrient_window_edge: 70
+  chemotaxis_strength: 8.0
+  zero_gradient_tolerance: 1.0e-9
+  reactivation_cooldown_hours: 24.0
+  reactivation_density_threshold: 0.10
+  crowding_exchange: active_r_K_stage1_conservative_v1
+  vessel_exclusion: true
+  maximum_move_probability_per_substep: 0.15
+  minimum_density: 1.0e-12
+output:
+  directory: abm_model_run
+growth_rate_closure: truncated_normal_expectation_v2
+normal_transport: feasible_fixed_lattice_jump_v3
+division_clock: {model: transported_shifted_geometric_v1, work_bin_width: 0.5, maximum_work: 128.0}
+sector_mean_model: published_sector_sums_v1
+storage:
+  model: dense_v1
+  maximum_active_voxels: 1000000

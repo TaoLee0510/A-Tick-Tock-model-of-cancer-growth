@@ -238,8 +238,7 @@ void validate_restored_cell_schedule(const CellInit& cell,
             "restored thin-layer crowding exchange has a 3D direction");
     }
 
-    const bool growth_active =
-        cell.density_growth_rate > config.death_growth_rate_threshold;
+    const bool growth_active = cell.density_growth_rate > config.death_growth_rate_threshold;
     if ((cell.next_division_time > 0.0) != growth_active ||
         (cell.death_deadline > 0.0) == growth_active) {
         throw std::runtime_error(
@@ -623,12 +622,18 @@ Simulation3D::Simulation3D(
       lesion_index_(lesion_index_config(config_)) {
     config_.validate();
     grid_.attach_vessel_grid(&vessel_grid_);
+    if (config_.static_vasculature.enabled()) {
+        grid_.attach_static_vasculature(&config_.static_vasculature);
+    }
     density_.attach_quantized_count_index(&migration_activation_counts_);
     density_.configure_local_window_counts(
         config_.growth_density_window_edge, config_.thin_layer);
 }
 
 void Simulation3D::initialize() {
+    if (config_.angiogenesis.enabled && config_.angiogenesis.seed_process_model == "hypoxia_modulated_poisson_v2" && !environment_) {
+        throw std::invalid_argument("hypoxic angiogenesis requires a nutrient environment");
+    }
     if (initialized_) {
         throw std::logic_error("simulation is already initialized");
     }
@@ -893,6 +898,7 @@ void Simulation3D::restore(const std::vector<CellInit>& restored_cells,
     for (const VesselTipSlot slot : vessel_tips_.alive_slots()) restore_vessel_tip_event(slot);
     const bool initialize_missing_lesion_processes =
         config_.angiogenesis.enabled &&
+        (config_.angiogenesis.seed_process_model != "hypoxia_modulated_poisson_v2" || environment_) &&
         lesion_angiogenesis_processes_.empty() &&
         !lesion_index_.lesions().empty();
     if (initialize_missing_lesion_processes) {
@@ -936,6 +942,16 @@ void Simulation3D::initialize_environment() {
             (void)refresh_growth_state(
                 slot, clock_.time_hours, cells_, density_, config_,
                 environment_.get(), false);
+            if (environment_->individual_refractory()) {
+                const bool activated = apply_migration_activation_class(slot,
+                    migration_activation_class(migration_activation_query_block(cells_.anchor(slot))));
+                if (activated && config_.direction_guidance_model ==
+                                     "nutrient_gradient_shared_resource_v4") {
+                    const double rate = effective_migration_rate(slot, cells_, config_);
+                    cells_.set_next_migration_time(slot,
+                        rate > 0.0 ? clock_.time_hours + 1.0 / rate : 0.0);
+                }
+            }
         }
     }
     schedule_environment_refresh();
@@ -951,10 +967,41 @@ void Simulation3D::schedule_environment_refresh() {
 void Simulation3D::process_environment_refresh(const Event& event) {
     if (!environment_ || !current(event)) return;
     environment_->refresh(clock_.time_hours, cells_, vessel_grid_);
+    // Resource-guided migration proposals depend on the continuous field even
+    // when no discrete occupancy changed, so proposals computed before this
+    // refresh cannot be reused afterwards.
+    migration_proposal_cache_.clear();
+    proposal_cache_horizon_ = -1.0;
     std::vector<Slot> slots = cells_.alive_slots();
     std::sort(slots.begin(), slots.end(), [this](Slot lhs, Slot rhs) {
         return cells_.uid(lhs) < cells_.uid(rhs);
     });
+    if (environment_->enforces_resident_exclusion()) {
+        std::vector<Vec3i> changed_sites;
+        for (const Slot slot : slots) {
+            const auto occupied = occupied_sites_for_cell(cells_, slot);
+            const bool excluded = std::any_of(occupied.begin(), occupied.end(), [this](Vec3i site) {
+                return environment_->resident_site_excluded(site);
+            });
+            if (!excluded) continue;
+            const auto type = cells_.type(slot);
+            const auto stage = cells_.stage(slot);
+            const bool active = (cells_.flags(slot) & kMigrationActive) != 0;
+            if (remove_cell(slot, cells_, grid_, density_)) {
+                events_.cancel_cell(slot);
+                environment_->record_vascular_removal(type, stage, active);
+                ++stats_.vascular_displacements;
+                changed_sites.insert(changed_sites.end(), occupied.begin(), occupied.end());
+            }
+        }
+        if (!changed_sites.empty()) {
+            recover_neighborhood(changed_sites);
+            refresh_tumor_surface(changed_sites);
+            refresh_neighborhood(changed_sites);
+            mark_spatial_changes(changed_sites);
+            std::erase_if(slots, [this](Slot slot) { return !cells_.valid(slot); });
+        }
+    }
     std::vector<GrowthRefreshResult> refreshes(slots.size());
     const int workers = select_worker_count(
         cells_.alive_count(), slots.size(), config_, available_worker_threads(),
@@ -972,6 +1019,7 @@ void Simulation3D::process_environment_refresh(const Event& event) {
                                       cells_.anchor(slots[index]))));
         apply_growth_refresh(slots[index], refreshes[index]);
     }
+    if (config_.angiogenesis.seed_process_model == "hypoxia_modulated_poisson_v2") sync_angiogenesis_eligibility(true);
     schedule_environment_refresh();
 }
 
@@ -1014,6 +1062,9 @@ void Simulation3D::run(const std::function<void(const Simulation3D&)>& observer)
 }
 
 bool Simulation3D::step() {
+    if (config_.angiogenesis.enabled && config_.angiogenesis.seed_process_model == "hypoxia_modulated_poisson_v2" && !environment_) {
+        throw std::invalid_argument("hypoxic angiogenesis requires a nutrient environment");
+    }
     if (!initialized_) initialize();
     if (clock_.completed_events >= config_.max_events) return false;
     while (!events_.empty() && !current(events_.top())) events_.pop();
@@ -1183,8 +1234,11 @@ std::uint32_t Simulation3D::bump_event_generation(EventKind kind, Slot slot) {
 
 void Simulation3D::schedule(EventKind kind, std::uint32_t slot, std::uint64_t uid,
                             double time, std::uint32_t generation) {
+    const bool operator_enabled = !environment_ ||
+        ((kind != EventKind::migration || environment_->migration_operator_enabled()) &&
+         (kind != EventKind::division || environment_->division_operator_enabled()));
     const bool active =
-        time > 0.0 && time >= clock_.time_hours && std::isfinite(time);
+        operator_enabled && time > 0.0 && time >= clock_.time_hours && std::isfinite(time);
     events_.schedule({time, slot, uid, kind, generation}, active);
 }
 
@@ -1374,6 +1428,12 @@ void Simulation3D::prefetch_proposal_window() {
         if (event.kind == EventKind::angiogenesis_seed) {
             // Root placement is selected from an entire lesion surface.
             global_spatial_barrier = true;
+            continue;
+        }
+        if (event.kind == EventKind::environment_refresh) {
+            // All later resource-guided migration proposals must observe the
+            // newly solved nutrient field.
+            global_spatial_barrier = true;
         }
     }
     if (work.empty()) return;
@@ -1390,7 +1450,7 @@ void Simulation3D::prefetch_proposal_window() {
             : std::bit_cast<std::uint64_t>(item.event.time);
         item.proposal = make_move_proposal(
             item.event.slot, cells_, grid_, density_, config_, item.sequence,
-            time_bucket);
+            time_bucket, environment_.get());
     });
     for (WorkItem& item : work) {
         migration_proposal_cache_.emplace(
@@ -1490,6 +1550,7 @@ void Simulation3D::process_non_migration(const Event& event) {
     }
     if (expire_migration_activation_state(
             event.slot, clock_.time_hours, cells_, config_)) {
+        if (environment_) environment_->activation_expired(cells_.uid(event.slot), clock_.time_hours);
         const double rate = effective_migration_rate(
             event.slot, cells_, config_);
         cells_.set_next_migration_time(
@@ -1524,8 +1585,7 @@ void Simulation3D::process_deaths(const std::vector<Event>& events) {
         const Event& event = pending[index];
         const double rate = density_growth_rate_for_cell(
             cells_, event.slot, density_, config_, influence);
-        decisions[index] = {
-            event, rate <= config_.death_growth_rate_threshold};
+        decisions[index] = {event, rate <= config_.death_growth_rate_threshold};
     });
     for (const DeathDecision& decision : decisions) {
         const Event& event = decision.event;
@@ -1787,7 +1847,7 @@ void Simulation3D::process_migrations(const std::vector<Event>& events) {
         if (proposal_needs_compute[index] != 0) {
             proposals[index] = make_move_proposal(
                 item.event.slot, cells_, grid_, density_, config_,
-                item.sequence, time_bucket);
+                item.sequence, time_bucket, environment_.get());
         }
         if (config_.migration_swap_enabled &&
             proposals[index].direction == kStayDirection &&
@@ -1805,7 +1865,7 @@ void Simulation3D::process_migrations(const std::vector<Event>& events) {
             if (std::find(swap_directions.begin(), swap_directions.end(),
                           direction) == swap_directions.end()) {
                 direction = select_crowding_swap_direction(
-                    item.event.slot, cells_, grid_, config_, item.sequence);
+                    item.event.slot, cells_, grid_, config_, item.sequence, density_modifier());
             }
             if (direction != kStayDirection) {
                 proposals[index] = make_crowding_swap_proposal(
@@ -1865,7 +1925,7 @@ void Simulation3D::process_migrations(const std::vector<Event>& events) {
                     const DirectionId retry_direction =
                         select_crowding_swap_direction(
                             proposal.slot, cells_, grid_, config_,
-                            cells_.event_sequence(proposal.slot));
+                            cells_.event_sequence(proposal.slot), density_modifier());
                     if (rate > 0.0 &&
                         retry_direction != kStayDirection) {
                         cells_.set_swap_wait_state(proposal.slot, 1);
@@ -1936,7 +1996,7 @@ void Simulation3D::process_migrations(const std::vector<Event>& events) {
                 const DirectionId direction =
                     select_crowding_swap_direction(
                         proposal.slot, cells_, grid_, config_,
-                        cells_.event_sequence(proposal.slot));
+                        cells_.event_sequence(proposal.slot), density_modifier());
                 if (direction != kStayDirection) {
                     cells_.set_swap_wait_state(proposal.slot, 1);
                     cells_.set_pending_swap_direction(
@@ -2281,6 +2341,16 @@ void Simulation3D::update_lesion_source_ownership(
 
 double Simulation3D::lesion_density_stress(
     const LesionSummary3D& lesion) const {
+    if (config_.angiogenesis.seed_process_model == "hypoxia_modulated_poisson_v2") {
+        std::uint64_t count=0,hypoxic=0;
+        for (const Slot slot : cells_.alive_slots()) {
+            const Vec3i anchor=cells_.anchor(slot);
+            if (lesion_index_.lesion_for_anchor(anchor) != lesion.id) continue;
+            ++count;
+            if (environment_->normalized_resource(anchor) < config_.angiogenesis.seed_hypoxia_threshold) ++hypoxic;
+        }
+        return count>0 ? static_cast<double>(hypoxic)/count : 0.0;
+    }
     if (lesion.core_blocks.empty()) return 0.0;
     const int edge = config_.angiogenesis.lesion_block_edge;
     const std::uint64_t block_capacity = static_cast<std::uint64_t>(edge) * edge *
@@ -2486,6 +2556,7 @@ bool Simulation3D::process_seed_event(const Event& event) {
             0.0, splitmix64(config_.seed ^ event.uid),
             process.state().attempted_events,
             [this, lesion_id = event.uid](const ExposedFace3D& face) {
+                if(config_.thin_layer && config_.angiogenesis.seed_process_model == "hypoxia_modulated_poisson_v2" && face.outward_normal.z != 0) return false;
                 const auto owner = lesion_index_.lesion_for_face(
                     face, cells_, grid_);
                 return owner.has_value() && *owner == lesion_id;
@@ -3445,6 +3516,16 @@ void Simulation3D::rebuild_migration_activation_class_cache() {
 bool Simulation3D::apply_migration_activation_class(
     Slot slot, std::uint8_t classes) {
     if (!cells_.valid(slot)) return false;
+    if (environment_ && environment_->individual_refractory()) {
+        if (cells_.type(slot) != CellType::r ||
+            (cells_.flags(slot) & static_cast<std::uint8_t>(kMigrationActive)) != 0) return false;
+        const double density = migration_activation_density(density_, cells_.anchor(slot), cells_.stage(slot),
+            config_.migration_activation_window_edge, config_.migration_activation_block_edge, config_.thin_layer) +
+            environment_->external_activation_density(cells_.anchor(slot),cells_.stage(slot));
+        if (!environment_->activation_ready(cells_.uid(slot), clock_.time_hours, density) ||
+            density < config_.migration_activation_threshold) return false;
+        return activate_migration_state_if_density_high(slot, clock_.time_hours, cells_, config_);
+    }
     const std::uint8_t stage_class = cells_.stage(slot) == CellStage::large
         ? kLargeMigrationActivationClass
         : kSmallMigrationActivationClass;

@@ -106,7 +106,7 @@ const NutrientEnvironment3D::Block* NutrientEnvironment3D::find_block(
 }
 
 bool NutrientEnvironment3D::active_site(Vec3i site) const noexcept {
-    return !thin_layer_ || site.z == 0;
+    return (!thin_layer_ || site.z == 0) && config_.static_vasculature.contains(site);
 }
 
 float NutrientEnvironment3D::value(Vec3i site) const noexcept {
@@ -131,6 +131,11 @@ double NutrientEnvironment3D::capacity_multiplier(Vec3i site) const noexcept {
 
 double NutrientEnvironment3D::retained_density(Vec3i site) const noexcept {
     return 1.0 / capacity_multiplier(site);
+}
+
+double NutrientEnvironment3D::normalized_resource(Vec3i site) const noexcept {
+    return std::clamp(
+        static_cast<double>(value(site)) / config_.vessel_value, 0.0, 1.0);
 }
 
 void NutrientEnvironment3D::rebuild_sources_and_sinks(
@@ -171,9 +176,26 @@ void NutrientEnvironment3D::rebuild_sources_and_sinks(
     for (const Slot slot : cells.alive_slots()) {
         source_blocks.insert(address(cells.anchor(slot)).block);
     }
-    const std::vector<Vec3i> vessel_sites = vessels.occupied_sites();
+    std::vector<Vec3i> vessel_sites = vessels.occupied_sites();
+    if (config_.static_vasculature.enabled()) {
+        const auto& geometry = config_.static_vasculature;
+        for (int z = 0; z < geometry.shape[2]; ++z) {
+            for (int y = 0; y < geometry.shape[1]; ++y) {
+                for (int x = 0; x < geometry.shape[0]; ++x) {
+                    const Vec3i site{static_cast<int>(std::ceil(geometry.origin[0])) + x,
+                        static_cast<int>(std::ceil(geometry.origin[1])) + y,
+                        thin_layer_ ? 0 : static_cast<int>(std::ceil(geometry.origin[2])) + z};
+                    if (geometry.source(site)) vessel_sites.push_back(site);
+                }
+            }
+        }
+        std::sort(vessel_sites.begin(), vessel_sites.end());
+        vessel_sites.erase(std::unique(vessel_sites.begin(), vessel_sites.end()), vessel_sites.end());
+    }
     for (const Vec3i site : vessel_sites) {
-        if (vessels.perfused(site)) source_blocks.insert(address(site).block);
+        if (vessels.perfused(site) || config_.static_vasculature.source(site)) {
+            source_blocks.insert(address(site).block);
+        }
     }
     for (const Vec3i source_block : source_blocks) add_halo(source_block);
 
@@ -186,30 +208,40 @@ void NutrientEnvironment3D::rebuild_sources_and_sinks(
     }
     blocks_ = std::move(rebuilt);
 
-    const auto add_consumption = [&](Vec3i site, CellType type) {
+    const auto add_consumption = [&](Vec3i site, CellType type, double weight) {
         if (!active_site(site)) return;
         const Address location = address(site);
         Block* block = find_block(location.block);
         if (block == nullptr) return;
         if (type == CellType::r) {
             block->r_consumption[location.index] += static_cast<float>(
-                config_.r_consumption_per_voxel_hour);
+                weight * config_.r_consumption_rate_per_hour);
         } else {
             block->K_consumption[location.index] += static_cast<float>(
-                config_.K_consumption_per_voxel_hour);
+                weight * config_.K_consumption_rate_per_hour);
         }
     };
     for (const Slot slot : cells.alive_slots()) {
         if (cells.stage(slot) == CellStage::large) {
+            std::vector<Vec3i> sites;
             for (const Vec3i site : large_footprint(cells.anchor(slot))) {
-                add_consumption(site, cells.type(slot));
+                if (thin_layer_ && site.z != cells.anchor(slot).z) continue;
+                sites.push_back(site);
+            }
+            const double weight = config_.consumption_model ==
+                    "per_cell_ratio_v2"
+                ? 1.0 / static_cast<double>(sites.size())
+                : 1.0;
+            for (const Vec3i site : sites) {
+                add_consumption(site, cells.type(slot), weight);
             }
         } else {
-            add_consumption(cells.anchor(slot), cells.type(slot));
+            add_consumption(cells.anchor(slot), cells.type(slot), 1.0);
         }
     }
     for (const Vec3i site : vessel_sites) {
-        if (!vessels.perfused(site) || !active_site(site)) continue;
+        if ((!vessels.perfused(site) && !config_.static_vasculature.source(site)) ||
+            !active_site(site)) continue;
         const Address location = address(site);
         if (Block* block = find_block(location.block)) {
             block->perfused[location.index] = 1U;
@@ -235,6 +267,12 @@ void NutrientEnvironment3D::solve() {
                     continue;
                 }
                 const double old = block.value[index];
+                if (config_.static_vasculature.enabled() && block.perfused[index] != 0) {
+                    block.next[index] = static_cast<float>(config_.vessel_value);
+                    maximum_update = std::max(maximum_update,
+                        std::abs(config_.vessel_value - old));
+                    continue;
+                }
                 double neighbor_sum = 0.0;
                 const int neighbor_count = thin_layer_ ? 4 : 6;
                 for (int direction = 0; direction < neighbor_count; ++direction) {
@@ -272,6 +310,8 @@ void NutrientEnvironment3D::update_diagnostics() {
     diagnostics_.active_voxel_count = 0;
     diagnostics_.perfused_source_voxels = 0;
     diagnostics_.consuming_voxels = 0;
+    diagnostics_.assembled_r_consumption_per_hour = 0.0;
+    diagnostics_.assembled_K_consumption_per_hour = 0.0;
     diagnostics_.minimum = std::numeric_limits<double>::infinity();
     diagnostics_.maximum = 0.0;
     long double sum = 0.0L;
@@ -289,6 +329,10 @@ void NutrientEnvironment3D::update_diagnostics() {
                 block.K_consumption[index] > 0.0F) {
                 ++diagnostics_.consuming_voxels;
             }
+            diagnostics_.assembled_r_consumption_per_hour +=
+                block.r_consumption[index];
+            diagnostics_.assembled_K_consumption_per_hour +=
+                block.K_consumption[index];
         }
     }
     if (diagnostics_.active_voxel_count == 0) {

@@ -4,4 +4,5 @@ __pycache__/
 *.py[cod]
 /build/
 /build-*/
+**/xcuserdata/
 visualization/studio/desktop/src-tauri/target/

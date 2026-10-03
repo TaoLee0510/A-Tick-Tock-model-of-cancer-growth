@@ -4,6 +4,7 @@
 #include <fstream>
 #include <string>
 #include <thread>
+#include <unistd.h>
 
 #include "app/run_controller.hpp"
 
@@ -28,7 +29,7 @@ int main() {
     using namespace atcg3d;
     const std::filesystem::path directory =
         std::filesystem::temp_directory_path() /
-        "atcg3d_run_controller_test";
+        ("atcg3d_run_controller_test_" + std::to_string(getpid()));
     std::filesystem::remove_all(directory);
 
     Model3DConfig config;

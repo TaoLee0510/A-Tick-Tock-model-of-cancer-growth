@@ -1,0 +1,11 @@
+schema: {name: atcg3d.hybrid_config, version: 1}
+model: hybrid_shared_grid_v1
+structured_config: ../../ATCG3D_SharedRules/config/angiogenesis_v8.yaml
+hybrid:
+  mode: adaptive
+  exchange_every_hours: 1.0
+  smoothing_radius_voxels: 3
+  core_on: 0.45
+  core_off: 0.25
+
+output: {directory: atcg3d_hybrid_smoke_v1_run}

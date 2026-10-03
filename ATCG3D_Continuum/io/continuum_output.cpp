@@ -1,6 +1,7 @@
 #include "io/continuum_output.hpp"
 
 #include <algorithm>
+#include "io/pde_vtkhdf_writer.hpp"
 #include <bit>
 #include <cmath>
 #include <iomanip>
@@ -93,7 +94,7 @@ ContinuumOutput3D::ContinuumOutput3D(
                                    config_.output.checkpoint_every_hours);
         last_checkpoint_time_ = initial_time_hours;
         for (const auto& entry : std::filesystem::directory_iterator(directory_ / "fields")) {
-            if (entry.is_regular_file()) ++field_index_;
+            if (entry.is_regular_file()&&(!config_.output.vtkhdf_fields||entry.path().extension()==".csv")) ++field_index_;
         }
         for (const auto& entry : std::filesystem::directory_iterator(directory_ / "profiles")) {
             if (entry.is_regular_file()) ++profile_index_;
@@ -155,7 +156,15 @@ void ContinuumOutput3D::write_field(const ContinuumModel3D& model) {
     stream << "time_hours,x,y,z,r_small,r_large,K_small,K_large,r_total,K_total,"
               "occupied_fraction,nutrient,vessel_fraction\n"
            << std::setprecision(10);
+    const int nx = config_.grid.shape[0];
+    const int ny = config_.grid.shape[1];
+    const int stride = config_.output.field_stride;
     for (std::size_t location = 0; location < model.voxel_count(); ++location) {
+        const int x = static_cast<int>(location % static_cast<std::size_t>(nx));
+        const std::size_t yz = location / static_cast<std::size_t>(nx);
+        const int y = static_cast<int>(yz % static_cast<std::size_t>(ny));
+        const int z = static_cast<int>(yz / static_cast<std::size_t>(ny));
+        if (x % stride != 0 || y % stride != 0 || z % stride != 0) continue;
         const double total = model.population(PopulationField3D::r_small)[location] +
             model.population(PopulationField3D::r_large)[location] +
             model.population(PopulationField3D::K_small)[location] +
@@ -184,6 +193,12 @@ void ContinuumOutput3D::write_field(const ContinuumModel3D& model) {
     if (!stream) throw std::runtime_error("unable to finish continuum field output");
     stream.close();
     std::filesystem::rename(temporary, path);
+    if(config_.output.vtkhdf_fields) {
+        auto hdf_path=path;hdf_path.replace_extension(".vtkhdf");
+        continuum::write_pde_vtkhdf(hdf_path,model);
+        continuum::append_pde_series(directory_,hdf_path,model.time_hours());
+    }
+
 }
 
 void ContinuumOutput3D::write_radial_profile(const ContinuumModel3D& model) {

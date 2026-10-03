@@ -163,7 +163,24 @@ int main() {
         density.add(second.anchor, second.type, second_slot);
         assert(refresh_migration_activation_state(
             first_slot, first_end, cells, density, config));
-        assert(cells.migration_activation_end_time(first_slot) > first_end);
+        const double second_end =
+            cells.migration_activation_end_time(first_slot);
+        assert(second_end > first_end);
+
+        // In the aligned mode, expiry resamples the baseline and updates the
+        // stored active rate from the same draw, preserving the literal 20x
+        // per-cell contract on a later activation.
+        config.activated_r_migration_rate_model = "normal_multiplier";
+        config.activated_r_normal_multiplier = 20.0;
+        assert(expire_migration_activation_state(
+            first_slot, second_end, cells, config));
+        assert(std::abs(cells.migration_rate(first_slot) -
+                        20.0F * cells.normal_migration_rate(first_slot)) <
+               1.0e-5F);
+        assert(refresh_migration_activation_state(
+            first_slot, second_end, cells, density, config));
+        assert(effective_migration_rate(first_slot, cells, config) ==
+               cells.migration_rate(first_slot));
 
         // If the remaining cycle is shorter than one float ULP at the current
         // clock, no strictly-future in-cycle end event is representable. The
