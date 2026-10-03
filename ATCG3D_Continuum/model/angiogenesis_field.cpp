@@ -1,4 +1,5 @@
 #include "model/angiogenesis_field.hpp"
+#include "model/shared_angiogenesis.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -12,7 +13,7 @@
 
 namespace atcg3d::continuum {
 void AngiogenesisFieldConfig3D::validate() const {
-    if(model!="disabled" && model!="vegf_tip_density_v1") throw std::invalid_argument("unknown angiogenesis field model");
+    if(model!="disabled" && model!="vegf_tip_density_v1" && model!="shared_vegf_lattice_v2") throw std::invalid_argument("unknown angiogenesis field model");
     for(double v:{hypoxia_threshold,taf_production_per_cell_hour,taf_diffusion_voxels2_per_hour,taf_decay_per_hour,
         tip_diffusion_voxels2_per_hour,tip_chemotaxis,tip_branching_per_hour,tip_anastomosis_per_hour,
         seed_tips_per_hour,tip_speed_voxels_per_hour,vessel_radius_voxels,perfusion_exchange_per_hour,exclusion_fraction,maximum_tip_density}) {
@@ -36,21 +37,60 @@ std::string AngiogenesisFieldConfig3D::to_json() const {
 std::uint64_t AngiogenesisFieldConfig3D::fingerprint() const {
     std::uint64_t h=1469598103934665603ULL; for(unsigned char ch:to_json()) { h^=ch; h*=1099511628211ULL; } return h;
 }
-AngiogenesisField3D::AngiogenesisField3D(AngiogenesisFieldConfig3D config,std::array<int,3> shape,double spacing,bool thin)
+AngiogenesisField3D::AngiogenesisField3D(AngiogenesisFieldConfig3D config,std::array<int,3> shape,double spacing,bool thin,int threads)
     :config_(std::move(config)),shape_(shape),spacing_(spacing),measure_(std::pow(spacing,thin?2:3)),
      cross_section_(thin?2*config_.vessel_radius_voxels:std::acos(-1.0)*config_.vessel_radius_voxels*config_.vessel_radius_voxels),thin_(thin) {
     config_.validate();
     if(spacing<=0 || !std::isfinite(spacing) || shape[0]<=0 || shape[1]<=0 || shape[2]<=0 || (thin && shape[2]!=1)) throw std::invalid_argument("invalid angiogenesis field grid");
+    if (config_.model == "shared_vegf_lattice_v2") {
+        shared_ = std::make_unique<SharedAngiogenesis3D>(config_, shape_, spacing_, thin_, threads);
+        return;
+    }
     const auto size=static_cast<std::size_t>(shape[0])*shape[1]*shape[2];
     for(auto* field:{&taf_,&tips_,&vessels_,&work_taf_,&work_tips_}) field->assign(size,0);
 }
+AngiogenesisField3D::~AngiogenesisField3D() = default;
+
+void AngiogenesisField3D::use_individual_tips(std::uint64_t seed) {
+    if (!shared_) throw std::logic_error("individual tips require the shared vascular model");
+    shared_->use_individual_tips(seed);
+}
+
+const std::vector<double>& AngiogenesisField3D::taf() const noexcept {
+    return shared_ ? shared_->taf() : taf_;
+}
+
+const std::vector<double>& AngiogenesisField3D::tips() const noexcept {
+    return shared_ ? shared_->tips() : tips_;
+}
+
+const std::vector<double>& AngiogenesisField3D::vessels() const noexcept {
+    return shared_ ? shared_->vessels() : vessels_;
+}
+
+const SharedVascularDiagnostics3D* AngiogenesisField3D::shared_diagnostics() const noexcept {
+    return shared_ ? &shared_->diagnostics() : nullptr;
+}
+
+std::size_t AngiogenesisField3D::allocated_bytes() const noexcept {
+    return shared_ ? shared_->allocated_bytes() : 5 * taf_.size() * sizeof(double);
+}
 std::size_t AngiogenesisField3D::index(int x,int y,int z) const noexcept { return (static_cast<std::size_t>(z)*shape_[1]+y)*shape_[0]+x; }
 void AngiogenesisField3D::initialize(std::vector<double> vessels) {
+    if (shared_) {
+        shared_->initialize(std::move(vessels));
+        return;
+    }
     if(vessels.size()!=vessels_.size()) throw std::invalid_argument("vascular field shape mismatch");
     for(double value:vessels) if(!std::isfinite(value) || value<0 || value>1) throw std::invalid_argument("invalid vessel fraction");
     vessels_=std::move(vessels);
 }
-void AngiogenesisField3D::advance(double dt,const std::vector<double>& cells,const std::vector<double>& nutrient,double maximum,bool grow) {
+void AngiogenesisField3D::advance(double dt,const std::vector<double>& cells,const std::vector<double>& nutrient,double maximum,bool grow,
+                                const VascularConsumerBounds3D* consumer_bounds) {
+    if (shared_) {
+        shared_->advance(dt, cells, nutrient, maximum, grow, consumer_bounds);
+        return;
+    }
     if(dt<0 || !std::isfinite(dt) || cells.size()!=taf_.size() || nutrient.size()!=taf_.size() || maximum<=0) throw std::invalid_argument("invalid vascular update");
     const int dims=thin_?2:3;
     std::vector<double> hypoxia(cells.size(),0),surface(cells.size(),0);
@@ -99,21 +139,30 @@ void AngiogenesisField3D::advance(double dt,const std::vector<double>& cells,con
         taf_.swap(work_taf_); tips_.swap(work_tips_); elapsed+=h;
     }
 }
-double AngiogenesisField3D::perfused_volume() const { return measure_*std::accumulate(vessels_.begin(),vessels_.end(),0.0); }
-double AngiogenesisField3D::vessel_length() const { return perfused_volume()/cross_section_; }
+double AngiogenesisField3D::perfused_volume() const { return measure_*std::accumulate(vessels().begin(),vessels().end(),0.0); }
+double AngiogenesisField3D::vessel_length() const { return shared_ ? shared_->diagnostics().centerline_growth : perfused_volume()/cross_section_; }
 double AngiogenesisField3D::lesion_perfused_fraction(const std::vector<double>& cells) const {
-    if(cells.size()!=vessels_.size()) throw std::invalid_argument("lesion field shape mismatch");
-    double lesion=0,perfused=0; for(std::size_t i=0;i<cells.size();++i) if(cells[i]>1.0e-12) { lesion+=measure_; perfused+=measure_*vessels_[i]; }
+    if(cells.size()!=vessels().size()) throw std::invalid_argument("lesion field shape mismatch");
+    double lesion=0,perfused=0; for(std::size_t i=0;i<cells.size();++i) if(cells[i]>1.0e-12) { lesion+=measure_; perfused+=measure_*vessels()[i]; }
     return lesion>0?perfused/lesion:0;
 }
 std::uint64_t AngiogenesisField3D::checksum() const {
+    if (shared_) return shared_->checksum();
     std::uint64_t hash=config_.fingerprint();for(const auto* field:{&taf_,&tips_,&vessels_}) for(double v:*field) { hash^=std::bit_cast<std::uint64_t>(v);hash*=1099511628211ULL; }return hash;
 }
 void AngiogenesisField3D::save(std::ostream& out) const {
+    if (shared_) {
+        shared_->save(out);
+        return;
+    }
     for(const auto* field:{&taf_,&tips_,&vessels_}) out.write(reinterpret_cast<const char*>(field->data()),field->size()*sizeof(double));
     if(!out) throw std::runtime_error("unable to save vascular fields");
 }
 void AngiogenesisField3D::load(std::istream& in) {
+    if (shared_) {
+        shared_->load(in);
+        return;
+    }
     for(auto* field:{&taf_,&tips_,&vessels_}) {
         in.read(reinterpret_cast<char*>(field->data()),field->size()*sizeof(double));
         for(double v:*field) if(!std::isfinite(v)||v<0||(field==&vessels_&&v>1)) throw std::runtime_error("invalid vascular checkpoint field");

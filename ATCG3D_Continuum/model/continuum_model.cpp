@@ -82,7 +82,7 @@ ContinuumModel3D::ContinuumModel3D(ContinuumModelConfig3D config)
     vessel_.assign(voxel_count_, 0.0);
     if(config_.angiogenesis.model != "disabled") {
         const auto& c=config_;
-        angiogenesis_=std::make_unique<AngiogenesisField3D>(c.angiogenesis,c.grid.shape,c.grid.spacing_voxels,c.base.thin_layer);
+        angiogenesis_=std::make_unique<AngiogenesisField3D>(c.angiogenesis,c.grid.shape,c.grid.spacing_voxels,c.base.thin_layer,c.base.threads);
     }
 
     tumour_mask_.assign(voxel_count_, 0U);

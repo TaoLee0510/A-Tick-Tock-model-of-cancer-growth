@@ -34,7 +34,10 @@ public:
     double nutrient_direction_weight(Vec3i site, DirectionId direction) const override;
     std::array<double,2> external_growth_counts(Vec3i site) const override { return external_counts_ ? external_counts_(site) : std::array<double,2>{}; }
     double external_activation_density(Vec3i site, CellStage stage) const override { return external_activation_ ? external_activation_(site,stage) : 0.0; }
-    bool destination_available(Vec3i site) const noexcept override { return !external_destination_ || external_destination_(site); }
+    bool destination_available(Vec3i site) const noexcept override;
+    bool resident_site_excluded(Vec3i site) const noexcept override;
+    bool enforces_resident_exclusion() const noexcept override;
+    void record_vascular_removal(CellType type, CellStage stage, bool active) override;
     bool individual_refractory() const noexcept override { return true; }
     bool activation_ready(CellUid uid, double now, double density) override;
     void activation_expired(CellUid uid, double now) override;
@@ -52,6 +55,8 @@ public:
     const std::vector<double>& nutrient() const noexcept { return nutrient_; }
     const std::vector<double>& vessel_fraction() const noexcept { return vessels_; }
     const std::vector<std::uint8_t>& tumour_mask() const noexcept { return tumour_mask_; }
+    const continuum::AngiogenesisField3D* angiogenesis() const noexcept { return angiogenesis_.get(); }
+    const std::array<double, 6>& vascular_removed_mass() const noexcept { return vascular_removed_mass_; }
     void save_checkpoint(const std::filesystem::path& path, std::uint64_t abm_checksum) const;
     void load_checkpoint(const std::filesystem::path& path, std::uint64_t abm_checksum);
 
@@ -73,6 +78,7 @@ private:
     std::uint64_t fingerprint_{};
     StaticVascularGeometry3D geometry_;
     std::vector<double> nutrient_, next_, consumers_, occupied_, vessels_, row_prefix_;
+    continuum::VascularConsumerBounds3D vascular_consumer_bounds_;
     std::vector<std::uint8_t> tumour_mask_;
     continuum::MovingTumorFrontWorkspace2D front_workspace_;
     std::array<std::vector<Vec3i>, 27> sector_offsets_;
@@ -82,6 +88,7 @@ private:
     std::uint32_t generation_{1};
     std::uint64_t refreshes_{};
     bool restored_{};
+    std::array<double, 6> vascular_removed_mass_{};
 };
 
 }  // namespace atcg3d::shared_rules

@@ -45,6 +45,9 @@ Model3DConfig abm_config(const structured_pde::StructuredPdeConfig3D& config) {
     base.r_limit = base.K_limit = base.legacy_mapping.source_r_limit * mapping_scale;
     base.carrying_capacity_r = base.carrying_capacity_K = base.legacy_mapping.source_carrying_capacity_r * mapping_scale;
     base.migration_swap_enabled = config.migration.crowding_exchange != "none";
+    if (config.continuum.angiogenesis.model == "shared_vegf_lattice_v2") {
+        base.angiogenesis.enabled = false;
+    }
     if (config.schema_version >= 14) {
         base.migration_activation_enabled = base.migration_activation_enabled &&
             config.activation_operator_enabled;
@@ -78,7 +81,14 @@ SharedResourceEnvironment3D::SharedResourceEnvironment3D(structured_pde::Structu
     nutrient_.assign(size, config_.continuum.nutrient.initial_value);
     for (auto* field : {&next_, &consumers_, &occupied_, &vessels_}) field->assign(size, 0.0);
     tumour_mask_.assign(size, 0U);
-    if(config_.continuum.angiogenesis.model != "disabled") angiogenesis_=std::make_unique<continuum::AngiogenesisField3D>(config_.continuum.angiogenesis,grid.shape,grid.spacing_voxels,geometry_.thin_layer);
+    if (config_.continuum.angiogenesis.model != "disabled") {
+        angiogenesis_ = std::make_unique<continuum::AngiogenesisField3D>(
+            config_.continuum.angiogenesis, grid.shape, grid.spacing_voxels,
+            geometry_.thin_layer, config_.continuum.base.threads);
+        if (config_.continuum.angiogenesis.model == "shared_vegf_lattice_v2") {
+            angiogenesis_->use_individual_tips(config_.continuum.base.seed);
+        }
+    }
     const int edge = config_.migration.direction_nutrient_window_edge;
     const int lower = (edge - 1) / 2;
     const int upper = edge - lower - 1;
@@ -129,10 +139,39 @@ double SharedResourceEnvironment3D::growth_resource_scale(Vec3i site) const noex
     return value / (config_.continuum.nutrient.growth_half_saturation + value);
 }
 
+bool SharedResourceEnvironment3D::enforces_resident_exclusion() const noexcept {
+    return !externally_driven_ && config_.migration.vessel_exclusion &&
+        config_.continuum.angiogenesis.model == "shared_vegf_lattice_v2";
+}
+
+bool SharedResourceEnvironment3D::resident_site_excluded(Vec3i site) const noexcept {
+    if (geometry_.thin_layer && site.z == 1) site.z = 0;
+    return enforces_resident_exclusion() && contains_resource_site(site) &&
+        vessels_[location(site)] >= config_.continuum.angiogenesis.exclusion_fraction;
+}
+
+bool SharedResourceEnvironment3D::destination_available(Vec3i site) const noexcept {
+    if (external_destination_ && !external_destination_(site)) return false;
+    if (config_.continuum.angiogenesis.model == "shared_vegf_lattice_v2") {
+        if (geometry_.thin_layer && site.z == 1) site.z = 0;
+        return contains_resource_site(site) && !resident_site_excluded(site);
+    }
+    return true;
+}
+
+void SharedResourceEnvironment3D::record_vascular_removal(CellType type, CellStage stage, bool active) {
+    const std::size_t phase = stage == CellStage::large ? 1 : 0;
+    const std::size_t channel = type == CellType::K ? 4 : (active ? 2 : 0);
+    vascular_removed_mass_[channel + phase] += 1.0;
+}
+
 void SharedResourceEnvironment3D::assemble(const CellStore3D& cells, const SparseVesselGrid3D& vessels) {
     std::fill(consumers_.begin(), consumers_.end(), 0.0);
+    vascular_consumer_bounds_ = {};
     std::fill(occupied_.begin(), occupied_.end(), 0.0);
-    std::fill(vessels_.begin(), vessels_.end(), 0.0);
+    if (config_.continuum.angiogenesis.model != "shared_vegf_lattice_v2") {
+        std::fill(vessels_.begin(), vessels_.end(), 0.0);
+    }
     std::set<CellUid> alive;
     const double large_volume = geometry_.thin_layer ? 4.0 : 8.0;
     for (const auto slot : cells.alive_slots()) {
@@ -142,6 +181,22 @@ void SharedResourceEnvironment3D::assemble(const CellStore3D& cells, const Spars
             if (!contains_resource_site(site)) return;
             consumers_[location(site)] += large ? 1.0 / large_volume : 1.0;
             occupied_[location(site)] += 1.0;
+            if (config_.continuum.angiogenesis.model == "shared_vegf_lattice_v2") {
+                const auto here = location(site);
+                const auto nx = geometry_.shape[0], ny = geometry_.shape[1];
+                const std::array<int, 3> point{static_cast<int>(here % nx),
+                    static_cast<int>((here / nx) % ny), static_cast<int>(here / (static_cast<std::size_t>(nx) * ny))};
+                auto& bounds = vascular_consumer_bounds_;
+                if (!bounds.valid) {
+                    bounds.lower = bounds.upper = point;
+                    bounds.valid = true;
+                } else {
+                    for (int axis = 0; axis < 3; ++axis) {
+                        bounds.lower[axis] = std::min(bounds.lower[axis], point[axis]);
+                        bounds.upper[axis] = std::max(bounds.upper[axis], point[axis]);
+                    }
+                }
+            }
         };
         if (large) { for (const auto site : large_footprint(cells.anchor(slot))) add(site); }
         else add(cells.anchor(slot));
@@ -176,12 +231,14 @@ void SharedResourceEnvironment3D::rebuild_sources() {
 }
 bool SharedResourceEnvironment3D::source(int x, int y, int z, std::size_t here) const noexcept {
     const auto& mode = config_.continuum.nutrient.boundary_mode;
+    const bool vessel_source = config_.continuum.angiogenesis.model == "shared_vegf_lattice_v2"
+        ? vessels_[here] >= config_.continuum.angiogenesis.exclusion_fraction : vessels_[here] > 0.0;
     if (mode == "moving_tumor_front_dirichlet_v2" || mode == "moving_tumor_front_and_vessels_dirichlet_v2") {
-        return tumour_mask_[here] == 0U || (mode == "moving_tumor_front_and_vessels_dirichlet_v2" && vessels_[here] > 0.0);
+        return tumour_mask_[here] == 0U || (mode == "moving_tumor_front_and_vessels_dirichlet_v2" && vessel_source);
     }
     const bool edge = x == 0 || y == 0 || x + 1 == geometry_.shape[0] || y + 1 == geometry_.shape[1] ||
         (!geometry_.thin_layer && (z == 0 || z + 1 == geometry_.shape[2]));
-    return (mode != "vessels_dirichlet_v1" && edge) || (mode != "planar_edges_dirichlet_v1" && vessels_[here] > 0.0);
+    return (mode != "vessels_dirichlet_v1" && edge) || (mode != "planar_edges_dirichlet_v1" && vessel_source);
 }
 
 EnvironmentInitializationResult3D SharedResourceEnvironment3D::initialize(double now, const CellStore3D& cells,
@@ -213,7 +270,13 @@ void SharedResourceEnvironment3D::refresh(double now, const CellStore3D& cells, 
     const double dt = now - last_refresh_;
     assemble(cells, vessels);
     const auto& n = config_.continuum.nutrient;
-    if(angiogenesis_) { angiogenesis_->initialize(vessels_); angiogenesis_->advance(dt,consumers_,nutrient_,n.vessel_value,false); }
+    if (angiogenesis_) {
+        const bool shared = config_.continuum.angiogenesis.model == "shared_vegf_lattice_v2";
+        if (!shared) angiogenesis_->initialize(vessels_);
+        angiogenesis_->advance(dt, consumers_, nutrient_, n.vessel_value, shared,
+            shared ? &vascular_consumer_bounds_ : nullptr);
+        if (shared) vessels_ = angiogenesis_->vessels();
+    }
     const double mu = n.diffusion_voxels2_per_hour * dt;
     const double decay = std::exp(-n.decay_per_hour * dt);
     const int dimensions = geometry_.thin_layer ? 2 : 3;
@@ -297,7 +360,7 @@ std::size_t SharedResourceEnvironment3D::allocated_bytes() const noexcept {
     std::size_t result = (nutrient_.capacity() + next_.capacity() + consumers_.capacity() + occupied_.capacity() +
         vessels_.capacity() + row_prefix_.capacity()) * sizeof(double) + tumour_mask_.capacity();
     for (const auto& offsets : sector_offsets_) result += offsets.capacity() * sizeof(Vec3i);
-    if(angiogenesis_) result+=5*nutrient_.size()*sizeof(double);
+    if (angiogenesis_) result += angiogenesis_->allocated_bytes();
     return result + refractory_.size() * sizeof(std::pair<CellUid, Refractory>);
 }
 std::uint64_t SharedResourceEnvironment3D::field_checksum() const noexcept {
@@ -310,6 +373,9 @@ std::uint64_t SharedResourceEnvironment3D::field_checksum() const noexcept {
         state = mix(mix(mix(state, uid), std::bit_cast<std::uint64_t>(refractory.until)), refractory.armed);
     }
     if(angiogenesis_) state=mix(state,angiogenesis_->checksum());
+    if (config_.continuum.angiogenesis.model == "shared_vegf_lattice_v2") {
+        for (const auto mass : vascular_removed_mass_) state = mix(state, std::bit_cast<std::uint64_t>(mass));
+    }
     return state;
 }
 
@@ -330,6 +396,9 @@ void SharedResourceEnvironment3D::save_checkpoint(const std::filesystem::path& p
         write(out, uid); write(out, refractory.until); write(out, static_cast<std::uint8_t>(refractory.armed));
     }
     if(angiogenesis_) angiogenesis_->save(out);
+    if (config_.continuum.angiogenesis.model == "shared_vegf_lattice_v2") {
+        for (const auto mass : vascular_removed_mass_) write(out, mass);
+    }
     write(out, field_checksum()); out.close();
     std::filesystem::rename(temporary, path);
 }
@@ -367,6 +436,12 @@ void SharedResourceEnvironment3D::load_checkpoint(const std::filesystem::path& p
         }
     }
     if(angiogenesis_) { angiogenesis_->load(in); if(angiogenesis_->vessels()!=vessels_) throw std::runtime_error("shared vascular checkpoint mismatch"); }
+    if (config_.continuum.angiogenesis.model == "shared_vegf_lattice_v2") {
+        for (auto& mass : vascular_removed_mass_) {
+            mass = read<double>(in);
+            if (!std::isfinite(mass) || mass < 0.0) throw std::runtime_error("invalid shared vascular removal mass");
+        }
+    }
     if (read<std::uint64_t>(in) != field_checksum() || in.peek() != std::char_traits<char>::eof()) {
         throw std::runtime_error("shared resource checkpoint checksum mismatch");
     }

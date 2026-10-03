@@ -287,8 +287,11 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
 }
 
 void StructuredPdeConfig3D::validate() const {
-    if ((schema_version < 1 || schema_version > 14) || profile.empty()) {
+    if ((schema_version < 1 || schema_version > 15) || profile.empty()) {
         throw std::invalid_argument("structured PDE schema/profile is invalid");
+    }
+    if (continuum.angiogenesis.model == "shared_vegf_lattice_v2" && schema_version < 15) {
+        throw std::invalid_argument("shared lattice angiogenesis requires structured schema v15");
     }
     if (schema_version < 9 && storage_model != "dense_v1") {
         throw std::invalid_argument("sparse storage requires structured v9");
@@ -493,7 +496,7 @@ void StructuredPdeConfig3D::validate() const {
              base.migration_activation_threshold) ||
          migration.crowding_exchange !=
              "active_r_K_stage1_conservative_v1" ||
-         !migration.vessel_exclusion ||
+         (!migration.vessel_exclusion && schema_version < 15) ||
          continuum.nutrient.model != "transient_shared_resource_v2" ||
          continuum.nutrient.solver !=
              "transient_explicit_dirichlet_sources_v2" ||

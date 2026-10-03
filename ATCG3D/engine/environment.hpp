@@ -70,6 +70,9 @@ public:
     virtual void activation_expired(CellUid, double) {}
     virtual bool migration_operator_enabled() const noexcept { return true; }
     virtual bool division_operator_enabled() const noexcept { return true; }
+    virtual bool resident_site_excluded(Vec3i) const noexcept { return false; }
+    virtual bool enforces_resident_exclusion() const noexcept { return false; }
+    virtual void record_vascular_removal(CellType, CellStage, bool) {}
 };
 
 }  // namespace atcg3d

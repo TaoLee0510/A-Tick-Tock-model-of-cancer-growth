@@ -15,6 +15,7 @@
 #include "geometry/footprint.hpp"
 #include "model/shared_resource_environment.hpp"
 #include "model/structured_pde_model.hpp"
+#include "model/shared_angiogenesis.hpp"
 #ifdef ATCG3D_HAS_HDF5_CHECKPOINT
 #include "io/checkpoint_hdf5.hpp"
 #endif
@@ -27,6 +28,9 @@ struct Summary {
     std::vector<double> radial;
     std::uint64_t checksum{}, resource_checksum{};
     double boundary_mass{};
+    bool shared_vascular{};
+    double vascular_branches{}, initial_perfused_volume{}, discarded_taf_mass{}, discarded_tip_mass{};
+    std::array<double, 6> vascular_removed_mass{};
     explicit Summary(std::size_t bins) : radial(bins, 0.0) {}
     void add(double radius, double mass) {
         const auto bin = std::min(radial.size() - 1, static_cast<std::size_t>(std::floor(radius)));
@@ -58,6 +62,19 @@ struct Summary {
             << ",\"radial_mass\":[";
         for (std::size_t i = 0; i < radial.size(); ++i) { if (i != 0) out << ','; out << radial[i]; }
         out << ']';
+        if (shared_vascular) {
+            out << ",\"vascular_length_model\":\"unique_lattice_centerline_growth_v2\""
+                << ",\"vascular_branches\":" << vascular_branches
+                << ",\"initial_perfused_volume\":" << initial_perfused_volume
+                << ",\"discarded_taf_mass\":" << discarded_taf_mass
+                << ",\"discarded_tip_mass\":" << discarded_tip_mass
+                << ",\"vascular_removed_mass\":[";
+            for (std::size_t channel = 0; channel < vascular_removed_mass.size(); ++channel) {
+                if (channel != 0) out << ',';
+                out << vascular_removed_mass[channel];
+            }
+            out << ']';
+        }
         if (config) {
             double half_width = std::numeric_limits<double>::infinity();
             const int dimensions = config->base.thin_layer ? 2 : 3;
@@ -82,6 +99,18 @@ struct Summary {
         out << "}\n";
     }
 };
+void shared_vascular_summary(Summary& summary, const atcg3d::continuum::AngiogenesisField3D& field) {
+    const auto* diagnostic = field.shared_diagnostics();
+    if (!diagnostic) return;
+    summary.shared_vascular = true;
+    summary.vascular_length = diagnostic->centerline_growth;
+    summary.vascular_roots = diagnostic->seeded_tips;
+    summary.vascular_branches = diagnostic->branches;
+    summary.vascular_anastomoses = diagnostic->anastomoses;
+    summary.initial_perfused_volume = diagnostic->initial_perfused_volume;
+    summary.discarded_taf_mass = diagnostic->discarded_taf_mass;
+    summary.discarded_tip_mass = diagnostic->discarded_tip_mass;
+}
 void vascular_summary(Summary& summary, const std::vector<double>& vessels, const std::vector<double>& occupied,
                       const atcg3d::continuum::ContinuumModelConfig3D& config) {
     summary.perfused_volume=std::accumulate(vessels.begin(),vessels.end(),0.0);
@@ -167,6 +196,10 @@ Summary summarize_abm(const atcg3d::Simulation3D& simulation,
         }
     }
     vascular_abm(result, simulation, resource, config);
+    if (const auto* vascular = resource.angiogenesis()) {
+        shared_vascular_summary(result, *vascular);
+        if (result.shared_vascular) result.vascular_removed_mass = resource.vascular_removed_mass();
+    }
     result.checksum = simulation.state_checksum();
     result.resource_checksum = resource.field_checksum();
     return result;
@@ -181,6 +214,7 @@ Summary summarize_pde(const atcg3d::structured_pde::StructuredPdeModel3D& pde,
     }
     vascular_summary(result, pde.vessel_fraction(), occupied, config);
     if (const auto* vascular = pde.angiogenesis()) {
+        shared_vascular_summary(result, *vascular);
         const auto& law = config.angiogenesis;
         for (std::size_t i = 0; i < pde.voxel_count(); ++i) {
             const double tips = vascular->tips()[i];
@@ -191,6 +225,13 @@ Summary summarize_pde(const atcg3d::structured_pde::StructuredPdeModel3D& pde,
         }
     }
     const auto diagnostics = pde.diagnostics();
+    if (result.shared_vascular) {
+        for (std::size_t phase = 0; phase < 2; ++phase) {
+            result.vascular_removed_mass[phase] = diagnostics.vascular_removed_mass.r_normal[phase];
+            result.vascular_removed_mass[2 + phase] = diagnostics.vascular_removed_mass.r_active[phase];
+            result.vascular_removed_mass[4 + phase] = diagnostics.vascular_removed_mass.K[phase];
+        }
+    }
     result.r = diagnostics.r_total;
     result.K = diagnostics.K_total;
     result.active = diagnostics.r_active_total;

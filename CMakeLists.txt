@@ -231,6 +231,7 @@ if(ATCG_BUILD_3D)
     if(ATCG_BUILD_3D_CONTINUUM)
         add_library(atcg3d_continuum_core
             ATCG3D_Continuum/model/angiogenesis_field.cpp
+            ATCG3D_Continuum/model/shared_angiogenesis.cpp
             ATCG3D_Continuum/config/continuum_config.cpp
             ATCG3D_Continuum/model/moving_tumor_front.cpp
             ATCG3D_Continuum/model/continuum_model.cpp
@@ -246,6 +247,8 @@ if(ATCG_BUILD_3D)
 
         add_executable(atcg3d_continuum ATCG3D_Continuum/app/main.cpp)
         target_link_libraries(atcg3d_continuum PRIVATE atcg3d_continuum_core)
+        add_executable(atcg3d_angiogenesis_benchmark ATCG3D_Continuum/app/angiogenesis_benchmark.cpp)
+        target_link_libraries(atcg3d_angiogenesis_benchmark PRIVATE atcg3d_continuum_core)
 
         foreach(continuum_config_name IN ITEMS
                 continuum_smoke_v1.yaml
@@ -544,6 +547,15 @@ if(BUILD_TESTING)
             target_compile_options(atcg3d_vascular_field_test PRIVATE -UNDEBUG)
             target_compile_definitions(atcg3d_vascular_field_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
             add_test(NAME atcg3d_vascular_field_test COMMAND atcg3d_vascular_field_test)
+            add_executable(atcg3d_shared_angiogenesis_test tests/3d/shared_angiogenesis_test.cpp)
+            target_link_libraries(atcg3d_shared_angiogenesis_test PRIVATE atcg3d_shared_rules_core)
+            target_compile_options(atcg3d_shared_angiogenesis_test PRIVATE -UNDEBUG)
+            add_test(NAME atcg3d_shared_angiogenesis_test COMMAND atcg3d_shared_angiogenesis_test)
+            add_executable(atcg3d_shared_vascular_coupling_test tests/3d/shared_vascular_coupling_test.cpp)
+            target_link_libraries(atcg3d_shared_vascular_coupling_test PRIVATE atcg3d_shared_rules_core)
+            target_compile_options(atcg3d_shared_vascular_coupling_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_shared_vascular_coupling_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME atcg3d_shared_vascular_coupling_test COMMAND atcg3d_shared_vascular_coupling_test)
             add_executable(atcg3d_operator_contract_test tests/3d/operator_contract_test.cpp)
             target_link_libraries(atcg3d_operator_contract_test PRIVATE atcg3d_shared_rules_core)
             target_compile_options(atcg3d_operator_contract_test PRIVATE -UNDEBUG)
@@ -552,6 +564,8 @@ if(BUILD_TESTING)
             if(Python3_Interpreter_FOUND)
                 add_test(NAME atcg3d_equivalence_stats_test
                     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/3d/equivalence_stats_test.py)
+                add_test(NAME atcg3d_shared_angiogenesis_stats_test
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/3d/shared_angiogenesis_stats_test.py)
                 add_test(NAME atcg3d_validation_trace_test
                     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/3d/validation_trace_test.py
                         --exe $<TARGET_FILE:atcg3d_shared_abm> --root ${CMAKE_CURRENT_SOURCE_DIR})
@@ -574,6 +588,13 @@ if(BUILD_TESTING)
                         --seeds 16 --require-interior --minimum-active-fraction 0.1
                         --output ${CMAKE_CURRENT_BINARY_DIR}/validation-statistical-active-r20-v14)
                 set_tests_properties(atcg3d_statistical_active_r20_validation PROPERTIES LABELS validation TIMEOUT 1800)
+                add_test(NAME atcg3d_shared_angiogenesis_validation
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_shared_angiogenesis.py
+                        --exe $<TARGET_FILE:atcg3d_shared_abm>
+                        --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/angiogenesis_controlled_v15.yaml
+                        --seeds 16
+                        --output ${CMAKE_CURRENT_BINARY_DIR}/validation-shared-angiogenesis)
+                set_tests_properties(atcg3d_shared_angiogenesis_validation PROPERTIES LABELS validation TIMEOUT 1800)
                 if(ATCG_ENABLE_LONG_VALIDATION)
                     foreach(long_case IN ITEMS r20_512_360 r200_512_360 r20_2000_720 r200_2000_720)
                         add_test(NAME atcg3d_long_${long_case}_validation

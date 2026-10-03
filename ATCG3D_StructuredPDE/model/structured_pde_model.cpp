@@ -335,7 +335,7 @@ StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
     vessel_.assign(voxel_count_, 0.0);
     if(config_.continuum.angiogenesis.model != "disabled") {
         const auto& c=config_.continuum;
-        angiogenesis_=std::make_unique<continuum::AngiogenesisField3D>(c.angiogenesis,c.grid.shape,c.grid.spacing_voxels,c.base.thin_layer);
+        angiogenesis_=std::make_unique<continuum::AngiogenesisField3D>(c.angiogenesis,c.grid.shape,c.grid.spacing_voxels,c.base.thin_layer,c.base.threads);
     }
 
     tumour_mask_.assign(voxel_count_, 0U);
@@ -863,6 +863,36 @@ void StructuredPdeModel3D::initialize_from_arrays(
 
 void StructuredPdeModel3D::advance_angiogenesis(double dt) {
     if(!angiogenesis_) return;
+    if (config_.continuum.angiogenesis.model == "shared_vegf_lattice_v2") {
+        vascular_consumers_work_.resize(voxel_count_);
+        continuum::VascularConsumerBounds3D bounds;
+        const auto nx = config_.continuum.grid.shape[0], ny = config_.continuum.grid.shape[1];
+        for (std::size_t here = 0; here < voxel_count_; ++here) {
+            double consumers = 0.0;
+            for (std::size_t stage = 0; stage < 2; ++stage) {
+                consumers += r_normal_[stage][here] + active_total_[stage][here] + K_[stage][here];
+            }
+            if (!external_r_.empty()) consumers += external_consumers(here);
+            vascular_consumers_work_[here] = consumers;
+            if (!(consumers > 0.0)) continue;
+            const std::array<int, 3> point{static_cast<int>(here % nx),
+                static_cast<int>((here / nx) % ny), static_cast<int>(here / (static_cast<std::size_t>(nx) * ny))};
+            if (!bounds.valid) {
+                bounds.lower = bounds.upper = point;
+                bounds.valid = true;
+            } else {
+                for (int axis = 0; axis < 3; ++axis) {
+                    bounds.lower[axis] = std::min(bounds.lower[axis], point[axis]);
+                    bounds.upper[axis] = std::max(bounds.upper[axis], point[axis]);
+                }
+            }
+        }
+        angiogenesis_->advance(dt, vascular_consumers_work_, nutrient_,
+            config_.continuum.nutrient.vessel_value, true, &bounds);
+        vessel_ = angiogenesis_->vessels();
+        clear_cells_from_vessels();
+        return;
+    }
     std::vector<double> consumers(voxel_count_,0.0);
     for(std::size_t here=0;here<voxel_count_;++here) {
         for(std::size_t stage=0;stage<2;++stage) consumers[here]+=r_normal_[stage][here]+active_total_[stage][here]+K_[stage][here];

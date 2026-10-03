@@ -276,6 +276,7 @@ private:
     std::vector<double> nutrient_;
     std::vector<double> nutrient_next_;
     std::vector<double> vessel_;
+    std::vector<double> vascular_consumers_work_;
     std::vector<std::uint8_t> tumour_mask_;
     std::vector<double> tumour_occupancy_work_;
     std::vector<std::uint8_t> tumour_local_mask_work_;

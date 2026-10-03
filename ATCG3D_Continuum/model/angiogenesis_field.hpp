@@ -3,10 +3,17 @@
 #include <array>
 #include <cstdint>
 #include <iosfwd>
+#include <memory>
 #include <string>
 #include <vector>
 
 namespace atcg3d::continuum {
+class SharedAngiogenesis3D;
+struct SharedVascularDiagnostics3D;
+struct VascularConsumerBounds3D {
+    std::array<int, 3> lower{}, upper{};
+    bool valid{};
+};
 struct AngiogenesisFieldConfig3D {
     std::string model{"disabled"};
     double hypoxia_threshold{0.30};
@@ -28,16 +35,22 @@ struct AngiogenesisFieldConfig3D {
     std::uint64_t fingerprint() const;
 };
 
-// Reflecting finite-volume VEGF and upwind tip transport. Vessel density is
-// union volume fraction; its deposited volume/cross-section estimates length.
+// Version 1 uses reflecting finite-volume VEGF and upwind tip transport;
+// deposited volume/cross-section estimates its legacy length diagnostic.
+// The shared version 2 backend tracks unique lattice centerline growth.
 class AngiogenesisField3D {
 public:
-    AngiogenesisField3D(AngiogenesisFieldConfig3D config,std::array<int,3> shape,double spacing,bool thin);
+    AngiogenesisField3D(AngiogenesisFieldConfig3D config,std::array<int,3> shape,double spacing,bool thin,int threads=1);
+    ~AngiogenesisField3D();
+    void use_individual_tips(std::uint64_t seed);
     void initialize(std::vector<double> vessels);
-    void advance(double dt,const std::vector<double>& cells,const std::vector<double>& nutrient,double nutrient_maximum,bool grow_vessels=true);
-    const std::vector<double>& taf() const noexcept { return taf_; }
-    const std::vector<double>& tips() const noexcept { return tips_; }
-    const std::vector<double>& vessels() const noexcept { return vessels_; }
+    void advance(double dt,const std::vector<double>& cells,const std::vector<double>& nutrient,double nutrient_maximum,bool grow_vessels=true,
+                 const VascularConsumerBounds3D* consumer_bounds=nullptr);
+    const std::vector<double>& taf() const noexcept;
+    const std::vector<double>& tips() const noexcept;
+    const std::vector<double>& vessels() const noexcept;
+    const SharedVascularDiagnostics3D* shared_diagnostics() const noexcept;
+    std::size_t allocated_bytes() const noexcept;
     double vessel_length() const;
     double perfused_volume() const;
     double lesion_perfused_fraction(const std::vector<double>& cells) const;
@@ -51,5 +64,6 @@ private:
     double spacing_{},measure_{},cross_section_{};
     bool thin_{};
     std::vector<double> taf_,tips_,vessels_,work_taf_,work_tips_;
+    std::unique_ptr<SharedAngiogenesis3D> shared_;
 };
 }  // namespace atcg3d::continuum

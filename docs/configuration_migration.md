@@ -13,7 +13,7 @@ build-codex/atcg_sim --model pde --config migrated_run/model.yaml --dry-run
 ```
 
 Supported upgrades are ABM v1-v3 to v3, nutrient v1-v3 to v3, continuum v3-v6
-to v6, and shared-resource structured v5-v14 to v14. ODE v1 and hybrid v1/v2/v3
+to v6, and shared-resource structured v5-v15 to v15. ODE v1 and hybrid v1/v2/v3
 wrappers are copied with their references upgraded. Hybrid v1 retains its
 mean-clock closure; v2 retains its transported-work selection. Structured v1-v4 and continuum v1-v2 lack
 shared-resource calibration parameters; the tool rejects them rather than
@@ -56,3 +56,9 @@ v13 source. The named `feasible_fixed_lattice_jump_v3` and
 `truncated_normal_expectation_v2` corrections are explicit choices in the new
 validation configurations. Operator interventions require
 `shared_operator_switches_v1`; they are not enabled by migration.
+
+Structured v15 adds the explicit `shared_vegf_lattice_v2` vascular model.
+Migration preserves `vegf_tip_density_v1` or `disabled`; selecting v15 alone
+does not replace a published vascular mechanism. See the
+[shared angiogenesis contract](shared_angiogenesis_contract.md) for the
+individual tip law, centerline diagnostics and common perfusion assumptions.

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include "io/pde_vtkhdf_writer.hpp"
+#include "model/shared_angiogenesis.hpp"
 #include <bit>
 #include <cmath>
 #include <iomanip>
@@ -16,6 +17,12 @@ const char* vascular_metrics_columns() noexcept {
            "vascular_removed_r_active_small,vascular_removed_r_active_large,"
            "vascular_removed_K_small,vascular_removed_K_large,"
            "vascular_removed_mass";
+}
+
+const char* shared_vascular_metrics_columns() noexcept {
+    return ",vascular_centerline_growth,vascular_initial_perfused_volume,"
+           "vascular_seeded_tips,vascular_branches,vascular_anastomoses,"
+           "vascular_discarded_taf_mass,vascular_discarded_tip_mass";
 }
 
 bool same_time(double lhs, double rhs) noexcept {
@@ -77,6 +84,10 @@ StructuredPdeOutput3D::StructuredPdeOutput3D(
         std::getline(previous, header);
         if (header.find(vascular_metrics_columns()) == std::string::npos)
             throw std::runtime_error("structured v13 metrics header mismatch");
+        if (config_.continuum.angiogenesis.model == "shared_vegf_lattice_v2" &&
+            header.find(shared_vascular_metrics_columns()) == std::string::npos) {
+            throw std::runtime_error("shared vascular metrics header mismatch");
+        }
     }
     metrics_.open(metrics_path,
                   std::ios::binary | (append ? std::ios::app : std::ios::trunc));
@@ -97,6 +108,9 @@ StructuredPdeOutput3D::StructuredPdeOutput3D(
         }
         if (config_.schema_version >= 13)
             metrics_ << vascular_metrics_columns();
+        if (config_.continuum.angiogenesis.model == "shared_vegf_lattice_v2") {
+            metrics_ << shared_vascular_metrics_columns();
+        }
         metrics_ << ",state_checksum\n";
     }
     if (resume) {
@@ -164,6 +178,13 @@ void StructuredPdeOutput3D::write_metrics(const StructuredPdeModel3D& model) {
         for (const auto* field : {&removed.r_normal, &removed.r_active, &removed.K})
             for (const double mass : *field) metrics_ << ',' << mass;
         metrics_ << ',' << removed.total();
+    }
+    if (const auto* vascular = model.angiogenesis()) {
+        if (const auto* shared = vascular->shared_diagnostics()) {
+            metrics_ << ',' << shared->centerline_growth << ',' << shared->initial_perfused_volume
+                     << ',' << shared->seeded_tips << ',' << shared->branches << ',' << shared->anastomoses
+                     << ',' << shared->discarded_taf_mass << ',' << shared->discarded_tip_mass;
+        }
     }
     metrics_ << ',' << model.state_checksum() << '\n';
     metrics_.flush();
@@ -302,6 +323,13 @@ void StructuredPdeOutput3D::finalize(const StructuredPdeModel3D& model) {
     if (config_.schema_version >= 13)
         json << "  \"vascular_removed_mass\": "
              << value.vascular_removed_mass.total() << ",\n";
+    if (const auto* vascular = model.angiogenesis()) {
+        if (const auto* shared = vascular->shared_diagnostics()) {
+            json << "  \"vascular_centerline_growth\": " << shared->centerline_growth << ",\n"
+                 << "  \"vascular_branches\": " << shared->branches << ",\n"
+                 << "  \"vascular_anastomoses\": " << shared->anastomoses << ",\n";
+        }
+    }
     json << "  \"state_checksum\": " << model.state_checksum() << "\n}\n";
     write_text_atomic(directory_ / "final.json", json.str());
     finalized_ = true;

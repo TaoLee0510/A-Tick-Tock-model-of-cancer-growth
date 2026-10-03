@@ -976,6 +976,32 @@ void Simulation3D::process_environment_refresh(const Event& event) {
     std::sort(slots.begin(), slots.end(), [this](Slot lhs, Slot rhs) {
         return cells_.uid(lhs) < cells_.uid(rhs);
     });
+    if (environment_->enforces_resident_exclusion()) {
+        std::vector<Vec3i> changed_sites;
+        for (const Slot slot : slots) {
+            const auto occupied = occupied_sites_for_cell(cells_, slot);
+            const bool excluded = std::any_of(occupied.begin(), occupied.end(), [this](Vec3i site) {
+                return environment_->resident_site_excluded(site);
+            });
+            if (!excluded) continue;
+            const auto type = cells_.type(slot);
+            const auto stage = cells_.stage(slot);
+            const bool active = (cells_.flags(slot) & kMigrationActive) != 0;
+            if (remove_cell(slot, cells_, grid_, density_)) {
+                events_.cancel_cell(slot);
+                environment_->record_vascular_removal(type, stage, active);
+                ++stats_.vascular_displacements;
+                changed_sites.insert(changed_sites.end(), occupied.begin(), occupied.end());
+            }
+        }
+        if (!changed_sites.empty()) {
+            recover_neighborhood(changed_sites);
+            refresh_tumor_surface(changed_sites);
+            refresh_neighborhood(changed_sites);
+            mark_spatial_changes(changed_sites);
+            std::erase_if(slots, [this](Slot slot) { return !cells_.valid(slot); });
+        }
+    }
     std::vector<GrowthRefreshResult> refreshes(slots.size());
     const int workers = select_worker_count(
         cells_.alive_count(), slots.size(), config_, available_worker_threads(),
