@@ -1,5 +1,6 @@
 #include "model/structured_pde_model.hpp"
 #include "model/beta_duration.hpp"
+#include "model/feasible_jump.hpp"
 #include "model/shared_resource.hpp"
 
 #include <algorithm>
@@ -9,6 +10,7 @@
 #include <cmath>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <numeric>
 #include <stdexcept>
 #include <type_traits>
@@ -20,6 +22,7 @@
 #include "engine/simulation.hpp"
 #include "geometry/directions.hpp"
 #include "geometry/footprint.hpp"
+#include "rules/initial_rates.hpp"
 
 namespace atcg3d::structured_pde {
 namespace {
@@ -1546,8 +1549,11 @@ void StructuredPdeModel3D::refresh_activation(double dt) {
     }
 }
 
-double StructuredPdeModel3D::mean_growth_rate(CellType type) const noexcept {
+double StructuredPdeModel3D::mean_growth_rate(CellType type) const {
     const auto& base = config_.continuum.base;
+    if (config_.growth_rate_closure == "truncated_normal_expectation_v2") {
+        return expected_initial_growth_rate(base, type);
+    }
     if (base.initial_growth_rate_model == "fixed") {
         return type == CellType::r ? base.initial_r_growth_rate
                                    : base.initial_K_growth_rate;
@@ -1630,6 +1636,54 @@ void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
         target_bounds.z1 - target_bounds.z0);
     const std::size_t box_size = bx * by * bz;
 
+    std::array<std::vector<std::array<double, 27>>, 2> feasible_probabilities;
+    const bool feasible_jump = config_.normal_transport == "feasible_fixed_lattice_jump_v3";
+    const auto box_offset = [&](int x, int y, int z) {
+        return (static_cast<std::size_t>(z - target_bounds.z0) * by +
+            static_cast<std::size_t>(y - target_bounds.y0)) * bx +
+            static_cast<std::size_t>(x - target_bounds.x0);
+    };
+    if (feasible_jump) {
+        for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
+            auto& cache = feasible_probabilities[stage];
+            cache.resize(box_size);
+            for (int z = old_bounds.z0; z < old_bounds.z1; ++z) {
+                for (int y = old_bounds.y0; y < old_bounds.y1; ++y) {
+                    for (int x = old_bounds.x0; x < old_bounds.x1; ++x) {
+                        const auto here = index(x, y, z);
+                        if (vessel_blocks_cells(here)) continue;
+                        if (r_normal_[stage][here] == 0.0 && K_[stage][here] == 0.0 &&
+                            r_refractory_[stage][here] == 0.0 && refractory_clock_[stage][here] == 0.0) {
+                            continue;
+                        }
+                        std::vector<double> availability(direction_ids_.size(), 0.0);
+                        for (std::size_t d = 0; d < direction_ids_.size(); ++d) {
+                            const auto jump = direction_vector(direction_ids_[d]);
+                            const int ox = x + jump.x;
+                            const int oy = y + jump.y;
+                            const int oz = z + jump.z;
+                            if (ox < 0 || ox >= nx || oy < 0 || oy >= ny || oz < 0 || oz >= nz) continue;
+                            const auto other = index(ox, oy, oz);
+                            if (vessel_blocks_cells(other)) continue;
+                            const double vacancy = 1.0 - std::clamp(occupied_fraction(other) /
+                                continuum.reaction.maximum_occupied_fraction, 0.0, 1.0);
+                            const double overlapping_sites = (2 - std::abs(jump.x)) *
+                                (2 - std::abs(jump.y)) *
+                                (continuum.base.thin_layer ? 1 : 2 - std::abs(jump.z));
+                            const double new_sites = stage == 0 ? 1.0 : large_cell_volume_ - overlapping_sites;
+                            availability[d] = std::pow(vacancy, new_sites);
+                        }
+                        const auto probabilities = uniform_feasible_jump_probabilities(availability);
+                        auto& target = cache[box_offset(x, y, z)];
+                        for (std::size_t d = 0; d < direction_ids_.size(); ++d) {
+                            target[direction_ids_[d]] = probabilities[d];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     const auto migrate_field = [&](const PagedField<double>& source,
                                    PagedField<double>& target,
                                    StructuredStage3D stage,
@@ -1637,6 +1691,9 @@ void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
         const bool large = stage == StructuredStage3D::large;
         const double vacancy_exponent = large ? large_cell_volume_ : 1.0;
         const double diffusion = normal_diffusion(stage, type);
+        const bool lattice_jump = config_.normal_transport != "axial_diffusion_v1";
+        const double jump_coefficient = lattice_jump
+            ? diffusion / (continuum.base.thin_layer ? 3.0 : 9.0) : diffusion;
         std::atomic<bool> invalid_negative{false};
         deterministic_parallel_for(box_size, workers, [&](std::size_t offset) {
             const int x = target_bounds.x0 + static_cast<int>(offset % bx);
@@ -1652,7 +1709,7 @@ void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
             const double availability = vessel_blocks_cells(here)
                 ? 0.0 : std::pow(vacancy, vacancy_exponent);
             double delta = 0.0;
-            const auto exchange = [&](int ox, int oy, int oz) {
+            const auto exchange = [&](int ox, int oy, int oz, DirectionId direction = kStayDirection) {
                 if (ox < 0 || ox >= nx || oy < 0 || oy >= ny ||
                     oz < 0 || oz >= nz) return;
                 const std::size_t other = index(ox, oy, oz);
@@ -1666,23 +1723,49 @@ void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
                 const double mobility = std::pow(
                     0.5 * (vacancy + other_vacancy),
                     continuum.migration.crowding_exponent);
-                delta += diffusion * inverse_h2 * mobility *
-                    (source[other] * availability -
-                     source[here] * other_availability);
+                double incoming = jump_coefficient * inverse_h2 * mobility * availability;
+                double outgoing = jump_coefficient * inverse_h2 * mobility * other_availability;
+                if (feasible_jump) {
+                    const double rate = diffusion / (continuum.base.thin_layer ? 3.0 / 8.0 : kFixed26DiffusionFactor);
+                    const auto& cache = feasible_probabilities[std::size_t(stage)];
+                    const bool in_box = ox >= target_bounds.x0 && ox < target_bounds.x1 &&
+                        oy >= target_bounds.y0 && oy < target_bounds.y1 &&
+                        oz >= target_bounds.z0 && oz < target_bounds.z1;
+                    incoming = in_box ? rate * cache[box_offset(ox, oy, oz)][opposite_direction(direction)] : 0.0;
+                    outgoing = rate * cache[box_offset(x, y, z)][direction];
+                }
+                if (feasible_jump) {
+                    delta += source[other] * incoming - source[here] * outgoing;
+                } else {
+                    delta += jump_coefficient * inverse_h2 * mobility *
+                        (source[other] * availability - source[here] * other_availability);
+                }
                 if (renewal_ && carry_cycle && here < other) {
                     const std::size_t channel = (type == CellType::r ? 0 : 2) + std::size_t(stage);
-                    const double scale = dt * diffusion * inverse_h2 * mobility;
-                    renewal_->transfer(other, here, channel, scale * source[other] * availability);
-                    renewal_->transfer(here, other, channel, scale * source[here] * other_availability);
+                    if (feasible_jump) {
+                        renewal_->transfer(other, here, channel, dt * source[other] * incoming);
+                        renewal_->transfer(here, other, channel, dt * source[here] * outgoing);
+                    } else {
+                        const double scale = dt * jump_coefficient * inverse_h2 * mobility;
+                        renewal_->transfer(other, here, channel, scale * source[other] * availability);
+                        renewal_->transfer(here, other, channel, scale * source[here] * other_availability);
+                    }
                 }
             };
-            exchange(x - 1, y, z);
-            exchange(x + 1, y, z);
-            exchange(x, y - 1, z);
-            exchange(x, y + 1, z);
-            if (!continuum.base.thin_layer) {
-                exchange(x, y, z - 1);
-                exchange(x, y, z + 1);
+            if (lattice_jump) {
+                for (const auto direction_id : direction_ids_) {
+                    const auto direction = direction_vector(direction_id);
+                    exchange(x + direction.x, y + direction.y, z + direction.z, direction_id);
+                }
+            } else {
+                exchange(x - 1, y, z);
+                exchange(x + 1, y, z);
+                exchange(x, y - 1, z);
+                exchange(x, y + 1, z);
+                if (!continuum.base.thin_layer) {
+                    exchange(x, y, z - 1);
+                    exchange(x, y, z + 1);
+                }
             }
             const double value = source[here] + dt * delta;
             if (value < -1.0e-10) invalid_negative.store(true);
@@ -3059,6 +3142,86 @@ void StructuredPdeModel3D::build_local_counts(
     }
 }
 
+std::vector<StructuredPdeModel3D::SmallBirth3D> StructuredPdeModel3D::prepare_small_births(
+    const StructuredActiveBounds3D& bounds) const {
+    const auto& grid = config_.continuum.grid;
+    const auto width = static_cast<std::size_t>(bounds.x1 - bounds.x0);
+    const auto height = static_cast<std::size_t>(bounds.y1 - bounds.y0);
+    const auto depth = static_cast<std::size_t>(bounds.z1 - bounds.z0);
+    std::vector<SmallBirth3D> result(width * height * depth);
+    for (int z = bounds.z0; z < bounds.z1; ++z) {
+        for (int y = bounds.y0; y < bounds.y1; ++y) {
+            for (int x = bounds.x0; x < bounds.x1; ++x) {
+                const auto here = index(x, y, z);
+                if (r_normal_[0][here] + r_active(StructuredStage3D::small, here) + K_[0][here] <= 0.0) continue;
+                if (vessel_blocks_cells(here)) continue;
+                std::vector<double> availability(direction_ids_.size(), 0.0);
+                for (std::size_t d = 0; d < direction_ids_.size(); ++d) {
+                    const auto direction = direction_vector(direction_ids_[d]);
+                    const int ox = x + direction.x;
+                    const int oy = y + direction.y;
+                    const int oz = z + direction.z;
+                    if (ox < 0 || ox >= grid.shape[0] || oy < 0 || oy >= grid.shape[1] ||
+                        oz < 0 || oz >= grid.shape[2]) continue;
+                    const auto other = index(ox, oy, oz);
+                    if (vessel_blocks_cells(other)) continue;
+                    availability[d] = 1.0 - std::clamp(occupied_fraction(other) /
+                        config_.continuum.reaction.maximum_occupied_fraction, 0.0, 1.0);
+                }
+                const auto probabilities = uniform_feasible_jump_probabilities(availability);
+                const auto offset = (static_cast<std::size_t>(z - bounds.z0) * height +
+                    static_cast<std::size_t>(y - bounds.y0)) * width + static_cast<std::size_t>(x - bounds.x0);
+                for (std::size_t d = 0; d < direction_ids_.size(); ++d) {
+                    result[offset].probabilities[direction_ids_[d]] = probabilities[d];
+                    result[offset].success += probabilities[d];
+                }
+                result[offset].success = std::clamp(result[offset].success, 0.0, 1.0);
+            }
+        }
+    }
+    return result;
+}
+
+void StructuredPdeModel3D::place_small_births(const StructuredActiveBounds3D& bounds,
+                                            const std::vector<SmallBirth3D>& births) {
+    const auto& grid = config_.continuum.grid;
+    const auto width = static_cast<std::size_t>(bounds.x1 - bounds.x0);
+    const auto height = static_cast<std::size_t>(bounds.y1 - bounds.y0);
+    std::map<std::size_t, std::array<double, 2>> incoming;
+    for (std::size_t offset = 0; offset < births.size(); ++offset) {
+        const auto& birth = births[offset];
+        if (birth.mass[0] + birth.mass[1] <= 0.0) continue;
+        const int x = bounds.x0 + static_cast<int>(offset % width);
+        const int y = bounds.y0 + static_cast<int>((offset / width) % height);
+        const int z = bounds.z0 + static_cast<int>(offset / (width * height));
+        for (const auto id : direction_ids_) {
+            const double probability = birth.probabilities[id];
+            if (probability <= 0.0) continue;
+            const auto direction = direction_vector(id);
+            auto& target = incoming[index(x + direction.x, y + direction.y, z + direction.z)];
+            for (std::size_t type = 0; type < 2; ++type) target[type] += birth.mass[type] * probability;
+        }
+    }
+    for (const auto& [here, mass] : incoming) {
+        const double available = std::max(0.0, config_.continuum.reaction.maximum_occupied_fraction -
+            occupied_fraction(here));
+        const double total = mass[0] + mass[1];
+        const double scale = total > available ? available / total : 1.0;
+        const double r_birth = scale * mass[0];
+        const double K_birth = scale * mass[1];
+        r_normal_[0][here] += r_birth;
+        K_[0][here] += K_birth;
+        if (renewal_) {
+            if (r_birth > 0.0) renewal_->add_fresh(here, 0, r_birth);
+            if (K_birth > 0.0) renewal_->add_fresh(here, 2, K_birth);
+        }
+        const int x = static_cast<int>(here % grid.shape[0]);
+        const int y = static_cast<int>((here / grid.shape[0]) % grid.shape[1]);
+        const int z = static_cast<int>(here / (static_cast<std::size_t>(grid.shape[0]) * grid.shape[1]));
+        if (r_birth + K_birth > 0.0) include_population_location(x, y, z);
+    }
+}
+
 void StructuredPdeModel3D::react(double dt) {
     if (!population_bounds_.valid) return;
     std::vector<double> r_counts;
@@ -3088,6 +3251,9 @@ void StructuredPdeModel3D::react(double dt) {
     const int workers = (renewal_ || duration_) ? 1 : std::max(
         1, std::min(continuum.base.threads, available_worker_threads()));
     const auto bounds = population_bounds_;
+    const bool spatial_birth = config_.small_daughter_placement == "feasible_neighbor_birth_v2" &&
+        config_.division_operator_enabled;
+    auto births = spatial_birth ? prepare_small_births(bounds) : std::vector<SmallBirth3D>{};
     const std::size_t bx = static_cast<std::size_t>(bounds.x1 - bounds.x0);
     const std::size_t by = static_cast<std::size_t>(bounds.y1 - bounds.y0);
     const std::size_t bz = static_cast<std::size_t>(bounds.z1 - bounds.z0);
@@ -3124,10 +3290,10 @@ void StructuredPdeModel3D::react(double dt) {
         const double K_growth = resource_limited(raw_K_growth);
         const bool abm_work_clock = continuum.reaction.model ==
             "abm_work_clock_neighbor_availability_v2";
-        const double r_division_rate = positive_part(r_growth) /
+        const double r_division_rate = (config_.division_operator_enabled ? positive_part(r_growth) : 0.0) /
             (continuum.base.division_timing.base_cycle_hours *
              (abm_work_clock ? 1.0 : std::max(1.0e-12, r_inherent)));
-        const double K_division_rate = positive_part(K_growth) /
+        const double K_division_rate = (config_.division_operator_enabled ? positive_part(K_growth) : 0.0) /
             (continuum.base.division_timing.base_cycle_hours *
              (abm_work_clock ? 1.0 : std::max(1.0e-12, K_inherent)));
         const double r_death_rate =
@@ -3141,7 +3307,7 @@ void StructuredPdeModel3D::react(double dt) {
             0.0, 1.0);
         const double large_success = std::pow(
             vacancy, continuum.reaction.large_daughter_vacancy_exponent);
-        const double small_success = abm_work_clock
+        const double small_success = spatial_birth ? births[offset].success : abm_work_clock
             ? 1.0 - std::pow(
                   1.0 - vacancy,
                   continuum.reaction.small_daughter_vacancy_exponent)
@@ -3162,7 +3328,7 @@ void StructuredPdeModel3D::react(double dt) {
             r_normal_[1][location] + r_active(StructuredStage3D::large, location)};
         const std::array<double, 2> old_K{K_[0][location], K_[1][location]};
         std::array<double, 4> completed{};
-        if (renewal_) {
+        if (renewal_ && config_.division_operator_enabled) {
             for (std::size_t stage = 0; stage < 2; ++stage) {
                 completed[stage] = renewal_->advance(location, stage, dt * positive_part(r_growth));
                 completed[stage + 2] = renewal_->advance(location, stage + 2, dt * positive_part(K_growth));
@@ -3199,6 +3365,13 @@ void StructuredPdeModel3D::react(double dt) {
                 continuum.reaction.failed_r_division_death_fraction;
         delta_K[0] += small_conversion * r_small_births;
         delta_K[0] += small_success * (renewal_ ? completed[2] / dt : K_division_rate * old_K[0]);
+        if (spatial_birth) {
+            const double K_small_events = renewal_ ? completed[2] / dt : K_division_rate * old_K[0];
+            births[offset].mass[0] = dt * (1.0 - small_conversion) * r_small_events;
+            births[offset].mass[1] = dt * (small_conversion * r_small_events + K_small_events);
+            delta_r[0] -= (1.0 - small_conversion) * r_small_births;
+            delta_K[0] -= small_conversion * r_small_births + small_success * K_small_events;
+        }
 
         std::array<double, 2> positive_r{};
         std::array<double, 2> positive_K{};
@@ -3283,6 +3456,7 @@ void StructuredPdeModel3D::react(double dt) {
             }
         }
     });
+    if (spatial_birth) place_small_births(bounds, births);
 }
 
 std::array<double, 2> StructuredPdeModel3D::growth_counts_at(Vec3i site) const {
@@ -3329,10 +3503,16 @@ bool StructuredPdeModel3D::step() {
     if(external_after_vascular_advance_) external_after_vascular_advance_();
     // Density is only the trigger. Active cohorts keep their own remaining
     // clock and therefore do not deactivate when this field later falls.
-    refresh_activation(dt);
-    migrate_normal_and_K(dt);
-    migrate_active(dt);
-    exchange_active_r_with_K(dt);
+    if (config_.activation_operator_enabled) refresh_activation(dt);
+    if (config_.migration_operator_enabled) {
+        migrate_normal_and_K(dt);
+        migrate_active(dt);
+        if (config_.exchange_operator_enabled) exchange_active_r_with_K(dt);
+    } else {
+        for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
+            expire_active(stage, dt);
+        }
+    }
     // V4 conversion is evaluated at the post-transport division location.
     // At 200x migration, reusing the pre-transport 70x70 field can otherwise
     // classify mass hundreds of voxels away using its source neighbourhood.

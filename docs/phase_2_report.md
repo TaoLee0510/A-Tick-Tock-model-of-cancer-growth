@@ -1,5 +1,12 @@
 # Phase 2 verification
 
+Historical note: the ensemble passes below use the original smoke criterion
+with a sampling allowance. [Phase B](phase_b_report.md) adds disjoint ABM
+baselines, time-series TOST and complete numerical tables at unchanged margins.
+Those later statistical results supersede equivalence interpretations of this
+historical report; some published activated and vascular smoke cases do not
+establish statistical equivalence.
+
 The new shared-resource ABM environment loads structured YAML and applies
 transient nutrient, common r/K growth limits, resource-scaled positive growth,
 70-square sector chemotaxis, UID-specific cooldown and hysteresis. Coupled

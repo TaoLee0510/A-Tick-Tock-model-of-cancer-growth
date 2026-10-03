@@ -45,6 +45,12 @@ Model3DConfig abm_config(const structured_pde::StructuredPdeConfig3D& config) {
     base.r_limit = base.K_limit = base.legacy_mapping.source_r_limit * mapping_scale;
     base.carrying_capacity_r = base.carrying_capacity_K = base.legacy_mapping.source_carrying_capacity_r * mapping_scale;
     base.migration_swap_enabled = config.migration.crowding_exchange != "none";
+    if (config.schema_version >= 14) {
+        base.migration_activation_enabled = base.migration_activation_enabled &&
+            config.activation_operator_enabled;
+        base.migration_swap_enabled = base.migration_swap_enabled &&
+            config.migration_operator_enabled && config.exchange_operator_enabled;
+    }
     base.end_time_hours = config.continuum.end_time_hours;
     base.output_enabled = false;
     base.control_enabled = false;

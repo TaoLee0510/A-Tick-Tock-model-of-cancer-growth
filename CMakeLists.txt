@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 
+option(ATCG_ENABLE_LONG_VALIDATION "Register opt-in long ensembles" OFF)
 option(ATCG_BUILD_LEGACY_2D "Build the existing 2D ATCG executable" ON)
 option(ATCG_BUILD_3D "Build the sparse event-driven 3D executable" ON)
 option(ATCG_BUILD_3D_NUTRIENT "Build the nutrient-coupled 3D executable" ON)
@@ -265,6 +266,7 @@ if(ATCG_BUILD_3D)
         add_library(atcg3d_structured_pde_core
             ATCG3D_StructuredPDE/config/structured_config.cpp
             ATCG3D_StructuredPDE/model/structured_pde_model.cpp
+            ATCG3D_StructuredPDE/model/feasible_jump.cpp
             ATCG3D_StructuredPDE/model/division_renewal.cpp
             ATCG3D_StructuredPDE/model/beta_duration.cpp
             ATCG3D_StructuredPDE/io/structured_pde_output.cpp
@@ -542,7 +544,47 @@ if(BUILD_TESTING)
             target_compile_options(atcg3d_vascular_field_test PRIVATE -UNDEBUG)
             target_compile_definitions(atcg3d_vascular_field_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
             add_test(NAME atcg3d_vascular_field_test COMMAND atcg3d_vascular_field_test)
+            add_executable(atcg3d_operator_contract_test tests/3d/operator_contract_test.cpp)
+            target_link_libraries(atcg3d_operator_contract_test PRIVATE atcg3d_shared_rules_core)
+            target_compile_options(atcg3d_operator_contract_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_operator_contract_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME atcg3d_operator_contract_test COMMAND atcg3d_operator_contract_test)
             if(Python3_Interpreter_FOUND)
+                add_test(NAME atcg3d_equivalence_stats_test
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/3d/equivalence_stats_test.py)
+                add_test(NAME atcg3d_validation_trace_test
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/3d/validation_trace_test.py
+                        --exe $<TARGET_FILE:atcg3d_shared_abm> --root ${CMAKE_CURRENT_SOURCE_DIR})
+                if(ATCG3D_ENABLE_HDF5_CHECKPOINT)
+                    add_test(NAME atcg3d_validation_trace_checkpoint_test
+                        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/3d/validation_trace_test.py
+                            --exe $<TARGET_FILE:atcg3d_shared_abm> --root ${CMAKE_CURRENT_SOURCE_DIR} --checkpoint)
+                endif()
+                add_test(NAME atcg3d_statistical_regular_validation
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
+                        --exe $<TARGET_FILE:atcg3d_shared_abm>
+                        --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/regular_cycle_spatial_birth_v14.yaml
+                        --seeds 16 --require-interior
+                        --output ${CMAKE_CURRENT_BINARY_DIR}/validation-statistical-spatial-birth)
+                set_tests_properties(atcg3d_statistical_regular_validation PROPERTIES LABELS validation TIMEOUT 600)
+                add_test(NAME atcg3d_statistical_active_r20_validation
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
+                        --exe $<TARGET_FILE:atcg3d_shared_abm>
+                        --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/active_r20_v14.yaml
+                        --seeds 16 --require-interior --minimum-active-fraction 0.1
+                        --output ${CMAKE_CURRENT_BINARY_DIR}/validation-statistical-active-r20-v14)
+                set_tests_properties(atcg3d_statistical_active_r20_validation PROPERTIES LABELS validation TIMEOUT 1800)
+                if(ATCG_ENABLE_LONG_VALIDATION)
+                    foreach(long_case IN ITEMS r20_512_360 r200_512_360 r20_2000_720 r200_2000_720)
+                        add_test(NAME atcg3d_long_${long_case}_validation
+                            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
+                                --exe $<TARGET_FILE:atcg3d_shared_abm>
+                                --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/long_${long_case}_v14.yaml
+                                --seeds 16 --sample-every-hours 24 --require-interior
+                                --output ${CMAKE_CURRENT_BINARY_DIR}/validation-long-${long_case})
+                        set_tests_properties(atcg3d_long_${long_case}_validation PROPERTIES LABELS validation_long TIMEOUT 604800)
+                    endforeach()
+                endif()
                 add_test(NAME atcg3d_hybrid_validation
                     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_hybrid.py
                         --exe $<TARGET_FILE:atcg3d_hybrid>
@@ -559,19 +601,19 @@ if(BUILD_TESTING)
                     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
                         --exe $<TARGET_FILE:atcg3d_shared_abm>
                         --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/validation_v7.yaml
-                        --seeds 16 --output ${CMAKE_CURRENT_BINARY_DIR}/validation)
+                        --smoke-only --seeds 16 --output ${CMAKE_CURRENT_BINARY_DIR}/validation)
                 set_tests_properties(atcg3d_abm_pde_validation PROPERTIES LABELS validation TIMEOUT 180)
                 add_test(NAME atcg3d_regular_cycle_validation
                     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
                         --exe $<TARGET_FILE:atcg3d_shared_abm>
                         --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/regular_cycle_v10.yaml
-                        --seeds 16 --output ${CMAKE_CURRENT_BINARY_DIR}/validation-regular)
+                        --smoke-only --seeds 16 --output ${CMAKE_CURRENT_BINARY_DIR}/validation-regular)
                 set_tests_properties(atcg3d_regular_cycle_validation PROPERTIES LABELS validation TIMEOUT 300)
                 add_test(NAME atcg3d_vascular_validation
                     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
                         --exe $<TARGET_FILE:atcg3d_shared_abm>
                         --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/angiogenesis_v8.yaml
-                        --seeds 16 --vascular --output ${CMAKE_CURRENT_BINARY_DIR}/validation-vascular)
+                        --smoke-only --seeds 16 --vascular --output ${CMAKE_CURRENT_BINARY_DIR}/validation-vascular)
                 set_tests_properties(atcg3d_vascular_validation PROPERTIES LABELS validation TIMEOUT 180)
                 foreach(multiplier IN ITEMS 20 200)
                     if(multiplier EQUAL 200)
@@ -583,7 +625,7 @@ if(BUILD_TESTING)
                         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
                             --exe $<TARGET_FILE:atcg3d_shared_abm>
                             --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/${active_config}
-                            --seeds 16 --minimum-active-fraction 0.1
+                            --smoke-only --seeds 16 --minimum-active-fraction 0.1
                             --output ${CMAKE_CURRENT_BINARY_DIR}/validation-active-r${multiplier})
                     set_tests_properties(atcg3d_active_r${multiplier}_validation PROPERTIES LABELS validation TIMEOUT 1800)
                 endforeach()
@@ -591,7 +633,7 @@ if(BUILD_TESTING)
                     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_abm_vs_pde.py
                         --exe $<TARGET_FILE:atcg3d_shared_abm>
                         --config ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_SharedRules/config/angiogenesis_nonlinear_v8.yaml
-                        --seeds 16 --vascular --require-vascular-activity
+                        --smoke-only --seeds 16 --vascular --require-vascular-activity
                         --output ${CMAKE_CURRENT_BINARY_DIR}/validation-vascular-nonlinear)
                 set_tests_properties(atcg3d_nonlinear_vascular_validation PROPERTIES LABELS validation TIMEOUT 180)
             endif()

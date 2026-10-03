@@ -38,6 +38,12 @@ public:
     bool individual_refractory() const noexcept override { return true; }
     bool activation_ready(CellUid uid, double now, double density) override;
     void activation_expired(CellUid uid, double now) override;
+    bool migration_operator_enabled() const noexcept override {
+        return config_.migration_operator_enabled;
+    }
+    bool division_operator_enabled() const noexcept override {
+        return config_.division_operator_enabled;
+    }
     double next_refresh_time_hours() const noexcept override { return next_refresh_; }
     std::uint32_t schedule_generation() const noexcept override { return generation_; }
     std::uint64_t refresh_count() const noexcept override { return refreshes_; }

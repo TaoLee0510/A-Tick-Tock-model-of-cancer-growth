@@ -168,6 +168,13 @@ private:
     void exchange_active_r_with_K(double dt);
     void expire_active(std::size_t stage, double dt);
     void react(double dt);
+    struct SmallBirth3D {
+        std::array<double, 27> probabilities{};
+        std::array<double, 2> mass{};
+        double success{};
+    };
+    std::vector<SmallBirth3D> prepare_small_births(const StructuredActiveBounds3D& bounds) const;
+    void place_small_births(const StructuredActiveBounds3D& bounds, const std::vector<SmallBirth3D>& births);
     void build_local_counts(std::vector<double>& r_counts,
                             std::vector<double>& K_counts) const;
     std::vector<std::size_t> eligible_initial_directions(
@@ -178,7 +185,7 @@ private:
     void build_guidance_prefix(double dt);
     bool vessel_blocks_cells(std::size_t location) const noexcept;
     double capacity_multiplier(double nutrient) const noexcept;
-    double mean_growth_rate(CellType type) const noexcept;
+    double mean_growth_rate(CellType type) const;
     double normal_diffusion(StructuredStage3D stage, CellType type) const noexcept;
     double active_rate(StructuredStage3D stage) const noexcept;
     void include_active_location(std::size_t stage,

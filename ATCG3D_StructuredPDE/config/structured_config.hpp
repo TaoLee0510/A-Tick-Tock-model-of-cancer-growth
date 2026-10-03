@@ -38,6 +38,14 @@ struct StructuredPdeConfig3D {
     std::string division_clock_model{"mean_rate_v1"};
     double division_work_bin_width{0.5};
     double division_maximum_work{128.0};
+    std::string operator_model{"published_operators_v1"};
+    bool migration_operator_enabled{true};
+    bool activation_operator_enabled{true};
+    bool division_operator_enabled{true};
+    bool exchange_operator_enabled{true};
+    std::string growth_rate_closure{"clipped_location_mean_v1"};
+    std::string normal_transport{"axial_diffusion_v1"};
+    std::string small_daughter_placement{"local_growth_v1"};
     std::filesystem::path source_path;
     std::filesystem::path continuum_config_path;
     continuum::ContinuumModelConfig3D continuum;

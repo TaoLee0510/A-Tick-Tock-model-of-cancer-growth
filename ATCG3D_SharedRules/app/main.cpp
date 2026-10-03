@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <optional>
@@ -25,6 +26,7 @@ struct Summary {
     double vascular_roots{}, vascular_anastomoses{}, tip_branching_rate{}, tip_anastomosis_rate{};
     std::vector<double> radial;
     std::uint64_t checksum{}, resource_checksum{};
+    double boundary_mass{};
     explicit Summary(std::size_t bins) : radial(bins, 0.0) {}
     void add(double radius, double mass) {
         const auto bin = std::min(radial.size() - 1, static_cast<std::size_t>(std::floor(radius)));
@@ -40,7 +42,9 @@ struct Summary {
         }
         return 0.0;
     }
-    void write(std::ostream& out, const std::string& model, std::uint64_t seed) const {
+    void write(std::ostream& out, const std::string& model, std::uint64_t seed,
+               const std::vector<Summary>* trace = nullptr,
+               const atcg3d::continuum::ContinuumModelConfig3D* config = nullptr) const {
         out << std::setprecision(17) << "{\"schema_version\":1,\"model\":\"" << model << "\",\"seed\":" << seed
             << ",\"time_hours\":" << time << ",\"total_mass\":" << r + K << ",\"r_mass\":" << r
             << ",\"K_mass\":" << K << ",\"r_K_ratio\":" << (K > 0.0 ? r / K : 0.0)
@@ -53,7 +57,29 @@ struct Summary {
             << ",\"tip_branching_rate\":" << tip_branching_rate << ",\"tip_anastomosis_rate\":" << tip_anastomosis_rate
             << ",\"radial_mass\":[";
         for (std::size_t i = 0; i < radial.size(); ++i) { if (i != 0) out << ','; out << radial[i]; }
-        out << "]}\n";
+        out << ']';
+        if (config) {
+            double half_width = std::numeric_limits<double>::infinity();
+            const int dimensions = config->base.thin_layer ? 2 : 3;
+            for (int axis = 0; axis < dimensions; ++axis) {
+                half_width = std::min(half_width, std::min(-config->grid.origin[axis],
+                    config->grid.origin[axis] + config->grid.shape[axis] * config->grid.spacing_voxels));
+            }
+            out << ",\"spatial_dimensions\":" << dimensions
+                << ",\"grid_shape\":[" << config->grid.shape[0] << ',' << config->grid.shape[1]
+                << ',' << config->grid.shape[2] << ']' << ",\"domain_half_width\":" << half_width
+                << ",\"boundary_mass\":" << boundary_mass
+                << ",\"r99_to_half_width\":" << quantile(0.99) / half_width;
+        }
+        if (trace) {
+            out << ",\"time_series\":[";
+            for (std::size_t i = 0; i < trace->size(); ++i) {
+                if (i != 0) out << ',';
+                (*trace)[i].write(out, model, seed, nullptr, config);
+            }
+            out << ']';
+        }
+        out << "}\n";
     }
 };
 void vascular_summary(Summary& summary, const std::vector<double>& vessels, const std::vector<double>& occupied,
@@ -104,6 +130,129 @@ std::size_t radial_bin_count(const atcg3d::continuum::ContinuumModelConfig3D& co
     for(int edge:config.grid.shape) squared+=static_cast<double>(edge)*edge;
     return static_cast<std::size_t>(std::ceil(std::sqrt(squared)))+1;
 }
+Summary summarize_abm(const atcg3d::Simulation3D& simulation,
+                      const atcg3d::shared_rules::SharedResourceEnvironment3D& resource,
+                      const atcg3d::continuum::ContinuumModelConfig3D& config) {
+    Summary result(radial_bin_count(config));
+    result.time = simulation.clock().time_hours;
+    const auto geometry = config.shared_vascular_geometry();
+    for (const auto slot : simulation.cells().alive_slots()) {
+        const auto point = simulation.cells().anchor(slot);
+        (simulation.cells().type(slot) == atcg3d::CellType::r ? result.r : result.K) += 1.0;
+        if (simulation.cells().type(slot) == atcg3d::CellType::r &&
+            (simulation.cells().flags(slot) & atcg3d::kMigrationActive)) {
+            result.active += 1.0;
+        }
+        result.add(std::sqrt((point.x + 0.5) * (point.x + 0.5) +
+            (point.y + 0.5) * (point.y + 0.5) +
+            (config.base.thin_layer ? 0.0 : (point.z + 0.5) * (point.z + 0.5))), 1.0);
+        const auto on_boundary = [&](atcg3d::Vec3i site) {
+            const std::array<int, 3> coordinates{site.x, site.y, site.z};
+            const int dimensions = config.base.thin_layer ? 2 : 3;
+            for (int axis = 0; axis < dimensions; ++axis) {
+                const double index = std::floor((coordinates[axis] - geometry.origin[axis]) /
+                    geometry.spacing_voxels);
+                if (index <= 0 || index >= geometry.shape[axis] - 1) return true;
+            }
+            return false;
+        };
+        if (simulation.cells().stage(slot) == atcg3d::CellStage::large) {
+            const double weight = config.base.thin_layer ? 0.25 : 0.125;
+            for (const auto site : atcg3d::large_footprint(point)) {
+                if (config.base.thin_layer && site.z != point.z) continue;
+                if (on_boundary(site)) result.boundary_mass += weight;
+            }
+        } else if (on_boundary(point)) {
+            result.boundary_mass += 1.0;
+        }
+    }
+    vascular_abm(result, simulation, resource, config);
+    result.checksum = simulation.state_checksum();
+    result.resource_checksum = resource.field_checksum();
+    return result;
+}
+
+Summary summarize_pde(const atcg3d::structured_pde::StructuredPdeModel3D& pde,
+                      const atcg3d::continuum::ContinuumModelConfig3D& config) {
+    Summary result(radial_bin_count(config));
+    std::vector<double> occupied(pde.voxel_count(), 0.0);
+    for (std::size_t i = 0; i < pde.voxel_count(); ++i) {
+        occupied[i] = pde.occupied_fraction(i);
+    }
+    vascular_summary(result, pde.vessel_fraction(), occupied, config);
+    if (const auto* vascular = pde.angiogenesis()) {
+        const auto& law = config.angiogenesis;
+        for (std::size_t i = 0; i < pde.voxel_count(); ++i) {
+            const double tips = vascular->tips()[i];
+            result.tip_branching_rate += law.tip_branching_per_hour *
+                vascular->taf()[i] * tips * pde.voxel_measure();
+            result.tip_anastomosis_rate += law.tip_anastomosis_per_hour *
+                (pde.vessel_fraction()[i] + tips) * tips * pde.voxel_measure();
+        }
+    }
+    const auto diagnostics = pde.diagnostics();
+    result.r = diagnostics.r_total;
+    result.K = diagnostics.K_total;
+    result.active = diagnostics.r_active_total;
+    result.time = pde.time_hours();
+    result.checksum = pde.state_checksum();
+    for (std::size_t here = 0; here < pde.voxel_count(); ++here) {
+        const auto point = pde.coordinate(here);
+        double mass = 0.0;
+        for (const auto stage : {atcg3d::structured_pde::StructuredStage3D::small,
+                                atcg3d::structured_pde::StructuredStage3D::large}) {
+            mass += pde.r_normal(stage, here) + pde.r_active(stage, here) + pde.K(stage, here);
+        }
+        result.add(std::sqrt(point[0] * point[0] + point[1] * point[1] +
+            (config.base.thin_layer ? 0.0 : point[2] * point[2])), mass * pde.voxel_measure());
+        const int x = static_cast<int>(here % config.grid.shape[0]);
+        const int y = static_cast<int>((here / config.grid.shape[0]) % config.grid.shape[1]);
+        const int z = static_cast<int>(here / (config.grid.shape[0] * config.grid.shape[1]));
+        if (x == 0 || x == config.grid.shape[0] - 1 ||
+            y == 0 || y == config.grid.shape[1] - 1 ||
+            (!config.base.thin_layer && (z == 0 || z == config.grid.shape[2] - 1))) {
+            result.boundary_mass += mass * pde.voxel_measure();
+        }
+    }
+    return result;
+}
+
+bool same_sample_time(double time, double target) {
+    return std::abs(time - target) <= 1.0e-9 * std::max(1.0, std::abs(target));
+}
+
+void configure_sampling(atcg3d::Model3DConfig& base, double interval) {
+    if (interval == 0.0) return;
+    base.output_enabled = true;
+    base.preview_every_hours = interval;
+    base.full_every_hours = interval;
+    base.checkpoint_every_hours = interval;
+    base.preview_keyframe_every_hours = interval;
+    base.full_keyframe_every_hours = std::max(base.full_keyframe_every_hours, interval);
+    base.checkpoint_base_every_hours = std::max(base.checkpoint_base_every_hours, interval);
+}
+
+void run_abm(atcg3d::Simulation3D& simulation,
+             const atcg3d::shared_rules::SharedResourceEnvironment3D& resource,
+             const atcg3d::continuum::ContinuumModelConfig3D& config,
+             double interval, std::vector<Summary>& trace) {
+    if (interval == 0.0) {
+        simulation.run();
+        return;
+    }
+    double next = simulation.clock().time_hours;
+    simulation.run([&](const atcg3d::Simulation3D& current) {
+        const double time = current.clock().time_hours;
+        if (same_sample_time(time, next)) {
+            trace.push_back(summarize_abm(current, resource, config));
+            next += interval;
+        }
+    });
+    if (trace.empty() || !same_sample_time(trace.back().time, simulation.clock().time_hours)) {
+        trace.push_back(summarize_abm(simulation, resource, config));
+    }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -112,12 +261,14 @@ int main(int argc, char** argv) {
         std::string model = "abm";
         std::optional<std::uint64_t> seed_override;
         int threads = 1;
+        double sample_interval = 0.0;
+        std::vector<Summary> trace;
         bool dry_run = false;
         for (int i = 1; i < argc; ++i) {
             const std::string argument = argv[i];
             if (argument == "--help") {
                 std::cout << "Usage: atcg3d_shared_abm --config YAML [--model abm|pde] [--seed N] [--threads N]\n"
-                          << "       [--report JSON] [--output-root PATH] [--checkpoint H5] [--resume-checkpoint H5] [--dry-run]\n";
+                          << "       [--report JSON] [--output-root PATH] [--checkpoint H5] [--resume-checkpoint H5] [--sample-every-hours 4..24] [--dry-run]\n";
                 return 0;
             }
             if (argument == "--dry-run") { dry_run = true; continue; }
@@ -127,6 +278,7 @@ int main(int argc, char** argv) {
             else if (argument == "--model") model = value;
             else if (argument == "--seed") seed_override = std::stoull(value);
             else if (argument == "--threads") threads = std::stoi(value);
+            else if (argument == "--sample-every-hours") sample_interval = std::stod(value);
             else if (argument == "--report") report = value;
             else if (argument == "--output-root") output_root = value;
             else if (argument == "--checkpoint") checkpoint = value;
@@ -135,12 +287,22 @@ int main(int argc, char** argv) {
         }
         if (yaml.empty() || (model != "abm" && model != "pde") || threads < 1) throw std::invalid_argument("invalid shared-model arguments");
         if (model == "pde" && (!checkpoint.empty() || !resume.empty())) throw std::invalid_argument("shared checkpoint options require --model abm");
+        if (!std::isfinite(sample_interval) ||
+            (sample_interval != 0.0 && (sample_interval < 4.0 || sample_interval > 24.0))) {
+            throw std::invalid_argument("sampling interval must be zero or between four and 24 hours");
+        }
         auto config = atcg3d::structured_pde::StructuredPdeConfig3D::load(yaml);
+        if (sample_interval > 0.0 && !same_sample_time(
+            sample_interval / config.continuum.time_step_hours,
+            std::round(sample_interval / config.continuum.time_step_hours))) {
+            throw std::invalid_argument("sampling interval must be a multiple of the PDE time step");
+        }
         if (seed_override) config.continuum.base.seed = *seed_override;
         const auto seed = config.continuum.base.seed;
         config.continuum.base.threads = threads;
         config.continuum.output.enabled = false;
         auto base = atcg3d::shared_rules::abm_config(config);
+        configure_sampling(base, sample_interval);
         if (dry_run) { std::cout << config.to_json() << '\n'; return 0; }
         auto environment = std::make_unique<atcg3d::shared_rules::SharedResourceEnvironment3D>(config);
         auto* field = environment.get();
@@ -153,25 +315,16 @@ int main(int argc, char** argv) {
             atcg3d::Simulation3D restored(base, std::move(environment));
             restored.restore(saved.cells, saved.next_uid, saved.clock, saved.stats, saved.lineage,
                 saved.vasculature, saved.cell_slot_count, saved.cell_slots, saved.cell_free_slots);
-            restored.run();
-            const auto bins = radial_bin_count(config.continuum);
-            Summary result(bins);
-            result.time = restored.clock().time_hours;
-            for (const auto slot : restored.cells().alive_slots()) {
-                const auto point = restored.cells().anchor(slot);
-                (restored.cells().type(slot) == atcg3d::CellType::r ? result.r : result.K) += 1.0;
-                if (restored.cells().type(slot) == atcg3d::CellType::r && (restored.cells().flags(slot) & atcg3d::kMigrationActive)) result.active += 1.0;
-                result.add(std::sqrt((point.x + 0.5) * (point.x + 0.5) + (point.y + 0.5) * (point.y + 0.5) +
-                    (base.thin_layer ? 0.0 : (point.z + 0.5) * (point.z + 0.5))), 1.0);
-            }
-            vascular_abm(result,restored,*field,config.continuum);
-            result.checksum = restored.state_checksum(); result.resource_checksum = field->field_checksum();
-            if (report.empty()) result.write(std::cout, model, seed);
+            run_abm(restored, *field, config.continuum, sample_interval, trace);
+            const auto result = summarize_abm(restored, *field, config.continuum);
+            if (report.empty()) result.write(std::cout, model, seed, sample_interval > 0.0 ? &trace : nullptr,
+                sample_interval > 0.0 ? &config.continuum : nullptr);
             else {
                 if (!report.parent_path().empty()) std::filesystem::create_directories(report.parent_path());
                 std::ofstream out(report);
                 if (!out) throw std::runtime_error("unable to write summary report");
-                result.write(out, model, seed);
+                result.write(out, model, seed, sample_interval > 0.0 ? &trace : nullptr,
+                    sample_interval > 0.0 ? &config.continuum : nullptr);
             }
             return 0;
 #else
@@ -183,17 +336,8 @@ int main(int argc, char** argv) {
         const auto bins = radial_bin_count(config.continuum);
         Summary result(bins);
         if (model == "abm") {
-            simulation.run();
-            result.time = simulation.clock().time_hours;
-            for (const auto slot : simulation.cells().alive_slots()) {
-                const auto point = simulation.cells().anchor(slot);
-                (simulation.cells().type(slot) == atcg3d::CellType::r ? result.r : result.K) += 1.0;
-                if (simulation.cells().type(slot) == atcg3d::CellType::r && (simulation.cells().flags(slot) & atcg3d::kMigrationActive)) result.active += 1.0;
-                result.add(std::sqrt((point.x + 0.5) * (point.x + 0.5) + (point.y + 0.5) * (point.y + 0.5) +
-                    (base.thin_layer ? 0.0 : (point.z + 0.5) * (point.z + 0.5))), 1.0);
-            }
-            vascular_abm(result,simulation,*field,config.continuum);
-            result.checksum = simulation.state_checksum(); result.resource_checksum = field->field_checksum();
+            run_abm(simulation, *field, config.continuum, sample_interval, trace);
+            result = summarize_abm(simulation, *field, config.continuum);
             if (!checkpoint.empty()) {
 #ifdef ATCG3D_HAS_HDF5_CHECKPOINT
                 atcg3d::write_hdf5_checkpoint(checkpoint, simulation);
@@ -205,30 +349,19 @@ int main(int argc, char** argv) {
         } else {
             atcg3d::structured_pde::StructuredPdeModel3D pde(config);
             pde.initialize_from_abm(simulation);
-            while (pde.step()) {}
-            std::vector<double> occupied(pde.voxel_count(),0);
-            for(std::size_t i=0;i<pde.voxel_count();++i) occupied[i]=pde.occupied_fraction(i);
-            vascular_summary(result,pde.vessel_fraction(),occupied,config.continuum);
-            if (const auto* vascular = pde.angiogenesis()) {
-                const auto& law = config.continuum.angiogenesis;
-                for (std::size_t i = 0; i < pde.voxel_count(); ++i) {
-                    const double tips = vascular->tips()[i];
-                    result.tip_branching_rate += law.tip_branching_per_hour *
-                        vascular->taf()[i] * tips * pde.voxel_measure();
-                    result.tip_anastomosis_rate += law.tip_anastomosis_per_hour *
-                        (pde.vessel_fraction()[i] + tips) * tips * pde.voxel_measure();
+            double next = pde.time_hours();
+            const auto sample = [&]() {
+                if (sample_interval > 0.0 && same_sample_time(pde.time_hours(), next)) {
+                    trace.push_back(summarize_pde(pde, config.continuum));
+                    next += sample_interval;
                 }
-            }
-            const auto diagnostics = pde.diagnostics();
-            result.r = diagnostics.r_total; result.K = diagnostics.K_total; result.active = diagnostics.r_active_total;
-            result.time = pde.time_hours(); result.checksum = pde.state_checksum();
-            for (std::size_t here = 0; here < pde.voxel_count(); ++here) {
-                const auto point = pde.coordinate(here);
-                double mass = 0.0;
-                for (const auto stage : {atcg3d::structured_pde::StructuredStage3D::small, atcg3d::structured_pde::StructuredStage3D::large}) {
-                    mass += pde.r_normal(stage, here) + pde.r_active(stage, here) + pde.K(stage, here);
-                }
-                result.add(std::sqrt(point[0] * point[0] + point[1] * point[1] + (base.thin_layer ? 0.0 : point[2] * point[2])), mass * pde.voxel_measure());
+            };
+            sample();
+            while (pde.step()) sample();
+            result = summarize_pde(pde, config.continuum);
+            if (sample_interval > 0.0 &&
+                (trace.empty() || !same_sample_time(trace.back().time, result.time))) {
+                trace.push_back(result);
             }
         }
         if (report.empty()) {
@@ -238,7 +371,8 @@ int main(int argc, char** argv) {
         } else if (!report.parent_path().empty()) std::filesystem::create_directories(report.parent_path());
         std::ofstream out(report);
         if (!out) throw std::runtime_error("unable to write summary report");
-        result.write(out, model, seed);
+        result.write(out, model, seed, sample_interval > 0.0 ? &trace : nullptr,
+                    sample_interval > 0.0 ? &config.continuum : nullptr);
         std::cout << "model=" << model << " time_hours=" << result.time << " mass=" << result.r + result.K << " checksum=" << result.checksum << '\n';
         return 0;
     } catch (const std::exception& error) { std::cerr << "shared rules: " << error.what() << '\n'; return 1; }

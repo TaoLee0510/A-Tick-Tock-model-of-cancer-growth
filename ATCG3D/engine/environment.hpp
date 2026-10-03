@@ -68,6 +68,8 @@ public:
     virtual bool individual_refractory() const noexcept { return false; }
     virtual bool activation_ready(CellUid, double, double) { return true; }
     virtual void activation_expired(CellUid, double) {}
+    virtual bool migration_operator_enabled() const noexcept { return true; }
+    virtual bool division_operator_enabled() const noexcept { return true; }
 };
 
 }  // namespace atcg3d

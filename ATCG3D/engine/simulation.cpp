@@ -1208,8 +1208,11 @@ std::uint32_t Simulation3D::bump_event_generation(EventKind kind, Slot slot) {
 
 void Simulation3D::schedule(EventKind kind, std::uint32_t slot, std::uint64_t uid,
                             double time, std::uint32_t generation) {
+    const bool operator_enabled = !environment_ ||
+        ((kind != EventKind::migration || environment_->migration_operator_enabled()) &&
+         (kind != EventKind::division || environment_->division_operator_enabled()));
     const bool active =
-        time > 0.0 && time >= clock_.time_hours && std::isfinite(time);
+        operator_enabled && time > 0.0 && time >= clock_.time_hours && std::isfinite(time);
     events_.schedule({time, slot, uid, kind, generation}, active);
 }
 

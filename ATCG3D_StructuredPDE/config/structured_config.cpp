@@ -1,6 +1,7 @@
 #include "config/structured_config.hpp"
 #include "model/division_renewal.hpp"
 #include "model/beta_duration.hpp"
+#include "rules/initial_rates.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -118,7 +119,8 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
             error.what());
     }
     mapping(root, "$", {"schema", "profile", "continuum_config",
-                         "structured_migration", "output", "storage", "division_clock"});
+                         "structured_migration", "output", "storage", "division_clock",
+                         "operators", "growth_rate_closure", "normal_transport", "small_daughter_placement"});
     const YAML::Node schema = required(root, "schema", "$");
     mapping(schema, "$.schema", {"name", "version"});
     if (text(required(schema, "name", "$.schema"), "$.schema.name") !=
@@ -258,12 +260,34 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
         result.division_work_bin_width = number(required(clock, "work_bin_width", "$.division_clock"), "$.division_clock.work_bin_width");
         result.division_maximum_work = number(required(clock, "maximum_work", "$.division_clock"), "$.division_clock.maximum_work");
     }
+    if (root["operators"]) {
+        if (result.schema_version < 14) fail("$.operators", "requires schema v14");
+        const auto operators = root["operators"];
+        mapping(operators, "$.operators", {"model", "migration", "activation", "division", "exchange"});
+        result.operator_model = text(required(operators, "model", "$.operators"), "$.operators.model");
+        result.migration_operator_enabled = boolean(required(operators, "migration", "$.operators"), "$.operators.migration");
+        result.activation_operator_enabled = boolean(required(operators, "activation", "$.operators"), "$.operators.activation");
+        result.division_operator_enabled = boolean(required(operators, "division", "$.operators"), "$.operators.division");
+        result.exchange_operator_enabled = boolean(required(operators, "exchange", "$.operators"), "$.operators.exchange");
+    }
+    if (root["growth_rate_closure"]) {
+        if (result.schema_version < 14) fail("$.growth_rate_closure", "requires schema v14");
+        result.growth_rate_closure = text(root["growth_rate_closure"], "$.growth_rate_closure");
+    }
+    if (root["normal_transport"]) {
+        if (result.schema_version < 14) fail("$.normal_transport", "requires schema v14");
+        result.normal_transport = text(root["normal_transport"], "$.normal_transport");
+    }
+    if (root["small_daughter_placement"]) {
+        if (result.schema_version < 14) fail("$.small_daughter_placement", "requires schema v14");
+        result.small_daughter_placement = text(root["small_daughter_placement"], "$.small_daughter_placement");
+    }
     result.validate();
     return result;
 }
 
 void StructuredPdeConfig3D::validate() const {
-    if ((schema_version < 1 || schema_version > 13) || profile.empty()) {
+    if ((schema_version < 1 || schema_version > 14) || profile.empty()) {
         throw std::invalid_argument("structured PDE schema/profile is invalid");
     }
     if (schema_version < 9 && storage_model != "dense_v1") {
@@ -279,6 +303,36 @@ void StructuredPdeConfig3D::validate() const {
             "sparse zero pages v1 requires thin layer and static vasculature");
     }
     continuum.validate();
+    const bool switched = !migration_operator_enabled || !activation_operator_enabled ||
+        !division_operator_enabled || !exchange_operator_enabled;
+    if ((operator_model != "published_operators_v1" && operator_model != "shared_operator_switches_v1") ||
+        (switched && operator_model != "shared_operator_switches_v1") ||
+        (schema_version < 14 && (operator_model != "published_operators_v1" || switched ||
+                                growth_rate_closure != "clipped_location_mean_v1" ||
+                                normal_transport != "axial_diffusion_v1" ||
+                                small_daughter_placement != "local_growth_v1"))) {
+        throw std::invalid_argument("operator switches require the schema v14 shared operator model");
+    }
+    if (growth_rate_closure != "clipped_location_mean_v1" &&
+        growth_rate_closure != "truncated_normal_expectation_v2") {
+        throw std::invalid_argument("unsupported growth rate closure");
+    }
+    if ((normal_transport != "axial_diffusion_v1" && normal_transport != "fixed_lattice_jump_v2" &&
+         normal_transport != "feasible_fixed_lattice_jump_v3") ||
+        (normal_transport != "axial_diffusion_v1" && !close(continuum.grid.spacing_voxels, 1.0))) {
+        throw std::invalid_argument("fixed lattice normal transport requires unit spacing and schema v14");
+    }
+    if (normal_transport == "feasible_fixed_lattice_jump_v3" &&
+        (continuum.base.distance_weight_exponent != 0.0 || continuum.migration.crowding_exponent != 0.0)) {
+        throw std::invalid_argument("uniform feasible normal jumps require zero distance and crowding exponents");
+    }
+    if (small_daughter_placement != "local_growth_v1" && small_daughter_placement != "feasible_neighbor_birth_v2") {
+        throw std::invalid_argument("unsupported small daughter placement");
+    }
+    if (small_daughter_placement == "feasible_neighbor_birth_v2" &&
+        (!close(continuum.grid.spacing_voxels, 1.0) || continuum.base.ultrasmall_enabled)) {
+        throw std::invalid_argument("neighbor birth requires unit spacing and no ultrasmall cells");
+    }
     if ((division_clock_model != "mean_rate_v1" &&
          division_clock_model != "transported_shifted_geometric_v1") ||
         (schema_version < 10 && division_clock_model != "mean_rate_v1") ||
@@ -322,6 +376,10 @@ void StructuredPdeConfig3D::validate() const {
             const auto& K = base.initial_K_growth_truncated_normal;
             inherent = {std::clamp(r.mean, r.minimum, r.maximum),
                         std::clamp(K.mean, K.minimum, K.maximum)};
+        }
+        if (growth_rate_closure == "truncated_normal_expectation_v2") {
+            inherent = {expected_initial_growth_rate(base, CellType::r),
+                        expected_initial_growth_rate(base, CellType::K)};
         }
         (void)DivisionRenewal3D(base.division_timing, division_work_bin_width,
                               division_maximum_work, inherent);
@@ -501,6 +559,16 @@ std::uint64_t StructuredPdeConfig3D::dynamics_fingerprint() const {
         state = mix(state, std::bit_cast<std::uint64_t>(division_work_bin_width));
         state = mix(state, std::bit_cast<std::uint64_t>(division_maximum_work));
     }
+    if (schema_version >= 14) {
+        hash_text(state, operator_model);
+        state = mix(state, migration_operator_enabled);
+        state = mix(state, activation_operator_enabled);
+        state = mix(state, division_operator_enabled);
+        state = mix(state, exchange_operator_enabled);
+        hash_text(state, growth_rate_closure);
+        hash_text(state, normal_transport);
+        if (small_daughter_placement != "local_growth_v1") hash_text(state, small_daughter_placement);
+    }
     return state;
 }
 
@@ -557,6 +625,18 @@ std::string StructuredPdeConfig3D::to_json() const {
         stream << ",\"division_clock\":{\"model\":\"" << division_clock_model
                << "\",\"work_bin_width\":" << division_work_bin_width
                << ",\"maximum_work\":" << division_maximum_work << '}';
+    }
+    if (schema_version >= 14) {
+        if (small_daughter_placement != "local_growth_v1") {
+            stream << ",\"small_daughter_placement\":\"" << small_daughter_placement << '"';
+        }
+        stream << ",\"normal_transport\":\"" << normal_transport
+               << "\",\"growth_rate_closure\":\"" << growth_rate_closure
+               << "\",\"operators\":{\"model\":\"" << operator_model
+               << "\",\"migration\":" << (migration_operator_enabled ? "true" : "false")
+               << ",\"activation\":" << (activation_operator_enabled ? "true" : "false")
+               << ",\"division\":" << (division_operator_enabled ? "true" : "false")
+               << ",\"exchange\":" << (exchange_operator_enabled ? "true" : "false") << '}';
     }
     stream << '}';
     return stream.str();

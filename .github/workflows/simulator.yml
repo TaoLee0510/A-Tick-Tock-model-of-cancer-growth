@@ -59,5 +59,7 @@ jobs:
             build-ci/validation-vascular-nonlinear/
             build-ci/validation-hybrid/
             build-ci/validation-hybrid-volume/
+            build-ci/validation-statistical-spatial-birth/
+            build-ci/validation-statistical-active-r20-v14/
             build-ci/Testing/Temporary/LastTest.log
             build-legacy-ci/native_checksums.txt

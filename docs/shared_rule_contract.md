@@ -3,7 +3,10 @@
 `atcg3d_shared_abm` accepts the same structured YAML as the PDE.
 Use `--model abm` or `--model pde`, `--seed N`, `--threads N` and
 `--report summary.json`. The ABM adapter selects the new
-`nutrient_gradient_shared_resource_v3` model and a finite unit-spaced domain.
+`nutrient_gradient_shared_resource_v3` model and a finite unit-spaced resource
+grid. Native individual positions remain expandable outside that grid; the PDE
+reflects at its grid faces. Boundary-exposed comparisons therefore mix different
+domain closures and cannot establish free-space equivalence.
 An explicitly selected v4 model keeps the same contract and corrects the first
 jump time of initially activated cells to use their active rate.
 Existing ABM models keep their original rules. Sources and initial vessel
@@ -46,14 +49,24 @@ count and extending the end time preserve the trajectory.
 ## Ensemble validation
 
 Run `python3 scripts/validate_abm_vs_pde.py --exe build-codex/atcg3d_shared_abm
---config ATCG3D_SharedRules/config/validation_v7.yaml --seeds 16 --output results`
+--config ATCG3D_SharedRules/config/regular_cycle_spatial_birth_v14.yaml
+--seeds 16 --output results`
 (on one shell line), or `ctest --test-dir build-codex -L validation`.
 The default is 256 square voxels and 48 hours. Reports contain total mass,
 r/K ratio, active fraction, r50/r90/r99 and normalized radial density L2.
-Scalar tolerances are 35% mass/ratio, 5 percentage points active fraction,
-25% r50/r90 and 30% r99, plus an explicitly reported paired sampling allowance.
-The area-weighted radial L2 tolerance is 0.35 with no sampling allowance.
-Reports use deterministic seed ordering and retain each seed's raw metrics.
+Equivalence margins are 35% mass/ratio, 5 percentage points active fraction,
+25% r50/r90 and 30% r99. The area-weighted radial L2 margin is 0.35.
+Every metric at every four-hour sample must pass paired TOST at alpha 0.05.
+Two disjoint 16-seed ABM groups quantify within-model variation; the paired
+PDE group uses the first group's seeds. Reports retain each realization,
+baseline ratios, descriptive paired t tests, both one-sided equivalence tests
+and the maximum error over time. See [the statistical protocol](statistical_validation.md)
+for the prespecified hypotheses, boundary guard and profile approximation.
+
+`--smoke-only` selects the historical endpoint criterion, which adds an
+explicit paired sampling allowance to scalar tolerances. Its success is a
+smoke result and does not establish statistical equivalence. Published smoke
+CTest cases retain this criterion without changing their tolerances.
 
 The original CI case uses near-memoryless division work clocks (minimum fraction zero,
 stochastic fraction one), sparse small cells and no angiogenesis. It does not
@@ -67,3 +80,11 @@ checks and closure limits. [Activation distributions](activation_distribution.md
 describe the opt-in schema 11/12 duration and speed closures and the new active
 ensemble coverage. Footprint, direction and mixed refractory-age correlations
 remain approximate.
+
+Schema 14 optionally uses the true truncated-normal growth expectation,
+uniform feasible eight/26-direction normal jumps, and neighbor placement of
+small daughters. Each operator can be disabled independently for paired
+mechanism attribution. Published operators remain the default. See
+[the phase B report](phase_b_report.md) for all raw statistical and intervention
+tables, improvements in front position, remaining r/K bias, and the published
+r200 and vascular cases that do not establish equivalence.

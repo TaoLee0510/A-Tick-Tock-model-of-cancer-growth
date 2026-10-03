@@ -13,7 +13,7 @@ build-codex/atcg_sim --model pde --config migrated_run/model.yaml --dry-run
 ```
 
 Supported upgrades are ABM v1-v3 to v3, nutrient v1-v3 to v3, continuum v3-v6
-to v6, and shared-resource structured v5-v13 to v13. ODE v1 and hybrid v1/v2/v3
+to v6, and shared-resource structured v5-v14 to v14. ODE v1 and hybrid v1/v2/v3
 wrappers are copied with their references upgraded. Hybrid v1 retains its
 mean-clock closure; v2 retains its transported-work selection. Structured v1-v4 and continuum v1-v2 lack
 shared-resource calibration parameters; the tool rejects them rather than
@@ -49,3 +49,10 @@ Structured v13 adds cumulative vascular-deletion accounting without changing
 the vascular deletion operator. Hybrid v3 must be selected explicitly; the
 migrator preserves a wrapper's existing model instead of silently changing its
 volume, activation-density or footprint-resource coupling.
+
+Structured v14 migration keeps `axial_diffusion_v1` and
+`clipped_location_mean_v1` defaults to preserve the numerical operators of a
+v13 source. The named `feasible_fixed_lattice_jump_v3` and
+`truncated_normal_expectation_v2` corrections are explicit choices in the new
+validation configurations. Operator interventions require
+`shared_operator_switches_v1`; they are not enabled by migration.
