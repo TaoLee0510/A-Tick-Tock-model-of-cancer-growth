@@ -1,10 +1,10 @@
 # Ver7 simulator validation and shared resource models
 
-This is a local draft for PR #67. Later commits have not been pushed, and this
-description has not been published. Following the local-only instruction,
-active hosted runs were cancelled; subsequent builds, tests and benchmarks
-run locally on macOS. Hosted Linux/macOS results for these local changes are
-unavailable.
+The phase A-F commits and their evidence are included in PR #67. Following
+the instruction to avoid hosted execution, active hosted runs were cancelled;
+subsequent builds, tests and benchmarks ran locally on macOS. The delivery
+commit includes `[skip ci]` to suppress automatic push and pull-request
+workflow runs. Hosted Linux/macOS results for phases D-F are unavailable.
 
 ## Resulting behavior
 
@@ -101,7 +101,7 @@ are retained; no declared tolerance has been widened.
 Phase F's full-suite times are 4895.79 seconds for Release and 4914.24
 seconds for HDF5. An additional expanded schema-17 restart check passes
 in both builds, including a migrated hybrid-v4 wrapper; it takes 6.83 and
-6.99 seconds respectively. All later work is local and remains unpushed.
+6.99 seconds respectively. These builds and tests ran locally on macOS.
 
 Each phase has a separate commit and full local CTest evidence, including
 the validation label. Phase D's complete run had a compatibility-scanner
@@ -171,7 +171,7 @@ reported together. All raw state/field checksums are in the phase F report.
 - Stronger vascular accuracy than the controlled screen's broad margins.
 - A memory bound for a fully occupied 3D domain; dense fields and caches
   contribute substantial memory even with sparse population storage.
-- Linux/macOS hosted verification of the unpushed commits.
+- Linux/macOS hosted verification of phases D-F, intentionally not run.
 
 Native binary checkpoint continuation requires a compatible ABI. Current
 recommended configuration graphs and migration/deprecation policy live in
