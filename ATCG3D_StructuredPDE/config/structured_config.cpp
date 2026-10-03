@@ -292,7 +292,7 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
 }
 
 void StructuredPdeConfig3D::validate() const {
-    if ((schema_version < 1 || schema_version > 16) || profile.empty()) {
+    if ((schema_version < 1 || schema_version > 17) || profile.empty()) {
         throw std::invalid_argument("structured PDE schema/profile is invalid");
     }
     if (continuum.angiogenesis.model == "shared_vegf_lattice_v2" && schema_version < 15) {

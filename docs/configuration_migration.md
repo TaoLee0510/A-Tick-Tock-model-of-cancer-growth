@@ -13,7 +13,7 @@ build-codex/atcg_sim --model pde --config migrated_run/model.yaml --dry-run
 ```
 
 Supported upgrades are ABM v1-v3 to v3, nutrient v1-v3 to v3, continuum v3-v6
-to v6, and shared-resource structured v5-v15 to v15. ODE v1 and hybrid v1/v2/v3
+to v6, and shared-resource structured v5-v17 to v17. ODE v1 and hybrid v1/v2/v3/v4/v5
 wrappers are copied with their references upgraded. Hybrid v1 retains its
 mean-clock closure; v2 retains its transported-work selection. Structured v1-v4 and continuum v1-v2 lack
 shared-resource calibration parameters; the tool rejects them rather than
@@ -50,6 +50,12 @@ the vascular deletion operator. Hybrid v3 must be selected explicitly; the
 migrator preserves a wrapper's existing model instead of silently changing its
 volume, activation-density or footprint-resource coupling.
 
+Hybrid v4 is also an explicit model choice. Migration retains it when present
+and does not reinterpret older occupancy-only policies as an invasion policy.
+The [recommended registry](recommended_configurations.md) contains copied,
+latest-schema graphs for all four models. Output names include the target
+directory's leaf name to distinguish independently migrated graphs.
+
 Structured v14 migration keeps `axial_diffusion_v1` and
 `clipped_location_mean_v1` defaults to preserve the numerical operators of a
 v13 source. The named `feasible_fixed_lattice_jump_v3` and
@@ -62,3 +68,20 @@ Migration preserves `vegf_tip_density_v1` or `disabled`; selecting v15 alone
 does not replace a published vascular mechanism. See the
 [shared angiogenesis contract](shared_angiogenesis_contract.md) for the
 individual tip law, centerline diagnostics and common perfusion assumptions.
+
+Structured v16 preserves `published_sector_sums_v1` unless the source
+explicitly selects `prepared_prefix_fft_v2`. New 3D/dynamic vascular sparse
+storage is likewise an explicit model string. Neither performance mechanism
+is inferred solely from a schema upgrade.
+
+Structured v17 persists complete positive density tails, active totals, nutrient
+work buffers and moving-front update state. Earlier formats omitted values
+below traversal cutoffs even though whole-grid vascular sources could read
+them. Uninterrupted live arithmetic is unchanged; the new native format
+preserves those values for exact continuation.
+
+`--hybrid-model hybrid_resource_restart_v5` explicitly upgrades a v4 front
+policy to v5, retaining its geometric/hysteresis parameters. The tool refuses
+to infer them for earlier occupancy policies. Version 5 imports the standalone
+ABM resource-limited initial field before coupling and uses structured v17
+continuation state. Older hybrid models stay available for reproduction.

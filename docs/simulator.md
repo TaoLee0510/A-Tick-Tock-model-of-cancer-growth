@@ -27,7 +27,7 @@ on the selected native model; invoke its `--help` for the complete list.
 | ABM | Native or nutrient YAML; shared structured YAML | Individual event clocks, directional migration and angiogenesis. Shared mode writes requested JSON reports and paired checkpoints. |
 | ODE | `ATCG3D_ODE/config/ode_smoke_v1.yaml` | Well-mixed mean-clock reaction, adaptive RK45, CSV and checkpoint. |
 | PDE | Continuum or structured YAML | Density fields, resource/vascular fields, CSV and native checkpoint. |
-| Hybrid | `ATCG3D_Hybrid/config/hybrid_regular_cycle_v3.yaml` | Smoothed-occupancy classification, volume/footprint coupling and conservative distribution exchanges, CSV and paired checkpoint. |
+| Hybrid | `docs/recommended/hybrid/model.yaml` | Version 5 resource initialization and continuation, v4 front/core policy, individual r and K core density, conservative distribution exchanges, CSV and paired checkpoint. |
 
 Examples:
 
@@ -64,8 +64,12 @@ configuration graph, [pde_fields.md](pde_fields.md) for viewer/Studio field
 output, and [sparse_pde_storage.md](sparse_pde_storage.md) for 10000-square runs.
 The versioned volume/vascular accounting fixes and their full numeric results
 are described in [phase_a_report.md](phase_a_report.md). The present
-occupancy-based hybrid classifier requires the subsequent front-policy work;
-its smoke passes do not establish statistical equivalence.
+v4 hybrid invasion experiment uses the new front policy; its full statistical
+results and retained failed interface experiment are in `phase_d_report.md`.
+Use the [recommended configuration registry](recommended_configurations.md)
+for current, scope-qualified starting points. Earlier smoke passes do not
+establish statistical equivalence. The [production protocol](production_benchmark_contract.md)
+distinguishes a measured prefix from the complete 2160-hour workload.
 
 Model manuals, specifications, viewer and Studio instructions live in `docs/`;
 old module README paths are navigation pointers. `cmake --install build-codex

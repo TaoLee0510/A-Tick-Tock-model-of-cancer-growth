@@ -193,7 +193,7 @@ int main() {
             assert(directories.insert(directory).second);
         }
     }
-    const auto root = std::filesystem::temp_directory_path() / "atcg3d_output_root";
+    const auto root = std::filesystem::current_path() / "compatibility_output_root";
     assert(resolve_output_directory("model/run", root) == root / "model/run");
     assert(resolve_output_directory("model/run", {}) == "model/run");
     assert(resolve_output_directory(root / "absolute_run", "other") ==

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "config/structured_config.hpp"
+#include "model/operator_strategies.hpp"
 #include "model/sector_mean_field.hpp"
 #include "model/paged_field.hpp"
 #include "model/division_renewal.hpp"
@@ -97,6 +98,13 @@ struct StructuredDirectionRowSpan3D {
 
 class StructuredPdeModel3D {
     friend class atcg3d::hybrid::HybridModel3D;
+    friend struct ActivationOperator3D;
+    friend struct TransportOperator3D;
+    friend struct ExchangeOperator3D;
+    friend struct ReactionOperator3D;
+    friend struct NutrientOperator3D;
+    friend struct VascularOperator3D;
+
 public:
     explicit StructuredPdeModel3D(StructuredPdeConfig3D config);
 
@@ -208,6 +216,7 @@ private:
     std::uint32_t checkpoint_version() const noexcept;
 
     StructuredPdeConfig3D config_;
+    const StructuredOperatorStrategies3D operators_;
     std::unique_ptr<continuum::AngiogenesisField3D> angiogenesis_;
     std::unique_ptr<continuum::SectorMeanField3D> sector_mean_;
     // Derived external-agent fields are populated by hybrid models. They

@@ -17,8 +17,8 @@ from validate_hybrid import REFINEMENT_TOLERANCES, SCENARIOS
 ADAPTIVE = {name: values for name, values in SCENARIOS.items() if values[0] == "adaptive"}
 
 
-def validate_record(record, seed):
-    if record.get("seed") != seed or record.get("model") != "hybrid_invasion_front_v4":
+def validate_record(record, seed, expected_model="hybrid_invasion_front_v4"):
+    if record.get("seed") != seed or record.get("model") != expected_model:
         raise RuntimeError("wrong hybrid realization identity")
     if record.get("mode") != "adaptive":
         raise RuntimeError("invasion validation requires adaptive mode")

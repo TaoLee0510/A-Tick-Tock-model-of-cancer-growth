@@ -110,7 +110,7 @@ std::string summary(const HybridModel3D& simulation, const HybridConfig3D& confi
         }
     }
     if (config.schema_version >= 4) {
-        out << ",\"model\":\"hybrid_invasion_front_v4\",\"mode\":\"" << config.mode
+        out << ",\"model\":\"" << config.model << "\",\"mode\":\"" << config.mode
             << "\",\"seed\":" << config.rules.continuum.base.seed
             << ",\"abm_fraction\":" << (d.total_mass > 0.0 ? d.abm_mass / d.total_mass : 0.0)
             << ",\"pde_fraction\":" << (d.total_mass > 0.0 ? d.pde_mass / d.total_mass : 0.0)

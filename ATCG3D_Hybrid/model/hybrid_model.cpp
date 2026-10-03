@@ -97,7 +97,10 @@ void HybridConfig3D::validate() const {
     const bool distributions =
         (schema_version == 2 && model == "hybrid_distributions_v2") ||
         (schema_version == 3 && model == "hybrid_volume_coupling_v3") ||
-        (schema_version == 4 && model == "hybrid_invasion_front_v4");
+        (schema_version == 4 && model == "hybrid_invasion_front_v4") ||
+        (schema_version == 5 && model == "hybrid_resource_restart_v5");
+    if (schema_version >= 5 && rules.schema_version < 17)
+        throw std::invalid_argument("hybrid v5 requires persistent resource schema v17");
     if (schema_version >= 3 && rules.schema_version < 13)
         throw std::invalid_argument("hybrid v3 requires structured schema v13+");
     if (!distributions && rules.migration.activation_clock != "beta_mean_remaining_cycle_v1")
@@ -287,7 +290,13 @@ bool HybridModel3D::available(Vec3i point, bool replaces_agent) const {
 void HybridModel3D::initialize() {
     if (initialized_)
         return;
+    const bool shared_initial_resources = config_.schema_version >= 5 &&
+        config_.mode == "adaptive";
+    if (shared_initial_resources)
+        environment_->externally_driven_ = false;
     abm_->initialize();
+    if (shared_initial_resources)
+        environment_->externally_driven_ = true;
     if (config_.mode == "all_pde")
         pde_->initialize_from_abm(*abm_);
     else if (config_.mode == "adaptive") {
@@ -302,6 +311,14 @@ void HybridModel3D::initialize() {
         pde_->initialize_from_arrays(std::move(f));
         abm_->grid_.attach_external_blocker(environment_);
         assemble();
+        if (shared_initial_resources) {
+            // Import the resource-limited initialization used by standalone
+            // ABM. Initializing empty density fields otherwise makes every
+            // voxel an exterior Dirichlet source before agents are attached.
+            pde_->nutrient_ = environment_->nutrient_;
+            pde_->nutrient_next_ = pde_->nutrient_;
+            pde_->rebuild_moving_tumour_front();
+        }
         synchronize_environment(true);
         exchange();
         attach_coupling();
@@ -978,6 +995,8 @@ std::uint64_t HybridModel3D::state_checksum() const {
     return h;
 }
 std::uint64_t HybridModel3D::checkpoint_magic() const noexcept {
+    if (config_.schema_version >= 5)
+        return 0x4154434748594235;
     if (config_.schema_version >= 4)
         return 0x4154434748594234;
     if (config_.schema_version >= 3)
@@ -1106,7 +1125,10 @@ void HybridModel3D::load_checkpoint(const std::filesystem::path &path) {
     if (config_.mode == "adaptive") {
         abm_->grid_.attach_external_blocker(environment_);
         assemble();
-        canonicalize();
+        if (pde_->operators_.nutrient.persistent_workspaces)
+            pde_->build_activation_density();
+        else
+            canonicalize();
         synchronize_environment(false);
         attach_coupling();
     }

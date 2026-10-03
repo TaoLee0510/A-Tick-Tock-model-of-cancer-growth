@@ -270,6 +270,13 @@ if(ATCG_BUILD_3D)
         add_library(atcg3d_structured_pde_core
             ATCG3D_StructuredPDE/config/structured_config.cpp
             ATCG3D_StructuredPDE/model/structured_pde_model.cpp
+            ATCG3D_StructuredPDE/model/operator_strategies.cpp
+            ATCG3D_StructuredPDE/model/operator_activation.cpp
+            ATCG3D_StructuredPDE/model/operator_transport.cpp
+            ATCG3D_StructuredPDE/model/operator_exchange.cpp
+            ATCG3D_StructuredPDE/model/operator_reaction.cpp
+            ATCG3D_StructuredPDE/model/operator_nutrient.cpp
+            ATCG3D_StructuredPDE/model/operator_vascular.cpp
             ATCG3D_StructuredPDE/model/feasible_jump.cpp
             ATCG3D_StructuredPDE/model/division_renewal.cpp
             ATCG3D_StructuredPDE/model/beta_duration.cpp
@@ -304,6 +311,8 @@ if(ATCG_BUILD_3D)
         target_link_libraries(atcg3d_hybrid_core PUBLIC atcg3d_shared_rules_core PRIVATE ${ATCG3D_YAML_TARGET})
         add_executable(atcg3d_hybrid ATCG3D_Hybrid/app/main.cpp)
         target_link_libraries(atcg3d_hybrid PRIVATE atcg3d_hybrid_core)
+        add_executable(atcg3d_production_benchmark benchmarks/atcg3d_production.cpp)
+        target_link_libraries(atcg3d_production_benchmark PRIVATE atcg3d_hybrid_core)
 
         add_library(atcg3d_ode_core ATCG3D_ODE/ode/ode_model.cpp)
         target_include_directories(atcg3d_ode_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_ODE)
@@ -455,6 +464,14 @@ if(BUILD_TESTING)
                 --exe $<TARGET_FILE:atcg3d_shared_3d_benchmark>
                 --output ${CMAKE_CURRENT_BINARY_DIR}/benchmark-shared-3d.json --repeat 1)
         set_tests_properties(atcg3d_shared_3d_benchmark PROPERTIES LABELS "benchmark;benchmark_3d" TIMEOUT 3600)
+        if(ATCG3D_ENABLE_HDF5_CHECKPOINT)
+            add_test(NAME atcg3d_production_benchmark
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/benchmark_production.py
+                    --exe $<TARGET_FILE:atcg3d_production_benchmark>
+                    --output ${CMAKE_CURRENT_BINARY_DIR}/benchmark-production.json)
+            set_tests_properties(atcg3d_production_benchmark PROPERTIES
+                LABELS "benchmark;benchmark_production" TIMEOUT 14400)
+        endif()
     endif()
     add_executable(stateless_rng_test
         ATCG/stateless_rng.cpp
@@ -529,6 +546,21 @@ if(BUILD_TESTING)
             target_compile_definitions(atcg3d_product_cli_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" ATCG_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}")
             add_dependencies(atcg3d_product_cli_test atcg_sim atcg_config_migrate atcg3d_structured_pde atcg3d_shared_abm atcg3d_ode atcg3d_hybrid)
             add_test(NAME atcg3d_product_cli_test COMMAND atcg3d_product_cli_test)
+            add_executable(atcg3d_production_restart_test tests/3d/production_restart_test.cpp)
+            target_link_libraries(atcg3d_production_restart_test PRIVATE atcg3d_hybrid_core ${ATCG3D_YAML_TARGET})
+            target_compile_options(atcg3d_production_restart_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_production_restart_test PRIVATE
+                ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" ATCG_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}")
+            add_dependencies(atcg3d_production_restart_test atcg3d_production_benchmark)
+            add_test(NAME atcg3d_production_restart_test COMMAND atcg3d_production_restart_test)
+            set_tests_properties(atcg3d_production_restart_test PROPERTIES TIMEOUT 600)
+            add_executable(atcg3d_hybrid_resource_initialization_test tests/3d/hybrid_resource_initialization_test.cpp)
+            target_link_libraries(atcg3d_hybrid_resource_initialization_test PRIVATE atcg3d_hybrid_core)
+            target_compile_options(atcg3d_hybrid_resource_initialization_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_hybrid_resource_initialization_test PRIVATE
+                ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME atcg3d_hybrid_resource_initialization_test COMMAND atcg3d_hybrid_resource_initialization_test)
+            set_tests_properties(atcg3d_hybrid_resource_initialization_test PROPERTIES TIMEOUT 600)
             if(ATCG3D_ENABLE_HDF5_CHECKPOINT)
                 add_executable(atcg3d_pde_vtkhdf_test tests/3d/pde_vtkhdf_test.cpp)
                 target_link_libraries(atcg3d_pde_vtkhdf_test PRIVATE atcg3d_structured_pde_core)
@@ -652,6 +684,14 @@ if(BUILD_TESTING)
                         --native-exe $<TARGET_FILE:atcg3d_shared_abm>
                         --seeds 16 --output ${CMAKE_CURRENT_BINARY_DIR}/validation-hybrid-invasion)
                 set_tests_properties(atcg3d_hybrid_invasion_validation PROPERTIES LABELS validation TIMEOUT 3600)
+                add_test(NAME atcg3d_hybrid_resources_validation
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_hybrid_resources.py
+                        --exe $<TARGET_FILE:atcg3d_hybrid>
+                        --native-exe $<TARGET_FILE:atcg3d_shared_abm>
+                        --reference-directory ${CMAKE_CURRENT_BINARY_DIR}/validation-hybrid-invasion
+                        --output ${CMAKE_CURRENT_BINARY_DIR}/validation-hybrid-resources)
+                set_tests_properties(atcg3d_hybrid_resources_validation PROPERTIES
+                    LABELS validation TIMEOUT 1800 DEPENDS atcg3d_hybrid_invasion_validation)
                 add_test(NAME atcg3d_hybrid_validation
                     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_hybrid.py
                         --exe $<TARGET_FILE:atcg3d_hybrid>

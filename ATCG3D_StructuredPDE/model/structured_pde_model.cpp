@@ -1,4 +1,5 @@
 #include "model/structured_pde_model.hpp"
+#include "model/operator_math.hpp"
 #include "model/beta_duration.hpp"
 #include "model/feasible_jump.hpp"
 #include "model/shared_resource.hpp"
@@ -29,29 +30,11 @@ namespace {
 
 constexpr std::array<char, 8> kCheckpointMagic{
     {'A', 'T', 'C', 'G', 'S', 'P', 'D', '1'}};
-constexpr std::uint32_t kCohortCheckpointVersion = 4;
-constexpr std::uint32_t kLegacyCheckpointVersion = 2;
 constexpr std::uint32_t kRefractoryCheckpointVersion = 3;
-constexpr double kFixed26DiffusionFactor = 9.0 / 26.0;
 
 bool same_time(double lhs, double rhs) noexcept {
     return std::abs(lhs - rhs) <=
         1.0e-10 * std::max({1.0, std::abs(lhs), std::abs(rhs)});
-}
-
-double beta_mean(const BetaRateConfig& config) noexcept {
-    return config.scale * config.alpha / (config.alpha + config.beta);
-}
-
-double positive_part(double value) noexcept {
-    return std::max(0.0, value);
-}
-
-int floor_div(int value, int divisor) noexcept {
-    int quotient = value / divisor;
-    const int remainder = value % divisor;
-    if (remainder != 0 && ((remainder < 0) != (divisor < 0))) --quotient;
-    return quotient;
 }
 
 std::uint64_t hash_mix(std::uint64_t state, std::uint64_t value) noexcept {
@@ -132,13 +115,6 @@ StructuredActiveBounds3D read_bounds(std::istream& stream,
     return bounds;
 }
 
-std::uint64_t bounds_size(const StructuredActiveBounds3D& bounds) noexcept {
-    if (!bounds.valid) return 0;
-    return static_cast<std::uint64_t>(bounds.x1 - bounds.x0) *
-        static_cast<std::uint64_t>(bounds.y1 - bounds.y0) *
-        static_cast<std::uint64_t>(bounds.z1 - bounds.z0);
-}
-
 template <class T>
 void write_region(std::ostream& stream,
                   const T& values,
@@ -187,8 +163,8 @@ void read_region(std::istream& stream,
 }  // namespace
 
 StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
-    : config_(std::move(config)) {
-    if (config_.schema_version >= 7) {
+    : config_(std::move(config)), operators_(config_) {
+    if (operators_.activation.transported_refractory) {
         config_.continuum.base.static_vasculature =
             config_.continuum.shared_vascular_geometry();
     }
@@ -231,8 +207,8 @@ StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
             }
         }
     }
-    if (config_.schema_version >= 3 && continuum.base.thin_layer) {
-        const int edge = config_.schema_version >= 5
+    if (operators_.transport.directional_sectors && continuum.base.thin_layer) {
+        const int edge = operators_.nutrient.transient_resources
             ? config_.migration.direction_nutrient_window_edge
             : config_.migration.direction_density_window_edge;
         const int lower = (edge - 1) / 2;
@@ -296,7 +272,7 @@ StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
         activation_cooldown_[stage].set_sparse(sparse);
         activation_armed_[stage].set_sparse(sparse);
         r_normal_[stage].assign(voxel_count_, 0.0);
-        if (config_.schema_version >= 7) {
+        if (operators_.activation.transported_refractory) {
             r_refractory_[stage].assign(voxel_count_, 0.0);
             refractory_clock_[stage].assign(voxel_count_, 0.0);
             refractory_work_[stage].assign(voxel_count_, 0.0);
@@ -326,7 +302,7 @@ StructuredPdeModel3D::StructuredPdeModel3D(StructuredPdeConfig3D config)
         active_work_[bucket].assign(voxel_count_, 0.0F);
         clock_work_[bucket].assign(voxel_count_, 0.0F);
     }
-    if (config_.schema_version >= 4) {
+    if (operators_.transport.cached_cohort_transport) {
         guidance_weight_cache_.resize(buckets);
         for (auto& field : guidance_weight_cache_) {
             field.set_sparse(sparse);
@@ -513,25 +489,6 @@ StructuredActiveBounds3D StructuredPdeModel3D::expanded_bounds(
         true};
 }
 
-namespace {
-
-StructuredActiveBounds3D union_bounds(
-    const StructuredActiveBounds3D& lhs,
-    const StructuredActiveBounds3D& rhs) noexcept {
-    if (!lhs.valid) return rhs;
-    if (!rhs.valid) return lhs;
-    return {
-        std::min(lhs.x0, rhs.x0),
-        std::min(lhs.y0, rhs.y0),
-        std::min(lhs.z0, rhs.z0),
-        std::max(lhs.x1, rhs.x1),
-        std::max(lhs.y1, rhs.y1),
-        std::max(lhs.z1, rhs.z1),
-        true};
-}
-
-}  // namespace
-
 void StructuredPdeModel3D::clear_active_work(
     const StructuredActiveBounds3D& bounds) {
     if (!bounds.valid) return;
@@ -545,7 +502,7 @@ void StructuredPdeModel3D::clear_active_work(
                       clock_work_[bucket].begin() + end, 0.0F);
         }
     };
-    if (config_.schema_version >= 4) {
+    if (operators_.transport.cached_cohort_transport) {
         const int rows_per_plane = bounds.y1 - bounds.y0;
         const std::size_t row_count = static_cast<std::size_t>(
             rows_per_plane) * static_cast<std::size_t>(bounds.z1 - bounds.z0);
@@ -694,7 +651,7 @@ void StructuredPdeModel3D::initialize_from_abm(
                 active_clock_[stage][bucket][location] +=
                     static_cast<float>(weight * remaining);
                 active_total_[stage][location] += static_cast<float>(weight);
-                if (config_.schema_version >= 5) {
+                if (operators_.nutrient.transient_resources) {
                     activation_armed_[stage][location] = 0U;
                     activation_cooldown_[stage][location] =
                         static_cast<float>(
@@ -723,13 +680,13 @@ void StructuredPdeModel3D::initialize_from_abm(
             vessel_[index(x, y, z)] = 1.0;
         }
     }
-    if (config_.schema_version >= 7 ||
+    if (operators_.activation.transported_refractory ||
         vascular.source_mode == "synthetic_central_line" ||
         vascular.source_mode == "abm_plus_synthetic_line") add_synthetic_vessel();
     clear_cells_from_vessels();
     time_hours_ = config_.continuum.initialization_mode == "abm_checkpoint"
         ? now : config_.continuum.start_time_hours;
-    if (config_.schema_version >= 5) {
+    if (operators_.nutrient.transient_resources) {
         fill_field(nutrient_,config_.continuum.nutrient.initial_value);
     }
     rebuild_moving_tumour_front();
@@ -769,7 +726,7 @@ void StructuredPdeModel3D::initialize_from_arrays(
         fill_field(activation_cooldown_[stage],0.0F);
         fill_field(activation_armed_[stage],1U);
         r_normal_[stage] = std::move(fields.r_normal[stage]);
-        if (config_.schema_version >= 7) {
+        if (operators_.activation.transported_refractory) {
             if ((!fields.r_refractory[stage].empty() &&
                  fields.r_refractory[stage].size() != voxel_count_) ||
                 (!fields.refractory_remaining_hours[stage].empty() &&
@@ -806,7 +763,7 @@ void StructuredPdeModel3D::initialize_from_arrays(
                 active_total_[stage][location], remaining);
             if (velocity_ && active > 0.0) velocity_->add_fresh(location, stage, active_total_[stage][location]);
             if (active >= config_.migration.minimum_density) {
-                if (config_.schema_version >= 5) {
+                if (operators_.nutrient.transient_resources) {
                     activation_armed_[stage][location] = 0U;
                     activation_cooldown_[stage][location] =
                         static_cast<float>(
@@ -845,7 +802,7 @@ void StructuredPdeModel3D::initialize_from_arrays(
         include_population_location(x, y, z);
     }
     const auto& source = config_.continuum.vascular.source_mode;
-    if (config_.schema_version >= 7 || source == "synthetic_central_line" ||
+    if (operators_.activation.transported_refractory || source == "synthetic_central_line" ||
         source == "abm_plus_synthetic_line") add_synthetic_vessel();
     clear_cells_from_vessels();
     time_hours_ = time_hours;
@@ -856,7 +813,7 @@ void StructuredPdeModel3D::initialize_from_arrays(
                 if (mass > 0.0) renewal_->add_fresh(location, channel, mass);
             }
     }
-    if (config_.schema_version >= 5) {
+    if (operators_.nutrient.transient_resources) {
         fill_field(nutrient_,config_.continuum.nutrient.initial_value);
     }
     rebuild_moving_tumour_front();
@@ -867,2701 +824,6 @@ void StructuredPdeModel3D::initialize_from_arrays(
     if(angiogenesis_) angiogenesis_->initialize(vessel_);
     initialized_ = true;
     validate_state();
-}
-
-void StructuredPdeModel3D::advance_angiogenesis(double dt) {
-    if(!angiogenesis_) return;
-    if (config_.continuum.angiogenesis.model == "shared_vegf_lattice_v2") {
-        vascular_consumers_work_.resize(voxel_count_);
-        continuum::VascularConsumerBounds3D bounds;
-        const auto nx = config_.continuum.grid.shape[0], ny = config_.continuum.grid.shape[1];
-        for (std::size_t here = 0; here < voxel_count_; ++here) {
-            double consumers = 0.0;
-            for (std::size_t stage = 0; stage < 2; ++stage) {
-                consumers += r_normal_[stage][here] + active_total_[stage][here] + K_[stage][here];
-            }
-            if (!external_r_.empty()) consumers += external_consumers(here);
-            vascular_consumers_work_[here] = consumers;
-            if (!(consumers > 0.0)) continue;
-            const std::array<int, 3> point{static_cast<int>(here % nx),
-                static_cast<int>((here / nx) % ny), static_cast<int>(here / (static_cast<std::size_t>(nx) * ny))};
-            if (!bounds.valid) {
-                bounds.lower = bounds.upper = point;
-                bounds.valid = true;
-            } else {
-                for (int axis = 0; axis < 3; ++axis) {
-                    bounds.lower[axis] = std::min(bounds.lower[axis], point[axis]);
-                    bounds.upper[axis] = std::max(bounds.upper[axis], point[axis]);
-                }
-            }
-        }
-        angiogenesis_->advance(dt, vascular_consumers_work_, nutrient_,
-            config_.continuum.nutrient.vessel_value, true, &bounds);
-        vessel_ = angiogenesis_->vessels();
-        clear_cells_from_vessels();
-        return;
-    }
-    std::vector<double> consumers(voxel_count_,0.0);
-    for(std::size_t here=0;here<voxel_count_;++here) {
-        for(std::size_t stage=0;stage<2;++stage) consumers[here]+=r_normal_[stage][here]+active_total_[stage][here]+K_[stage][here];
-        if (!external_r_.empty()) consumers[here] += external_consumers(here);
-    }
-    angiogenesis_->advance(dt,consumers,nutrient_,config_.continuum.nutrient.vessel_value);
-    vessel_=angiogenesis_->vessels();
-    clear_cells_from_vessels();
-}
-
-void StructuredPdeModel3D::add_synthetic_vessel() {
-    if (config_.schema_version >= 7) {
-        const auto geometry = config_.continuum.shared_vascular_geometry();
-        const int nx = geometry.shape[0];
-        const int ny = geometry.shape[1];
-        for (std::size_t location = 0; location < voxel_count_; ++location) {
-            const int x = static_cast<int>(location % nx);
-            const auto yz = location / nx;
-            const int y = static_cast<int>(yz % ny);
-            const int z = static_cast<int>(yz / ny);
-            if (geometry.source_voxel({x, y, z})) vessel_[location] = 1.0;
-        }
-        return;
-    }
-    const auto& vascular = config_.continuum.vascular;
-    const int axis = vascular.synthetic_axis == "x" ? 0
-        : (vascular.synthetic_axis == "y" ? 1 : 2);
-    const double radius_squared = vascular.synthetic_radius_voxels *
-        vascular.synthetic_radius_voxels;
-    for (std::size_t location = 0; location < voxel_count_; ++location) {
-        const auto point = coordinate(location);
-        double distance_squared = 0.0;
-        for (int dimension = 0; dimension < 3; ++dimension) {
-            if (dimension == axis ||
-                (config_.continuum.base.thin_layer && dimension == 2)) continue;
-            const double offset =
-                point[dimension] - vascular.synthetic_center[dimension];
-            distance_squared += offset * offset;
-        }
-        if (distance_squared <= radius_squared) vessel_[location] = 1.0;
-    }
-}
-
-bool StructuredPdeModel3D::vessel_blocks_cells(
-    std::size_t location) const noexcept {
-    return config_.migration.vessel_exclusion && (config_.schema_version < 8
-        ? vessel_[location] > 0.0 : vessel_[location] >= config_.continuum.angiogenesis.exclusion_fraction);
-}
-
-bool StructuredPdeModel3D::transport_destination_blocks_cells(
-    std::size_t location, StructuredStage3D stage) const {
-    if (vessel_blocks_cells(location)) return true;
-    if (!external_transport_destination_) return false;
-    if (!external_transport_destination_(location)) return true;
-    if (stage == StructuredStage3D::small) return false;
-    const auto& shape = config_.continuum.grid.shape;
-    const int x = static_cast<int>(location % shape[0]);
-    const int y = static_cast<int>((location / shape[0]) % shape[1]);
-    const int z = static_cast<int>(location /
-        (static_cast<std::size_t>(shape[0]) * shape[1]));
-    const int depth = config_.continuum.base.thin_layer ? 1 : 2;
-    for (int dz = 0; dz < depth; ++dz) {
-        for (int dy = 0; dy < 2; ++dy) {
-            for (int dx = 0; dx < 2; ++dx) {
-                if (x + dx >= shape[0] || y + dy >= shape[1] ||
-                    z + dz >= shape[2] ||
-                    !external_transport_destination_(index(x + dx, y + dy, z + dz)))
-                    return true;
-            }
-        }
-    }
-    return false;
-}
-
-void StructuredPdeModel3D::clear_cells_from_vessels() {
-    if (!config_.migration.vessel_exclusion) return;
-    for (std::size_t location = 0; location < voxel_count_; ++location) {
-        if (!vessel_blocks_cells(location)) continue;
-        if(config_.schema_version>=9&&occupied_fraction(location)==0)continue;
-        if (renewal_) renewal_->erase(location);
-        if (duration_) duration_->erase(location);
-        if (velocity_) velocity_->erase(location);
-        if (config_.schema_version >= 7 && !initialized_ && occupied_fraction(location) > 1.0e-10) {
-            throw std::invalid_argument("structured initial population overlaps an excluded vessel");
-        }
-        for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
-            if (config_.schema_version >= 13) {
-                const auto cell_stage = stage == 0
-                    ? CellStage::small : CellStage::large;
-                record_vascular_removal(CellType::r, cell_stage, false,
-                    r_normal_[stage][location] * voxel_measure_);
-                record_vascular_removal(CellType::r, cell_stage, true,
-                    active_total_[stage][location] * voxel_measure_);
-                record_vascular_removal(CellType::K, cell_stage, false,
-                    K_[stage][location] * voxel_measure_);
-            }
-            r_normal_[stage][location] = 0.0;
-            if (config_.schema_version >= 7) {
-                r_refractory_[stage][location] = 0.0;
-                refractory_clock_[stage][location] = 0.0;
-            }
-            K_[stage][location] = 0.0;
-            active_total_[stage][location] = 0.0F;
-            activation_cooldown_[stage][location] = 0.0F;
-            activation_armed_[stage][location] = 0U;
-            for (std::size_t bucket = 0;
-                 bucket < active_direction_[stage].size(); ++bucket) {
-                active_direction_[stage][bucket][location] = 0.0F;
-                active_clock_[stage][bucket][location] = 0.0F;
-            }
-        }
-    }
-    for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
-        shrink_active_bounds(stage);
-    }
-    shrink_population_bounds();
-}
-
-void StructuredPdeModel3D::record_vascular_removal(
-    CellType type, CellStage stage, bool active, double mass) {
-    const std::size_t phase = stage == CellStage::large ? 1 : 0;
-    if (type == CellType::K)
-        vascular_removed_mass_.K[phase] += mass;
-    else if (active)
-        vascular_removed_mass_.r_active[phase] += mass;
-    else
-        vascular_removed_mass_.r_normal[phase] += mass;
-}
-
-double StructuredPdeModel3D::external_consumers(
-    std::size_t location) const noexcept {
-    if (!external_r_consumers_.empty())
-        return external_r_consumers_[location] + external_K_consumers_[location];
-    return external_r_.empty()
-        ? 0.0 : external_r_[location] + external_K_[location];
-}
-
-double StructuredPdeModel3D::capacity_multiplier(double value) const noexcept {
-    if (config_.schema_version >= 5) return 1.0;
-    const auto& nutrient = config_.continuum.nutrient;
-    const double local = std::clamp(value, 0.0, nutrient.vessel_value);
-    const double raw = local / (nutrient.capacity_half_saturation + local);
-    const double at_vessel = nutrient.vessel_value /
-        (nutrient.capacity_half_saturation + nutrient.vessel_value);
-    const double saturation = at_vessel > 0.0
-        ? std::clamp(raw / at_vessel, 0.0, 1.0) : 0.0;
-    return 1.0 + (nutrient.maximum_capacity_multiplier - 1.0) * saturation;
-}
-
-void StructuredPdeModel3D::rebuild_moving_tumour_front() {
-    if (config_.schema_version < 6) return;
-    const auto& nutrient = config_.continuum.nutrient;
-    const auto& mode = nutrient.boundary_mode;
-    if (mode != "moving_tumor_front_dirichlet_v2" &&
-        mode != "moving_tumor_front_and_vessels_dirichlet_v2") return;
-
-    const int nx = config_.continuum.grid.shape[0];
-    const int ny = config_.continuum.grid.shape[1];
-    const StructuredActiveBounds3D previous_bounds = tumour_mask_bounds_;
-    if (tumour_mask_bounds_.valid) {
-        for (int y = tumour_mask_bounds_.y0; y < tumour_mask_bounds_.y1; ++y) {
-            for (int x = tumour_mask_bounds_.x0; x < tumour_mask_bounds_.x1;
-                 ++x) {
-                tumour_mask_[index(x, y, 0)] = 0U;
-            }
-        }
-    }
-    tumour_mask_bounds_ = {};
-    tumour_voxel_count_ = 0U;
-    tumour_front_voxel_count_ = 0U;
-    if (!population_bounds_.valid) {
-        nutrient_update_bounds_ = previous_bounds;
-        return;
-    }
-
-    const int margin = nutrient.tumor_front_smoothing_radius_voxels + 2;
-    const int x0 = std::max(0, population_bounds_.x0 - margin);
-    const int y0 = std::max(0, population_bounds_.y0 - margin);
-    const int x1 = std::min(nx, population_bounds_.x1 + margin);
-    const int y1 = std::min(ny, population_bounds_.y1 + margin);
-    const int width = x1 - x0;
-    const int height = y1 - y0;
-    if (width <= 0 || height <= 0) {
-        nutrient_update_bounds_ = previous_bounds;
-        return;
-    }
-
-    tumour_occupancy_work_.resize(
-        static_cast<std::size_t>(width) * height);
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            tumour_occupancy_work_[
-                static_cast<std::size_t>(y) * width + x] =
-                occupied_fraction(index(x0 + x, y0 + y, 0));
-        }
-    }
-    const auto summary = continuum::build_moving_tumor_front_mask_2d(
-        tumour_occupancy_work_, width, height,
-        nutrient.tumor_front_smoothing_radius_voxels,
-        nutrient.tumor_front_density_threshold,
-        tumour_front_workspace_, tumour_local_mask_work_);
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            if (tumour_local_mask_work_[
-                    static_cast<std::size_t>(y) * width + x] == 0U) continue;
-            tumour_mask_[index(x0 + x, y0 + y, 0)] = 1U;
-        }
-    }
-    tumour_mask_bounds_ = {x0, y0, 0, x1, y1, 1, true};
-    nutrient_update_bounds_ = union_bounds(previous_bounds, tumour_mask_bounds_);
-    tumour_voxel_count_ = summary.tumour_voxels;
-    tumour_front_voxel_count_ = summary.front_voxels;
-}
-
-bool StructuredPdeModel3D::nutrient_source(
-    int x, int y, int z, std::size_t location) const noexcept {
-    if (config_.schema_version < 5) return false;
-    const auto& mode = config_.continuum.nutrient.boundary_mode;
-    if (config_.schema_version >= 6 &&
-        (mode == "moving_tumor_front_dirichlet_v2" ||
-         mode == "moving_tumor_front_and_vessels_dirichlet_v2")) {
-        // The in-grid host exterior is maintained at Nmax. When tumour reaches
-        // the computational box, tumour voxels on the box edge are not sources
-        // and the existing ghost-cell rule therefore remains zero-flux.
-        const bool use_vessels = mode ==
-            "moving_tumor_front_and_vessels_dirichlet_v2";
-        return tumour_mask_[location] == 0U ||
-            (use_vessels && (config_.schema_version < 8 ? vessel_[location] > 0.0 : vessel_[location] >= config_.continuum.angiogenesis.exclusion_fraction));
-    }
-    const auto& grid = config_.continuum.grid;
-    const bool planar_edge = x == 0 || x + 1 == grid.shape[0] ||
-        y == 0 || y + 1 == grid.shape[1] ||
-        (!config_.continuum.base.thin_layer &&
-         (z == 0 || z + 1 == grid.shape[2]));
-    const bool use_edges = mode != "vessels_dirichlet_v1";
-    const bool use_vessels = mode != "planar_edges_dirichlet_v1";
-    return (use_edges && planar_edge) ||
-        (use_vessels && (config_.schema_version < 8 ? vessel_[location] > 0.0 : vessel_[location] >= config_.continuum.angiogenesis.exclusion_fraction));
-}
-
-void StructuredPdeModel3D::advance_transient_nutrient(double dt) {
-    const auto& continuum = config_.continuum;
-    const auto& nutrient = continuum.nutrient;
-    const int nx = continuum.grid.shape[0];
-    const int ny = continuum.grid.shape[1];
-    const int nz = continuum.grid.shape[2];
-    const int dimensions = continuum.base.thin_layer ? 2 : 3;
-    const double inverse_h2 = 1.0 /
-        (continuum.grid.spacing_voxels * continuum.grid.spacing_voxels);
-    const double mu = nutrient.diffusion_voxels2_per_hour * dt * inverse_h2;
-    if (mu > 1.0 / (2.0 * dimensions) + 1.0e-12) {
-        throw std::runtime_error(
-            "transient nutrient diffusion violates the explicit CFL limit");
-    }
-    const double source_value = nutrient.vessel_value;
-    const double decay = std::exp(-nutrient.decay_per_hour * dt);
-    const int workers = std::max(
-        1, std::min(continuum.base.threads, available_worker_threads()));
-    const bool moving_front = config_.schema_version >= 6 &&
-        (nutrient.boundary_mode == "moving_tumor_front_dirichlet_v2" ||
-         nutrient.boundary_mode ==
-             "moving_tumor_front_and_vessels_dirichlet_v2");
-    const StructuredActiveBounds3D update_bounds = moving_front
-        ? nutrient_update_bounds_
-        : StructuredActiveBounds3D{0, 0, 0, nx, ny, nz, true};
-    if (!update_bounds.valid) {
-        ++nutrient_solve_count_;
-        return;
-    }
-    const std::size_t bx = static_cast<std::size_t>(
-        update_bounds.x1 - update_bounds.x0);
-    const std::size_t by = static_cast<std::size_t>(
-        update_bounds.y1 - update_bounds.y0);
-    const std::size_t bz = static_cast<std::size_t>(
-        update_bounds.z1 - update_bounds.z0);
-    const std::size_t update_count = bx * by * bz;
-    const auto coordinates = [&](std::size_t offset, int& x, int& y, int& z) {
-        x = update_bounds.x0 + static_cast<int>(offset % bx);
-        const std::size_t local_yz = offset / bx;
-        y = update_bounds.y0 + static_cast<int>(local_yz % by);
-        z = update_bounds.z0 + static_cast<int>(local_yz / by);
-    };
-    deterministic_parallel_for(update_count, workers, [&](std::size_t offset) {
-        int x{}, y{}, z{};
-        coordinates(offset, x, y, z);
-        const std::size_t here = index(x, y, z);
-        if (nutrient_source(x, y, z, here)) {
-            nutrient_next_[here] = source_value;
-            return;
-        }
-
-        const double old = nutrient_[here];
-        // A boundary that is not selected as a fixed nutrient source is
-        // reflecting. The centre-valued ghost cell gives zero normal flux and
-        // avoids any domain-exterior access in vessel-only controls.
-        double neighbor_sum =
-            (x > 0 ? nutrient_[index(x - 1, y, z)] : old) +
-            (x + 1 < nx ? nutrient_[index(x + 1, y, z)] : old) +
-            (y > 0 ? nutrient_[index(x, y - 1, z)] : old) +
-            (y + 1 < ny ? nutrient_[index(x, y + 1, z)] : old);
-        if (!continuum.base.thin_layer) {
-            neighbor_sum +=
-                (z > 0 ? nutrient_[index(x, y, z - 1)] : old) +
-                (z + 1 < nz ? nutrient_[index(x, y, z + 1)] : old);
-        }
-        const double diffused = std::clamp(
-            old + mu * (neighbor_sum - 2.0 * dimensions * old),
-            0.0, source_value) * decay;
-
-        // Schema v3 consumption is per biological cell, independent of
-        // phenotype and footprint. Solve the local Michaelis-Menten sink
-        // implicitly so consumption cannot drive the field negative.
-        double consumers = r_normal_[0][here] +
-            r_active(StructuredStage3D::small, here) +
-            r_normal_[1][here] +
-            r_active(StructuredStage3D::large, here) +
-            K_[0][here] + K_[1][here];
-        if (!external_r_.empty()) consumers += external_consumers(here);
-        const double demand =
-            nutrient.K_consumption_rate_per_hour * consumers;
-        const double half = nutrient.K_consumption_half_saturation;
-        const double b = half + dt * demand - diffused;
-        const double discriminant = std::max(
-            0.0, b * b + 4.0 * half * diffused);
-        const double consumed = 0.5 * (-b + std::sqrt(discriminant));
-        nutrient_next_[here] = config_.schema_version >= 7
-            ? continuum::resource_after_uptake(diffused, consumers, nutrient.K_consumption_rate_per_hour,
-                half, dt, source_value)
-            : std::clamp(consumed, 0.0, source_value);
-        if(angiogenesis_) nutrient_next_[here]=source_value-(source_value-nutrient_next_[here])*
-            std::exp(-dt*continuum.angiogenesis.perfusion_exchange_per_hour*vessel_[here]);
-    });
-    nutrient_.swap(nutrient_next_);
-    if (moving_front) {
-        // The explicit stencil above must read the previous value of a voxel
-        // that has just become exterior. After the swap, synchronize those
-        // Dirichlet sites in the inactive buffer so the solve box may shrink
-        // again on the next step without leaving stale nutrient behind.
-        deterministic_parallel_for(
-            update_count, workers, [&](std::size_t offset) {
-                int x{}, y{}, z{};
-                coordinates(offset, x, y, z);
-                const std::size_t here = index(x, y, z);
-                if (nutrient_source(x, y, z, here)) {
-                    nutrient_next_[here] = source_value;
-                }
-            });
-    }
-    ++nutrient_solve_count_;
-    validate_resources();
-}
-
-void StructuredPdeModel3D::solve_nutrient() {
-    const auto& continuum = config_.continuum;
-    if (config_.schema_version >= 5) {
-        const int nx = continuum.grid.shape[0];
-        const int ny = continuum.grid.shape[1];
-        for (std::size_t here = 0; here < voxel_count_; ++here) {
-            const int x = static_cast<int>(
-                here % static_cast<std::size_t>(nx));
-            const std::size_t yz = here / static_cast<std::size_t>(nx);
-            const int y = static_cast<int>(
-                yz % static_cast<std::size_t>(ny));
-            const int z = static_cast<int>(
-                yz / static_cast<std::size_t>(ny));
-            if (nutrient_source(x, y, z, here)) {
-                nutrient_[here] = continuum.nutrient.vessel_value;
-            }
-        }
-        ++nutrient_solve_count_;
-        validate_resources();
-        if (config_.schema_version >= 6) nutrient_next_ = nutrient_;
-        return;
-    }
-    const int nx = continuum.grid.shape[0];
-    const int ny = continuum.grid.shape[1];
-    const int nz = continuum.grid.shape[2];
-    const int dimensions = continuum.base.thin_layer ? 2 : 3;
-    const double diffusion = continuum.nutrient.diffusion_voxels2_per_hour /
-        (continuum.grid.spacing_voxels * continuum.grid.spacing_voxels);
-    const double laplacian_diagonal = 2.0 * dimensions * diffusion;
-    const int workers = std::max(
-        1, std::min(continuum.base.threads, available_worker_threads()));
-    for (int iteration = 0; iteration < continuum.nutrient.solver_iterations;
-         ++iteration) {
-        deterministic_parallel_for(voxel_count_, workers, [&](std::size_t here) {
-            const int x = static_cast<int>(here % static_cast<std::size_t>(nx));
-            const std::size_t yz = here / static_cast<std::size_t>(nx);
-            const int y = static_cast<int>(yz % static_cast<std::size_t>(ny));
-            const int z = static_cast<int>(yz / static_cast<std::size_t>(ny));
-            double neighbor_sum = 0.0;
-            if (x > 0) neighbor_sum += nutrient_[index(x - 1, y, z)];
-            if (x + 1 < nx) neighbor_sum += nutrient_[index(x + 1, y, z)];
-            if (y > 0) neighbor_sum += nutrient_[index(x, y - 1, z)];
-            if (y + 1 < ny) neighbor_sum += nutrient_[index(x, y + 1, z)];
-            if (!continuum.base.thin_layer) {
-                if (z > 0) neighbor_sum += nutrient_[index(x, y, z - 1)];
-                if (z + 1 < nz) neighbor_sum += nutrient_[index(x, y, z + 1)];
-            }
-            const double old = nutrient_[here];
-            const bool per_cell = continuum.nutrient.consumption_model ==
-                "per_cell_ratio_v2";
-            const double large_consumption_weight =
-                per_cell ? 1.0 : large_cell_volume_;
-            const double r_consumers = r_normal_[0][here] +
-                r_active(StructuredStage3D::small, here) +
-                large_consumption_weight * (r_normal_[1][here] +
-                    r_active(StructuredStage3D::large, here));
-            const double K_consumers =
-                K_[0][here] + large_consumption_weight * K_[1][here];
-            const double r_sink =
-                continuum.nutrient.r_consumption_rate_per_hour *
-                r_consumers /
-                (continuum.nutrient.r_consumption_half_saturation + old);
-            const double K_sink =
-                continuum.nutrient.K_consumption_rate_per_hour *
-                K_consumers /
-                (continuum.nutrient.K_consumption_half_saturation + old);
-            const double exchange = continuum.nutrient.vessel_exchange_per_hour *
-                std::clamp(vessel_[here], 0.0, 1.0);
-            const double denominator = laplacian_diagonal +
-                continuum.nutrient.decay_per_hour + exchange + r_sink + K_sink;
-            const double candidate = denominator > 0.0
-                ? (diffusion * neighbor_sum +
-                   exchange * continuum.nutrient.vessel_value) / denominator
-                : 0.0;
-            nutrient_next_[here] = std::clamp(
-                old + continuum.nutrient.relaxation * (candidate - old),
-                0.0, continuum.nutrient.vessel_value);
-        });
-        nutrient_.swap(nutrient_next_);
-    }
-    ++nutrient_solve_count_;
-    validate_resources();
-}
-
-void StructuredPdeModel3D::build_activation_density() {
-    const auto& continuum = config_.continuum;
-    const int nx = continuum.grid.shape[0];
-    const int ny = continuum.grid.shape[1];
-    const int nz = continuum.grid.shape[2];
-    const int edge = continuum.base.migration_activation_window_edge;
-    const int query = continuum.base.migration_activation_block_edge;
-    const int lower = (edge - 1) / 2;
-    const int upper = edge - lower - 1;
-    const int origin_x = static_cast<int>(std::floor(continuum.grid.origin[0]));
-    const int origin_y = static_cast<int>(std::floor(continuum.grid.origin[1]));
-    const int origin_z = static_cast<int>(std::floor(continuum.grid.origin[2]));
-
-    if (continuum.base.thin_layer) {
-        const auto clear_density = [&](const StructuredActiveBounds3D& bounds) {
-            if (!bounds.valid) return;
-            for (int y = bounds.y0; y < bounds.y1; ++y) {
-                const std::size_t begin = index(bounds.x0, y, 0);
-                const std::size_t end = index(bounds.x1 - 1, y, 0) + 1;
-                for (auto& field : activation_density_) {
-                    std::fill(field.begin() + begin, field.begin() + end, 0.0);
-                }
-            }
-        };
-        clear_density(activation_density_bounds_);
-        activation_density_bounds_ = {};
-        if (!population_bounds_.valid) return;
-
-        // The ABM performs one query per 32x32 anchor block. Only blocks that
-        // contain population can activate r mass, so use an exact local
-        // integral image covering those blocks and their 70x70 query windows.
-        const int first_qx = floor_div(
-            origin_x + population_bounds_.x0, query);
-        const int last_qx = floor_div(
-            origin_x + population_bounds_.x1 - 1, query);
-        const int first_qy = floor_div(
-            origin_y + population_bounds_.y0, query);
-        const int last_qy = floor_div(
-            origin_y + population_bounds_.y1 - 1, query);
-        const int source_x0 = std::clamp(
-            first_qx * query + query / 2 - origin_x - lower, 0, nx);
-        const int source_y0 = std::clamp(
-            first_qy * query + query / 2 - origin_y - lower, 0, ny);
-        const int source_x1 = std::clamp(
-            last_qx * query + query / 2 - origin_x + upper + 1, 0, nx);
-        const int source_y1 = std::clamp(
-            last_qy * query + query / 2 - origin_y + upper + 1, 0, ny);
-        const int width = source_x1 - source_x0;
-        const int height = source_y1 - source_y0;
-        const int pitch = width + 1;
-        std::vector<double> prefix(
-            static_cast<std::size_t>(pitch) * (height + 1), 0.0);
-        for (int y = 1; y <= height; ++y) {
-            double row = 0.0;
-            for (int x = 1; x <= width; ++x) {
-                const std::size_t source =
-                    index(source_x0 + x - 1, source_y0 + y - 1, 0);
-                row += (r_normal_[0][source] + r_normal_[1][source] +
-                        r_active(StructuredStage3D::small, source) +
-                        r_active(StructuredStage3D::large, source) +
-                        K_[0][source] + K_[1][source]) * voxel_measure_;
-                if(!external_r_.empty()) row+=(external_r_[source]+external_K_[source])*voxel_measure_;
-                prefix[static_cast<std::size_t>(y) * pitch + x] = row;
-            }
-        }
-        for (int x = 1; x <= width; ++x) {
-            for (int y = 1; y <= height; ++y) {
-                prefix[static_cast<std::size_t>(y) * pitch + x] +=
-                    prefix[static_cast<std::size_t>(y - 1) * pitch + x];
-            }
-        }
-        const auto sum = [&](int x0, int y0, int x1, int y1) {
-            x0 -= source_x0;
-            y0 -= source_y0;
-            x1 -= source_x0;
-            y1 -= source_y0;
-            return prefix[static_cast<std::size_t>(y1) * pitch + x1]
-                - prefix[static_cast<std::size_t>(y0) * pitch + x1]
-                - prefix[static_cast<std::size_t>(y1) * pitch + x0]
-                + prefix[static_cast<std::size_t>(y0) * pitch + x0];
-        };
-        for (int qy = first_qy; qy <= last_qy; ++qy) {
-            for (int qx = first_qx; qx <= last_qx; ++qx) {
-                const int center_x = qx * query + query / 2 - origin_x;
-                const int center_y = qy * query + query / 2 - origin_y;
-                const int x0 = std::clamp(center_x - lower, 0, nx);
-                const int y0 = std::clamp(center_y - lower, 0, ny);
-                const int x1 = std::clamp(center_x + upper + 1, 0, nx);
-                const int y1 = std::clamp(center_y + upper + 1, 0, ny);
-                const double count = x1 > x0 && y1 > y0
-                    ? sum(x0, y0, x1, y1) : 0.0;
-                const double small_density = count / static_cast<double>(edge * edge);
-                const double large_density = count /
-                    (static_cast<double>(edge * edge) / large_cell_volume_);
-                const int bx0 = std::clamp(qx * query - origin_x, 0, nx);
-                const int by0 = std::clamp(qy * query - origin_y, 0, ny);
-                const int bx1 = std::clamp((qx + 1) * query - origin_x, 0, nx);
-                const int by1 = std::clamp((qy + 1) * query - origin_y, 0, ny);
-                if (bx1 <= bx0 || by1 <= by0) continue;
-                if (!activation_density_bounds_.valid) {
-                    activation_density_bounds_ =
-                        {bx0, by0, 0, bx1, by1, 1, true};
-                } else {
-                    activation_density_bounds_.x0 = std::min(
-                        activation_density_bounds_.x0, bx0);
-                    activation_density_bounds_.y0 = std::min(
-                        activation_density_bounds_.y0, by0);
-                    activation_density_bounds_.x1 = std::max(
-                        activation_density_bounds_.x1, bx1);
-                    activation_density_bounds_.y1 = std::max(
-                        activation_density_bounds_.y1, by1);
-                }
-                for (int y = by0; y < by1; ++y) {
-                    for (int x = bx0; x < bx1; ++x) {
-                        const std::size_t here = index(x, y, 0);
-                        activation_density_[0][here] = small_density;
-                        activation_density_[1][here] = large_density;
-                    }
-                }
-            }
-        }
-        return;
-    }
-
-    activation_density_bounds_ = {0, 0, 0, nx, ny, nz, true};
-
-    const int px = nx + 1;
-    const int py = ny + 1;
-    const int pz = nz + 1;
-    const auto pindex = [px, py](int x, int y, int z) {
-        return (static_cast<std::size_t>(z) * py + y) * px + x;
-    };
-    std::vector<double> prefix(static_cast<std::size_t>(px) * py * pz, 0.0);
-    for (int z = 1; z <= nz; ++z) {
-        for (int y = 1; y <= ny; ++y) {
-            for (int x = 1; x <= nx; ++x) {
-                const std::size_t source = index(x - 1, y - 1, z - 1);
-                double value = (r_normal_[0][source] + r_normal_[1][source] +
-                    r_active(StructuredStage3D::small, source) +
-                    r_active(StructuredStage3D::large, source) +
-                    K_[0][source] + K_[1][source]) * voxel_measure_;
-                if(!external_r_.empty()) value+=(external_r_[source]+external_K_[source])*voxel_measure_;
-                prefix[pindex(x, y, z)] = value
-                    + prefix[pindex(x - 1, y, z)]
-                    + prefix[pindex(x, y - 1, z)]
-                    + prefix[pindex(x, y, z - 1)]
-                    - prefix[pindex(x - 1, y - 1, z)]
-                    - prefix[pindex(x - 1, y, z - 1)]
-                    - prefix[pindex(x, y - 1, z - 1)]
-                    + prefix[pindex(x - 1, y - 1, z - 1)];
-            }
-        }
-    }
-    const auto sum = [&](int x0, int y0, int z0, int x1, int y1, int z1) {
-        return prefix[pindex(x1, y1, z1)]
-            - prefix[pindex(x0, y1, z1)] - prefix[pindex(x1, y0, z1)]
-            - prefix[pindex(x1, y1, z0)] + prefix[pindex(x0, y0, z1)]
-            + prefix[pindex(x0, y1, z0)] + prefix[pindex(x1, y0, z0)]
-            - prefix[pindex(x0, y0, z0)];
-    };
-    const int first_qx = floor_div(origin_x, query);
-    const int last_qx = floor_div(origin_x + nx - 1, query);
-    const int first_qy = floor_div(origin_y, query);
-    const int last_qy = floor_div(origin_y + ny - 1, query);
-    const int first_qz = floor_div(origin_z, query);
-    const int last_qz = floor_div(origin_z + nz - 1, query);
-    for (int qz = first_qz; qz <= last_qz; ++qz) {
-        for (int qy = first_qy; qy <= last_qy; ++qy) {
-            for (int qx = first_qx; qx <= last_qx; ++qx) {
-                const int cx = qx * query + query / 2 - origin_x;
-                const int cy = qy * query + query / 2 - origin_y;
-                const int cz = qz * query + query / 2 - origin_z;
-                const int x0 = std::clamp(cx - lower, 0, nx);
-                const int y0 = std::clamp(cy - lower, 0, ny);
-                const int z0 = std::clamp(cz - lower, 0, nz);
-                const int x1 = std::clamp(cx + upper + 1, 0, nx);
-                const int y1 = std::clamp(cy + upper + 1, 0, ny);
-                const int z1 = std::clamp(cz + upper + 1, 0, nz);
-                const double count = x1 > x0 && y1 > y0 && z1 > z0
-                    ? sum(x0, y0, z0, x1, y1, z1) : 0.0;
-                const double capacity = static_cast<double>(edge) * edge * edge;
-                const double small_density = count / capacity;
-                const double large_density = count / (capacity / large_cell_volume_);
-                const int bx0 = std::clamp(qx * query - origin_x, 0, nx);
-                const int by0 = std::clamp(qy * query - origin_y, 0, ny);
-                const int bz0 = std::clamp(qz * query - origin_z, 0, nz);
-                const int bx1 = std::clamp((qx + 1) * query - origin_x, 0, nx);
-                const int by1 = std::clamp((qy + 1) * query - origin_y, 0, ny);
-                const int bz1 = std::clamp((qz + 1) * query - origin_z, 0, nz);
-                for (int z = bz0; z < bz1; ++z) {
-                    for (int y = by0; y < by1; ++y) {
-                        for (int x = bx0; x < bx1; ++x) {
-                            const std::size_t here = index(x, y, z);
-                            activation_density_[0][here] = small_density;
-                            activation_density_[1][here] = large_density;
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-void StructuredPdeModel3D::refresh_activation(double dt) {
-    build_activation_density();
-    if (!population_bounds_.valid) return;
-    const double threshold = config_.continuum.base.migration_activation_threshold;
-    const double r_inherent = mean_growth_rate(CellType::r);
-    const double full_cycle =
-        config_.continuum.base.division_timing.base_cycle_hours /
-        std::max(1.0e-12, r_inherent);
-    const double mean_fraction =
-        config_.continuum.base.migration_activation_duration_mean_fraction;
-    const double mean_duration = mean_fraction * full_cycle;
-    const auto bounds = population_bounds_;
-    for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
-        for (int z = bounds.z0; z < bounds.z1; ++z) {
-            for (int y = bounds.y0; y < bounds.y1; ++y) {
-                for (int x = bounds.x0; x < bounds.x1; ++x) {
-                    const std::size_t location = index(x, y, z);
-                    double mass = r_normal_[stage][location];
-                    if (config_.schema_version >= 7) {
-                        auto& refractory = r_refractory_[stage][location];
-                        auto& clock = refractory_clock_[stage][location];
-                        clock = std::max(0.0, clock - refractory * dt);
-                        if (clock <= 1.0e-12 * std::max(1.0, refractory) &&
-                            activation_density_[stage][location] <=
-                                config_.migration.reactivation_density_threshold) {
-                            refractory = 0.0;
-                            clock = 0.0;
-                        }
-                        mass = std::max(0.0, mass - refractory);
-                    } else if (config_.schema_version >= 5) {
-                        auto& cooldown = activation_cooldown_[stage][location];
-                        auto& armed = activation_armed_[stage][location];
-                        if (active_total_[stage][location] >=
-                            config_.migration.minimum_density) {
-                            armed = 0U;
-                            cooldown = static_cast<float>(
-                                config_.migration.reactivation_cooldown_hours);
-                        } else {
-                            cooldown = static_cast<float>(std::max(
-                                0.0, static_cast<double>(cooldown) - dt));
-                            if (cooldown <= 0.0F &&
-                                activation_density_[stage][location] <=
-                                    config_.migration
-                                        .reactivation_density_threshold) {
-                                armed = 1U;
-                            }
-                        }
-                        if (armed == 0U) continue;
-                    }
-                    if (mass < config_.migration.minimum_density ||
-                        activation_density_[stage][location] < threshold) continue;
-                    r_normal_[stage][location] -= mass;
-                    if (duration_) duration_->add_fresh(location, stage, mass);
-                    if (velocity_) velocity_->add_fresh(location, stage, mass);
-                    active_direction_[stage][0][location] +=
-                        static_cast<float>(mass);
-                    active_clock_[stage][0][location] +=
-                        static_cast<float>(mass * mean_duration);
-                    active_total_[stage][location] += static_cast<float>(mass);
-                    if (config_.schema_version >= 5) {
-                        activation_armed_[stage][location] = 0U;
-                        activation_cooldown_[stage][location] =
-                            static_cast<float>(
-                                config_.migration.reactivation_cooldown_hours);
-                    }
-                    include_active_location(stage, x, y, z);
-                }
-            }
-        }
-    }
-}
-
-double StructuredPdeModel3D::mean_growth_rate(CellType type) const {
-    const auto& base = config_.continuum.base;
-    if (config_.growth_rate_closure == "truncated_normal_expectation_v2") {
-        return expected_initial_growth_rate(base, type);
-    }
-    if (base.initial_growth_rate_model == "fixed") {
-        return type == CellType::r ? base.initial_r_growth_rate
-                                   : base.initial_K_growth_rate;
-    }
-    const auto& distribution = type == CellType::r
-        ? base.initial_r_growth_truncated_normal
-        : base.initial_K_growth_truncated_normal;
-    return std::clamp(distribution.mean, distribution.minimum,
-                      distribution.maximum);
-}
-
-double StructuredPdeModel3D::normal_diffusion(
-    StructuredStage3D stage, CellType type) const noexcept {
-    const auto& base = config_.continuum.base;
-    const double rate = type == CellType::r
-        ? beta_mean(base.normal_r_migration_beta)
-        : (base.initial_K_migration_rate_model == "fixed"
-               ? base.initial_K_migration_rate
-               : beta_mean(base.initial_K_migration_beta));
-    double result = (base.thin_layer &&
-        config_.continuum.migration.mapping == "shared_fixed_lattice_means_v2"
-        ? 3.0 / 8.0 : kFixed26DiffusionFactor) * rate *
-        config_.continuum.migration.diffusion_scale;
-    if (stage == StructuredStage3D::large) {
-        result *= config_.continuum.migration.large_mobility_multiplier;
-    }
-    return result;
-}
-
-double StructuredPdeModel3D::active_rate(StructuredStage3D stage) const noexcept {
-    double result = beta_mean(config_.continuum.base.normal_r_migration_beta) *
-        config_.continuum.base.activated_r_normal_multiplier;
-    if (stage == StructuredStage3D::large) {
-        result *= config_.continuum.migration.large_mobility_multiplier;
-    }
-    return result;
-}
-
-void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
-    const auto& continuum = config_.continuum;
-    if (!population_bounds_.valid) return;
-    if (renewal_) renewal_->begin_transport();
-    const int nx = continuum.grid.shape[0];
-    const int ny = continuum.grid.shape[1];
-    const int nz = continuum.grid.shape[2];
-    const double inverse_h2 = 1.0 /
-        (continuum.grid.spacing_voxels * continuum.grid.spacing_voxels);
-    const int workers = renewal_ ? 1 : std::max(
-        1, std::min(continuum.base.threads, available_worker_threads()));
-    const StructuredActiveBounds3D old_bounds = population_bounds_;
-    const StructuredActiveBounds3D target_bounds = expanded_bounds(old_bounds);
-    const auto clear = [&](const StructuredActiveBounds3D& bounds) {
-        if (!bounds.valid) return;
-        for (int z = bounds.z0; z < bounds.z1; ++z) {
-            for (int y = bounds.y0; y < bounds.y1; ++y) {
-                const std::size_t begin = index(bounds.x0, y, z);
-                const std::size_t end = index(bounds.x1 - 1, y, z) + 1;
-                for (std::size_t stage = 0; stage < 2; ++stage) {
-                    std::fill(r_normal_work_[stage].begin() + begin,
-                              r_normal_work_[stage].begin() + end, 0.0);
-                    std::fill(K_work_[stage].begin() + begin,
-                              K_work_[stage].begin() + end, 0.0);
-                    if (config_.schema_version >= 7) {
-                        std::fill(refractory_work_[stage].begin() + begin,
-                                  refractory_work_[stage].begin() + end, 0.0);
-                        std::fill(refractory_clock_work_[stage].begin() + begin,
-                                  refractory_clock_work_[stage].begin() + end, 0.0);
-                    }
-                }
-            }
-        }
-    };
-    clear(normal_work_dirty_bounds_);
-    clear(target_bounds);
-    const std::size_t bx = static_cast<std::size_t>(
-        target_bounds.x1 - target_bounds.x0);
-    const std::size_t by = static_cast<std::size_t>(
-        target_bounds.y1 - target_bounds.y0);
-    const std::size_t bz = static_cast<std::size_t>(
-        target_bounds.z1 - target_bounds.z0);
-    const std::size_t box_size = bx * by * bz;
-
-    std::array<std::vector<std::array<double, 27>>, 2> feasible_probabilities;
-    const bool feasible_jump = config_.normal_transport == "feasible_fixed_lattice_jump_v3";
-    const auto box_offset = [&](int x, int y, int z) {
-        return (static_cast<std::size_t>(z - target_bounds.z0) * by +
-            static_cast<std::size_t>(y - target_bounds.y0)) * bx +
-            static_cast<std::size_t>(x - target_bounds.x0);
-    };
-    if (feasible_jump) {
-        for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
-            auto& cache = feasible_probabilities[stage];
-            cache.resize(box_size);
-            for (int z = old_bounds.z0; z < old_bounds.z1; ++z) {
-                for (int y = old_bounds.y0; y < old_bounds.y1; ++y) {
-                    for (int x = old_bounds.x0; x < old_bounds.x1; ++x) {
-                        const auto here = index(x, y, z);
-                        if (vessel_blocks_cells(here)) continue;
-                        if (r_normal_[stage][here] == 0.0 && K_[stage][here] == 0.0 &&
-                            r_refractory_[stage][here] == 0.0 && refractory_clock_[stage][here] == 0.0) {
-                            continue;
-                        }
-                        std::vector<double> availability(direction_ids_.size(), 0.0);
-                        for (std::size_t d = 0; d < direction_ids_.size(); ++d) {
-                            const auto jump = direction_vector(direction_ids_[d]);
-                            const int ox = x + jump.x;
-                            const int oy = y + jump.y;
-                            const int oz = z + jump.z;
-                            if (ox < 0 || ox >= nx || oy < 0 || oy >= ny || oz < 0 || oz >= nz) continue;
-                            const auto other = index(ox, oy, oz);
-                            if (transport_destination_blocks_cells(
-                                    other, static_cast<StructuredStage3D>(stage))) continue;
-                            const double vacancy = 1.0 - std::clamp(occupied_fraction(other) /
-                                continuum.reaction.maximum_occupied_fraction, 0.0, 1.0);
-                            const double overlapping_sites = (2 - std::abs(jump.x)) *
-                                (2 - std::abs(jump.y)) *
-                                (continuum.base.thin_layer ? 1 : 2 - std::abs(jump.z));
-                            const double new_sites = stage == 0 ? 1.0 : large_cell_volume_ - overlapping_sites;
-                            availability[d] = std::pow(vacancy, new_sites);
-                        }
-                        const auto probabilities = uniform_feasible_jump_probabilities(availability);
-                        auto& target = cache[box_offset(x, y, z)];
-                        for (std::size_t d = 0; d < direction_ids_.size(); ++d) {
-                            target[direction_ids_[d]] = probabilities[d];
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    const auto migrate_field = [&](const PagedField<double>& source,
-                                   PagedField<double>& target,
-                                   StructuredStage3D stage,
-                                   CellType type, bool carry_cycle = false) {
-        const bool large = stage == StructuredStage3D::large;
-        const double vacancy_exponent = large ? large_cell_volume_ : 1.0;
-        const double diffusion = normal_diffusion(stage, type);
-        const bool lattice_jump = config_.normal_transport != "axial_diffusion_v1";
-        const double jump_coefficient = lattice_jump
-            ? diffusion / (continuum.base.thin_layer ? 3.0 : 9.0) : diffusion;
-        std::atomic<bool> invalid_negative{false};
-        deterministic_parallel_for(box_size, workers, [&](std::size_t offset) {
-            const int x = target_bounds.x0 + static_cast<int>(offset % bx);
-            const std::size_t yz = offset / bx;
-            const int y = target_bounds.y0 + static_cast<int>(yz % by);
-            const int z = target_bounds.z0 + static_cast<int>(yz / by);
-            const std::size_t here = index(x, y, z);
-            const double local_occupied = std::clamp(
-                occupied_fraction(here) /
-                    continuum.reaction.maximum_occupied_fraction,
-                0.0, 1.0);
-            const double vacancy = 1.0 - local_occupied;
-            const double availability = transport_destination_blocks_cells(here, stage)
-                ? 0.0 : std::pow(vacancy, vacancy_exponent);
-            double delta = 0.0;
-            const auto exchange = [&](int ox, int oy, int oz, DirectionId direction = kStayDirection) {
-                if (ox < 0 || ox >= nx || oy < 0 || oy >= ny ||
-                    oz < 0 || oz >= nz) return;
-                const std::size_t other = index(ox, oy, oz);
-                const double other_occupied = std::clamp(
-                    occupied_fraction(other) /
-                        continuum.reaction.maximum_occupied_fraction,
-                    0.0, 1.0);
-                const double other_vacancy = 1.0 - other_occupied;
-                const double other_availability = transport_destination_blocks_cells(other, stage)
-                    ? 0.0 : std::pow(other_vacancy, vacancy_exponent);
-                const double mobility = std::pow(
-                    0.5 * (vacancy + other_vacancy),
-                    continuum.migration.crowding_exponent);
-                double incoming = jump_coefficient * inverse_h2 * mobility * availability;
-                double outgoing = jump_coefficient * inverse_h2 * mobility * other_availability;
-                if (feasible_jump) {
-                    const double rate = diffusion / (continuum.base.thin_layer ? 3.0 / 8.0 : kFixed26DiffusionFactor);
-                    const auto& cache = feasible_probabilities[std::size_t(stage)];
-                    const bool in_box = ox >= target_bounds.x0 && ox < target_bounds.x1 &&
-                        oy >= target_bounds.y0 && oy < target_bounds.y1 &&
-                        oz >= target_bounds.z0 && oz < target_bounds.z1;
-                    incoming = in_box ? rate * cache[box_offset(ox, oy, oz)][opposite_direction(direction)] : 0.0;
-                    outgoing = rate * cache[box_offset(x, y, z)][direction];
-                }
-                if (feasible_jump) {
-                    delta += source[other] * incoming - source[here] * outgoing;
-                } else {
-                    delta += jump_coefficient * inverse_h2 * mobility *
-                        (source[other] * availability - source[here] * other_availability);
-                }
-                if (renewal_ && carry_cycle && here < other) {
-                    const std::size_t channel = (type == CellType::r ? 0 : 2) + std::size_t(stage);
-                    if (feasible_jump) {
-                        renewal_->transfer(other, here, channel, dt * source[other] * incoming);
-                        renewal_->transfer(here, other, channel, dt * source[here] * outgoing);
-                    } else {
-                        const double scale = dt * jump_coefficient * inverse_h2 * mobility;
-                        renewal_->transfer(other, here, channel, scale * source[other] * availability);
-                        renewal_->transfer(here, other, channel, scale * source[here] * other_availability);
-                    }
-                }
-            };
-            if (lattice_jump) {
-                for (const auto direction_id : direction_ids_) {
-                    const auto direction = direction_vector(direction_id);
-                    exchange(x + direction.x, y + direction.y, z + direction.z, direction_id);
-                }
-            } else {
-                exchange(x - 1, y, z);
-                exchange(x + 1, y, z);
-                exchange(x, y - 1, z);
-                exchange(x, y + 1, z);
-                if (!continuum.base.thin_layer) {
-                    exchange(x, y, z - 1);
-                    exchange(x, y, z + 1);
-                }
-            }
-            const double value = source[here] + dt * delta;
-            if (value < -1.0e-10) invalid_negative.store(true);
-            target[here] = value >= config_.migration.minimum_density
-                ? std::max(0.0, value) : 0.0;
-        });
-        if (invalid_negative.load()) {
-            throw std::runtime_error(
-                "structured normal migration produced negative density");
-        }
-    };
-
-    for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
-        const auto value = static_cast<StructuredStage3D>(stage);
-        migrate_field(r_normal_[stage], r_normal_work_[stage], value, CellType::r, true);
-        migrate_field(K_[stage], K_work_[stage], value, CellType::K, true);
-        if (config_.schema_version >= 7) {
-            migrate_field(r_refractory_[stage], refractory_work_[stage], value, CellType::r);
-            migrate_field(refractory_clock_[stage], refractory_clock_work_[stage], value, CellType::r);
-        }
-    }
-    r_normal_.swap(r_normal_work_);
-    K_.swap(K_work_);
-    if (config_.schema_version >= 7) {
-        r_refractory_.swap(refractory_work_);
-        refractory_clock_.swap(refractory_clock_work_);
-        for (std::size_t stage = 0; stage < 2; ++stage) {
-            for (int z = target_bounds.z0; z < target_bounds.z1; ++z) {
-                for (int y = target_bounds.y0; y < target_bounds.y1; ++y) {
-                    for (int x = target_bounds.x0; x < target_bounds.x1; ++x) {
-                        const auto here = index(x, y, z);
-                        const double mass = r_refractory_[stage][here];
-                        if (mass > r_normal_[stage][here]) {
-                            refractory_clock_[stage][here] *= r_normal_[stage][here] / mass;
-                            r_refractory_[stage][here] = r_normal_[stage][here];
-                        }
-                        if (r_refractory_[stage][here] == 0.0) refractory_clock_[stage][here] = 0.0;
-                    }
-                }
-            }
-        }
-    }
-    normal_work_dirty_bounds_ = old_bounds;
-    population_bounds_ = target_bounds;
-    finish_division_transport();
-}
-
-std::vector<std::size_t> StructuredPdeModel3D::eligible_initial_directions(
-    std::size_t location) const {
-    const auto& continuum = config_.continuum;
-    const int nx = continuum.grid.shape[0];
-    const int ny = continuum.grid.shape[1];
-    const int nz = continuum.grid.shape[2];
-    const int x = static_cast<int>(location % static_cast<std::size_t>(nx));
-    const std::size_t yz = location / static_cast<std::size_t>(nx);
-    const int y = static_cast<int>(yz % static_cast<std::size_t>(ny));
-    const int z = static_cast<int>(yz / static_cast<std::size_t>(ny));
-    const int radius = continuum.base.direction_density_radius;
-    const double minimum_cosine = std::cos(
-        continuum.base.direction_density_half_angle_degrees *
-        std::acos(-1.0) / 180.0);
-    std::vector<std::size_t> result;
-    for (std::size_t direction_index = 0;
-         direction_index < direction_ids_.size(); ++direction_index) {
-        const Vec3i forward = direction_vector(direction_ids_[direction_index]);
-        const int target_x = x + forward.x;
-        const int target_y = y + forward.y;
-        const int target_z = z + forward.z;
-        if (target_x < 0 || target_x >= nx || target_y < 0 || target_y >= ny ||
-            target_z < 0 || target_z >= nz ||
-            vessel_blocks_cells(index(target_x, target_y, target_z))) {
-            continue;
-        }
-        const double forward_length =
-            std::sqrt(static_cast<double>(squared_length(forward)));
-        double count = 0.0;
-        std::size_t sites = 0;
-        for (int dz = continuum.base.thin_layer ? 0 : -radius;
-             dz <= (continuum.base.thin_layer ? 0 : radius); ++dz) {
-            for (int dy = -radius; dy <= radius; ++dy) {
-                for (int dx = -radius; dx <= radius; ++dx) {
-                    const int distance = std::max(
-                        {std::abs(dx), std::abs(dy), std::abs(dz)});
-                    if (distance == 0 || distance > radius) continue;
-                    const Vec3i offset{dx, dy, dz};
-                    const double offset_length =
-                        std::sqrt(static_cast<double>(squared_length(offset)));
-                    const double cosine = static_cast<double>(dot(offset, forward)) /
-                        (offset_length * forward_length);
-                    if (cosine + 1.0e-12 < minimum_cosine) continue;
-                    ++sites;
-                    const int ox = x + dx;
-                    const int oy = y + dy;
-                    const int oz = z + dz;
-                    if (ox < 0 || ox >= nx || oy < 0 || oy >= ny ||
-                        oz < 0 || oz >= nz) continue;
-                    const std::size_t other = index(ox, oy, oz);
-                    count += (r_normal_[0][other] + r_normal_[1][other] +
-                              r_active(StructuredStage3D::small, other) +
-                              r_active(StructuredStage3D::large, other) +
-                              K_[0][other] + K_[1][other]) * voxel_measure_;
-                }
-            }
-        }
-        const double density = sites > 0 ? count / static_cast<double>(sites) : 1.0;
-        if (density <= continuum.base.direction_density_threshold) {
-            result.push_back(direction_index + 1);
-        }
-    }
-    return result;
-}
-
-void StructuredPdeModel3D::build_guidance_prefix(double dt) {
-    guidance_prefix_bounds_ = {};
-    guidance_prefix_pitch_ = 0;
-    if (sector_mean_) {
-        std::vector<continuum::SectorQueryBox3D> boxes;
-        const auto& continuum = config_.continuum;
-        for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
-            const auto& bounds = active_bounds_[stage];
-            if (!bounds.valid) continue;
-            const double rate = velocity_
-                ? continuum.base.normal_r_migration_beta.scale *
-                    continuum.migration.activated_r_mobility_multiplier *
-                    (stage == 1 ? continuum.migration.large_mobility_multiplier : 1.0)
-                : active_rate(static_cast<StructuredStage3D>(stage));
-            const int margin = static_cast<int>(std::ceil(rate * dt /
-                -std::log1p(-config_.migration.maximum_move_probability_per_substep))) + 1;
-            continuum::SectorQueryBox3D box{
-                {bounds.x0 - margin, bounds.y0 - margin, bounds.z0 - margin},
-                {bounds.x1 + margin, bounds.y1 + margin, bounds.z1 + margin}};
-            if (continuum.base.thin_layer) {
-                box.lower[2] = 0;
-                box.upper[2] = 1;
-            }
-            boxes.push_back(box);
-        }
-        sector_mean_->prepare(nutrient_, continuum.nutrient.vessel_value,
-            boxes, step_count_ + 1);
-        return;
-    }
-    if (config_.schema_version < 3 ||
-        !config_.continuum.base.thin_layer) return;
-
-    StructuredActiveBounds3D bounds;
-    for (const auto& stage_bounds : active_bounds_) {
-        if (!stage_bounds.valid) continue;
-        if (!bounds.valid) {
-            bounds = stage_bounds;
-        } else {
-            bounds.x0 = std::min(bounds.x0, stage_bounds.x0);
-            bounds.y0 = std::min(bounds.y0, stage_bounds.y0);
-            bounds.x1 = std::max(bounds.x1, stage_bounds.x1);
-            bounds.y1 = std::max(bounds.y1, stage_bounds.y1);
-        }
-    }
-    if (!bounds.valid) return;
-
-    int maximum_substeps = 1;
-    for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
-        const double rate = active_rate(static_cast<StructuredStage3D>(stage));
-        if (!(rate > 0.0)) continue;
-        maximum_substeps = std::max(maximum_substeps,
-            static_cast<int>(std::ceil(
-                rate * dt /
-                -std::log1p(-config_.migration.maximum_move_probability_per_substep))));
-    }
-    const int edge = config_.schema_version >= 5
-        ? config_.migration.direction_nutrient_window_edge
-        : config_.migration.direction_density_window_edge;
-    const int lower = (edge - 1) / 2;
-    const int upper = edge - lower - 1;
-    const int margin = std::max(lower, upper) + maximum_substeps + 1;
-    const int nx = config_.continuum.grid.shape[0];
-    const int ny = config_.continuum.grid.shape[1];
-    bounds.x0 = std::max(0, bounds.x0 - margin);
-    bounds.y0 = std::max(0, bounds.y0 - margin);
-    bounds.x1 = std::min(nx, bounds.x1 + margin);
-    bounds.y1 = std::min(ny, bounds.y1 + margin);
-    bounds.z0 = 0;
-    bounds.z1 = 1;
-    guidance_prefix_bounds_ = bounds;
-    guidance_prefix_pitch_ = bounds.x1 - bounds.x0 + 1;
-    const int height = bounds.y1 - bounds.y0;
-    const std::size_t size = static_cast<std::size_t>(height) *
-        static_cast<std::size_t>(guidance_prefix_pitch_);
-    guidance_density_row_prefix_.assign(size, 0.0);
-    guidance_resource_row_prefix_.assign(size, 0.0);
-    const double vessel_value = config_.continuum.nutrient.vessel_value;
-    for (int y = bounds.y0; y < bounds.y1; ++y) {
-        const std::size_t row = static_cast<std::size_t>(y - bounds.y0) *
-            static_cast<std::size_t>(guidance_prefix_pitch_);
-        double density_sum = 0.0;
-        double resource_sum = 0.0;
-        for (int x = bounds.x0; x < bounds.x1; ++x) {
-            const std::size_t location = index(x, y, 0);
-            if (config_.schema_version < 5) {
-                density_sum += (r_normal_[0][location] +
-                    r_normal_[1][location] +
-                    r_active(StructuredStage3D::small, location) +
-                    r_active(StructuredStage3D::large, location) +
-                    K_[0][location] + K_[1][location]) * voxel_measure_;
-            }
-            resource_sum += std::clamp(
-                nutrient_[location] / vessel_value, 0.0, 1.0);
-            const std::size_t column =
-                static_cast<std::size_t>(x - bounds.x0 + 1);
-            guidance_density_row_prefix_[row + column] = density_sum;
-            guidance_resource_row_prefix_[row + column] = resource_sum;
-        }
-    }
-}
-
-std::vector<double> StructuredPdeModel3D::guided_direction_weights(
-    std::size_t location,
-    bool allow_crowded_sectors) const {
-    const auto& continuum = config_.continuum;
-    const auto& base = continuum.base;
-    const int nx = continuum.grid.shape[0];
-    const int ny = continuum.grid.shape[1];
-    const int nz = continuum.grid.shape[2];
-    const int x = static_cast<int>(location % static_cast<std::size_t>(nx));
-    const std::size_t yz = location / static_cast<std::size_t>(nx);
-    const int y = static_cast<int>(yz % static_cast<std::size_t>(ny));
-    const int z = static_cast<int>(yz / static_cast<std::size_t>(ny));
-    const int edge = config_.schema_version >= 5
-        ? config_.migration.direction_nutrient_window_edge
-        : config_.schema_version >= 3
-        ? config_.migration.direction_density_window_edge
-        : 2 * base.direction_density_radius + 1;
-    const int lower = (edge - 1) / 2;
-    const int upper = edge - lower - 1;
-    const double minimum_cosine = std::cos(
-        base.direction_density_half_angle_degrees * std::acos(-1.0) / 180.0);
-    const double floor = base.direction_minimum_guidance_weight;
-    std::vector<double> result(direction_ids_.size() + 1, 0.0);
-    for (std::size_t direction_index = 0;
-         direction_index < direction_ids_.size(); ++direction_index) {
-        const Vec3i forward = direction_vector(direction_ids_[direction_index]);
-        const int target_x = x + forward.x;
-        const int target_y = y + forward.y;
-        const int target_z = z + forward.z;
-        if (target_x < 0 || target_x >= nx || target_y < 0 || target_y >= ny ||
-            target_z < 0 || target_z >= nz ||
-            vessel_blocks_cells(index(target_x, target_y, target_z))) {
-            continue;
-        }
-        const double forward_length =
-            std::sqrt(static_cast<double>(squared_length(forward)));
-        if (sector_mean_) {
-            if (sector_mean_->count(location, direction_ids_[direction_index]) == 0) continue;
-            double gradient = (sector_mean_->mean(location, direction_ids_[direction_index]) -
-                std::clamp(nutrient_[location] / continuum.nutrient.vessel_value, 0.0, 1.0)) *
-                continuum.nutrient.vessel_value;
-            if (std::abs(gradient) < config_.migration.zero_gradient_tolerance)
-                gradient = 0.0;
-            result[direction_index + 1] =
-                std::pow(forward_length, -base.distance_weight_exponent) *
-                std::exp(std::clamp(config_.migration.chemotaxis_strength * gradient, -40.0, 40.0));
-            continue;
-        }
-        double count = 0.0;
-        double resource = 0.0;
-        std::size_t sites = 0;
-        std::size_t resource_sites = 0;
-        if (config_.schema_version >= 3 && base.thin_layer &&
-            guidance_prefix_bounds_.valid) {
-            if (config_.schema_version < 7) {
-                sites = direction_sector_site_counts_[direction_index];
-            }
-            for (const auto& span : direction_row_spans_[direction_index]) {
-                const int oy = y + span.dy;
-                if (oy < guidance_prefix_bounds_.y0 ||
-                    oy >= guidance_prefix_bounds_.y1) continue;
-                const int ox0 = std::max(
-                    guidance_prefix_bounds_.x0, x + span.dx0);
-                const int ox1 = std::min(
-                    guidance_prefix_bounds_.x1, x + span.dx1 + 1);
-                if (ox1 <= ox0) continue;
-                const std::size_t row =
-                    static_cast<std::size_t>(oy - guidance_prefix_bounds_.y0) *
-                    static_cast<std::size_t>(guidance_prefix_pitch_);
-                const std::size_t left =
-                    static_cast<std::size_t>(ox0 - guidance_prefix_bounds_.x0);
-                const std::size_t right =
-                    static_cast<std::size_t>(ox1 - guidance_prefix_bounds_.x0);
-                resource_sites += static_cast<std::size_t>(ox1 - ox0);
-                if (config_.schema_version >= 7) sites += static_cast<std::size_t>(ox1 - ox0);
-                count += guidance_density_row_prefix_[row + right] -
-                    guidance_density_row_prefix_[row + left];
-                resource += guidance_resource_row_prefix_[row + right] -
-                    guidance_resource_row_prefix_[row + left];
-            }
-        } else {
-            for (int dz = base.thin_layer ? 0 : -lower;
-                 dz <= (base.thin_layer ? 0 : upper); ++dz) {
-                for (int dy = -lower; dy <= upper; ++dy) {
-                    for (int dx = -lower; dx <= upper; ++dx) {
-                        if (dx == 0 && dy == 0 && dz == 0) continue;
-                        const Vec3i offset{dx, dy, dz};
-                        const double offset_length =
-                            std::sqrt(static_cast<double>(squared_length(offset)));
-                        const double cosine =
-                            static_cast<double>(dot(offset, forward)) /
-                            (offset_length * forward_length);
-                        if (cosine + 1.0e-12 < minimum_cosine) continue;
-                        if (config_.schema_version < 7) ++sites;
-                        const int ox = x + dx;
-                        const int oy = y + dy;
-                        const int oz = z + dz;
-                        if (ox < 0 || ox >= nx || oy < 0 || oy >= ny ||
-                            oz < 0 || oz >= nz) continue;
-                        if (config_.schema_version >= 7) ++sites;
-                        const std::size_t other = index(ox, oy, oz);
-                        ++resource_sites;
-                        count += (r_normal_[0][other] + r_normal_[1][other] +
-                                  r_active(StructuredStage3D::small, other) +
-                                  r_active(StructuredStage3D::large, other) +
-                                  K_[0][other] + K_[1][other]) * voxel_measure_;
-                        resource += std::clamp(
-                            nutrient_[other] / continuum.nutrient.vessel_value,
-                            0.0, 1.0);
-                    }
-                }
-            }
-        }
-        if (sites == 0) continue;
-        if (config_.schema_version >= 5) {
-            if (resource_sites == 0) continue;
-            const double local_resource = std::clamp(
-                nutrient_[location] / continuum.nutrient.vessel_value,
-                0.0, 1.0);
-            const double directional_resource =
-                resource / static_cast<double>(resource_sites);
-            double gradient = directional_resource - local_resource;
-            if (base.direction_guidance_model == "nutrient_gradient_shared_resource_v3" ||
-                base.direction_guidance_model == "nutrient_gradient_shared_resource_v4") {
-                gradient *= continuum.nutrient.vessel_value;
-            }
-            if (std::abs(gradient) <
-                config_.migration.zero_gradient_tolerance) {
-                gradient = 0.0;
-            }
-            const double exponent = std::clamp(
-                config_.migration.chemotaxis_strength * gradient,
-                -40.0, 40.0);
-            result[direction_index + 1] =
-                std::pow(forward_length, -base.distance_weight_exponent) *
-                std::exp(exponent);
-            continue;
-        }
-        const double density = count / static_cast<double>(sites);
-        if (!allow_crowded_sectors &&
-            density > base.direction_density_threshold) continue;
-        const double density_fraction = std::clamp(
-            density / base.direction_density_threshold, 0.0, 1.0);
-        const double density_score =
-            floor + (1.0 - floor) * (1.0 - density_fraction);
-        const double resource_score = floor + (1.0 - floor) *
-            resource / static_cast<double>(sites);
-        result[direction_index + 1] =
-            std::pow(forward_length, -base.distance_weight_exponent) *
-            std::pow(density_score,
-                     base.direction_density_guidance_exponent) *
-            std::pow(resource_score,
-                     base.direction_resource_guidance_exponent);
-    }
-    return result;
-}
-
-void StructuredPdeModel3D::expire_active(std::size_t stage, double dt) {
-    const double epsilon = config_.migration.minimum_density;
-    const auto bounds = active_bounds_[stage];
-    if (!bounds.valid) return;
-    const auto expire_location = [&](std::size_t location) {
-        if (duration_) {
-            double before = 0.0;
-            for (const auto& field : active_direction_[stage]) before += field[location];
-            if (!(before > 0.0)) return;
-            duration_->advance(location, stage, dt);
-            const double remaining = duration_->mass(location, stage);
-            const double factor = before > 0.0 ? std::clamp(remaining / before, 0.0, 1.0) : 0.0;
-            const double mean = duration_->mean_work(location, stage);
-            double after = 0.0;
-            for (std::size_t bucket = 0; bucket < active_direction_[stage].size(); ++bucket) {
-                auto& mass = active_direction_[stage][bucket][location];
-                mass = static_cast<float>(mass * factor);
-                active_clock_[stage][bucket][location] = static_cast<float>(mass * mean);
-                after += mass;
-            }
-            const double expired = std::max(0.0, before - after);
-            r_normal_[stage][location] += expired;
-            r_refractory_[stage][location] += expired;
-            refractory_clock_[stage][location] += expired * config_.migration.reactivation_cooldown_hours;
-            active_total_[stage][location] = static_cast<float>(after);
-            duration_->reconcile(location, stage, after);
-            if (velocity_) velocity_->reconcile(location, stage, after);
-            return;
-        }
-        double total = 0.0;
-        for (std::size_t bucket = 0;
-             bucket < active_direction_[stage].size(); ++bucket) {
-            auto& mass = active_direction_[stage][bucket][location];
-            auto& clock_value = active_clock_[stage][bucket][location];
-            const double mass_value = mass;
-            const double clock = std::max(
-                0.0, static_cast<double>(clock_value));
-            if (mass_value <= epsilon ||
-                clock <= mass_value * dt +
-                    1.0e-6 * std::max(1.0, clock)) {
-                if (mass_value > 0.0) {
-                    r_normal_[stage][location] += mass_value;
-                    if (config_.schema_version >= 7) {
-                        r_refractory_[stage][location] += mass_value;
-                        refractory_clock_[stage][location] += mass_value *
-                            config_.migration.reactivation_cooldown_hours;
-                    } else if (config_.schema_version >= 5) {
-                        activation_armed_[stage][location] = 0U;
-                        activation_cooldown_[stage][location] =
-                            static_cast<float>(std::max(
-                                static_cast<double>(
-                                    activation_cooldown_[stage][location]),
-                                config_.migration
-                                    .reactivation_cooldown_hours));
-                    }
-                }
-                mass = 0.0F;
-                clock_value = 0.0F;
-            } else {
-                clock_value = static_cast<float>(
-                    clock - mass_value * dt);
-                total += mass_value;
-            }
-        }
-        active_total_[stage][location] = static_cast<float>(total);
-    };
-
-    if (config_.schema_version >= 4) {
-        const std::size_t bx = static_cast<std::size_t>(
-            bounds.x1 - bounds.x0);
-        const std::size_t by = static_cast<std::size_t>(
-            bounds.y1 - bounds.y0);
-        const std::size_t bz = static_cast<std::size_t>(
-            bounds.z1 - bounds.z0);
-        const std::size_t box_size = bx * by * bz;
-        const int workers = duration_ ? 1 : std::max(1, std::min(
-            config_.continuum.base.threads, available_worker_threads()));
-        deterministic_parallel_for(
-            box_size, workers, [&](std::size_t offset) {
-                const int x = bounds.x0 + static_cast<int>(offset % bx);
-                const std::size_t yz = offset / bx;
-                const int y = bounds.y0 + static_cast<int>(yz % by);
-                const int z = bounds.z0 + static_cast<int>(yz / by);
-                expire_location(index(x, y, z));
-            });
-        return;
-    }
-
-    for (int z = bounds.z0; z < bounds.z1; ++z) {
-        for (int y = bounds.y0; y < bounds.y1; ++y) {
-            for (int x = bounds.x0; x < bounds.x1; ++x) {
-                expire_location(index(x, y, z));
-            }
-        }
-    }
-}
-
-void StructuredPdeModel3D::migrate_active(double dt) {
-    const auto& continuum = config_.continuum;
-    const int nx = continuum.grid.shape[0];
-    const int ny = continuum.grid.shape[1];
-    const int nz = continuum.grid.shape[2];
-    const bool conditional_vacancy = config_.migration.direction_transport ==
-        "nutrient_gradient_feasible_direction_jump_exchange_v5";
-    build_guidance_prefix(dt);
-    if (config_.schema_version >= 4) {
-        ++guidance_weight_cache_generation_;
-        if (guidance_weight_cache_generation_ == 0U) {
-            fill_field(guidance_weight_cache_stamp_,0U);
-            guidance_weight_cache_generation_ = 1U;
-        }
-    }
-    const auto ensure_guidance_cache = [&](std::size_t location) {
-        if (config_.schema_version < 4 ||
-            guidance_weight_cache_stamp_[location] ==
-                guidance_weight_cache_generation_) {
-            return;
-        }
-        const std::vector<double> weights = guided_direction_weights(location);
-        for (std::size_t bucket = 0; bucket < weights.size(); ++bucket) {
-            guidance_weight_cache_[bucket][location] =
-                static_cast<float>(weights[bucket]);
-        }
-        guidance_weight_cache_stamp_[location] =
-            guidance_weight_cache_generation_;
-    };
-
-    for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
-        if (duration_) { expire_active(stage, 0.0); shrink_active_bounds(stage); }
-        if (!active_bounds_[stage].valid) continue;
-        const auto stage_value = static_cast<StructuredStage3D>(stage);
-        const double rate = active_rate(stage_value);
-        if (!(rate > 0.0)) {
-            if (duration_) { expire_active(stage, dt); shrink_active_bounds(stage); }
-            continue;
-        }
-        const bool resource_guided = config_.schema_version >= 5 ||
-            (config_.schema_version >= 2 &&
-             continuum.base.direction_guidance_model == "low_density_high_resource_v1");
-        // Resolve the no-persistent-direction state before transport. V2/v3
-        // rule uses the same low-density/high-resource directional cone score
-        // as the nutrient-coupled ABM.
-        const auto initial_bounds = active_bounds_[stage];
-        for (int z = initial_bounds.z0; z < initial_bounds.z1; ++z) {
-            for (int y = initial_bounds.y0; y < initial_bounds.y1; ++y) {
-                for (int x = initial_bounds.x0; x < initial_bounds.x1; ++x) {
-                    const std::size_t location = index(x, y, z);
-                    const double mass = active_direction_[stage][0][location];
-                    if (mass < config_.migration.minimum_density) continue;
-                    std::vector<std::size_t> targets;
-                    std::vector<double> weights(
-                        active_direction_[stage].size(), 0.0);
-                    double weight_sum = 0.0;
-                    if (resource_guided) {
-                        if (config_.schema_version >= 4) {
-                            ensure_guidance_cache(location);
-                            for (std::size_t target = 0;
-                                 target < weights.size(); ++target) {
-                                weights[target] =
-                                    guidance_weight_cache_[target][location];
-                            }
-                        } else {
-                            weights = guided_direction_weights(location);
-                        }
-                        for (std::size_t target = 1;
-                             target < weights.size(); ++target) {
-                            if (conditional_vacancy) {
-                                const auto step = direction_vector(direction_ids_[target - 1]);
-                                if (x + step.x < 0 || x + step.x >= nx ||
-                                    y + step.y < 0 || y + step.y >= ny ||
-                                    z + step.z < 0 || z + step.z >= nz) weights[target] = 0.0;
-                                else {
-                                    const auto other = index(x + step.x, y + step.y, z + step.z);
-                                    weights[target] *= vessel_blocks_cells(other) ? 0.0 :
-                                        std::pow(std::clamp(1.0 - occupied_fraction(other) /
-                                            continuum.reaction.maximum_occupied_fraction, 0.0, 1.0),
-                                            stage == 1 ? large_cell_volume_ : 1.0);
-                                }
-                            }
-                            if (weights[target] > 0.0) {
-                                targets.push_back(target);
-                                weight_sum += weights[target];
-                            }
-                        }
-                    } else {
-                        targets = eligible_initial_directions(location);
-                        for (const std::size_t target : targets) {
-                            const double length = std::sqrt(static_cast<double>(
-                                squared_length(direction_vector(
-                                    direction_ids_[target - 1]))));
-                            weights[target] = std::pow(
-                                length,
-                                -continuum.base.distance_weight_exponent);
-                            weight_sum += weights[target];
-                        }
-                    }
-                    if (targets.empty() || !(weight_sum > 0.0)) continue;
-                    const double clock = active_clock_[stage][0][location];
-                    for (const std::size_t target : targets) {
-                        const double fraction = weights[target] / weight_sum;
-                        active_direction_[stage][target][location] +=
-                            static_cast<float>(mass * fraction);
-                        active_clock_[stage][target][location] +=
-                            static_cast<float>(clock * fraction);
-                    }
-                    active_direction_[stage][0][location] = 0.0F;
-                    active_clock_[stage][0][location] = 0.0F;
-                }
-            }
-        }
-        const double maximum_probability =
-            config_.migration.maximum_move_probability_per_substep;
-        const double rate_supremum = velocity_ ? continuum.base.normal_r_migration_beta.scale *
-            continuum.migration.activated_r_mobility_multiplier *
-            (stage == 1 ? continuum.migration.large_mobility_multiplier : 1.0) : rate;
-        const int substeps = std::max(1, static_cast<int>(std::ceil(
-            rate_supremum * dt / -std::log1p(-maximum_probability))));
-        const double sub_dt = dt / substeps;
-        const double move_probability = 1.0 - std::exp(-rate * sub_dt);
-        const double vacancy_exponent = stage == 1 ? large_cell_volume_ : 1.0;
-        // Active-r PDE tails occupy most sites inside their bounds, so a
-        // contiguous dense traversal is faster than maintaining and sorting a
-        // sparse index. Keep the sparse implementation available for future
-        // genuinely sparse closures, but use the deterministic dense path for
-        // this v4 model.
-        constexpr bool sparse_transport = false;
-
-        std::vector<std::size_t> sparse_locations;
-        if (sparse_transport) {
-            for (int z = initial_bounds.z0; z < initial_bounds.z1; ++z) {
-                for (int y = initial_bounds.y0; y < initial_bounds.y1; ++y) {
-                    for (int x = initial_bounds.x0; x < initial_bounds.x1; ++x) {
-                        const std::size_t location = index(x, y, z);
-                        if (active_total_[stage][location] >=
-                            config_.migration.minimum_density) {
-                            sparse_locations.push_back(location);
-                        }
-                    }
-                }
-            }
-        }
-
-        for (int substep = 0; substep < substeps; ++substep) {
-            if (renewal_) renewal_->begin_transport();
-            if (duration_) duration_->begin_transport();
-            if (velocity_) {
-                std::array<std::vector<double>, 4> probabilities;
-                for (int c = 0; c < 2; ++c) {
-                    probabilities[c].resize(config_.migration.activation_rate_bins + 1);
-                    for (int b = 0; b <= config_.migration.activation_rate_bins; ++b)
-                        probabilities[c][b] = -std::expm1(-rate_supremum * b /
-                            config_.migration.activation_rate_bins * sub_dt);
-                }
-                velocity_->begin_weighted_transport(std::move(probabilities));
-            }
-            const StructuredActiveBounds3D old_bounds = active_bounds_[stage];
-            const StructuredActiveBounds3D target_bounds =
-                expanded_bounds(old_bounds);
-            std::vector<double> proposed_incoming;
-            bool collect_incoming = false;
-            const auto incoming_offset = [&](int x, int y, int z) {
-                return (static_cast<std::size_t>(z - target_bounds.z0) *
-                    (target_bounds.y1 - target_bounds.y0) + y - target_bounds.y0) *
-                    (target_bounds.x1 - target_bounds.x0) + x - target_bounds.x0;
-            };
-            if (conditional_vacancy) proposed_incoming.resize(bounds_size(target_bounds));
-            StructuredActiveBounds3D clear_bounds = target_bounds;
-            if (work_dirty_bounds_.valid) {
-                clear_bounds.x0 = std::min(clear_bounds.x0, work_dirty_bounds_.x0);
-                clear_bounds.y0 = std::min(clear_bounds.y0, work_dirty_bounds_.y0);
-                clear_bounds.z0 = std::min(clear_bounds.z0, work_dirty_bounds_.z0);
-                clear_bounds.x1 = std::max(clear_bounds.x1, work_dirty_bounds_.x1);
-                clear_bounds.y1 = std::max(clear_bounds.y1, work_dirty_bounds_.y1);
-                clear_bounds.z1 = std::max(clear_bounds.z1, work_dirty_bounds_.z1);
-            }
-            // V4 clears the complete prior dirty region once. After each
-            // sparse swap below, only the actual source locations in the old
-            // buffer need clearing. Legacy schemas retain their dense path.
-            if (!sparse_transport || substep == 0) {
-                clear_active_work(clear_bounds);
-            }
-
-            std::vector<std::size_t> sparse_targets;
-            if (sparse_transport) {
-                ++active_location_generation_;
-                if (active_location_generation_ == 0U) {
-                    fill_field(active_location_stamp_,0U);
-                    active_location_generation_ = 1U;
-                }
-                sparse_targets.reserve(sparse_locations.size() * 2);
-            }
-            const auto mark_sparse_target = [&](std::size_t location) {
-                if (!sparse_transport ||
-                    active_location_stamp_[location] ==
-                        active_location_generation_) {
-                    return;
-                }
-                active_location_stamp_[location] =
-                    active_location_generation_;
-                sparse_targets.push_back(location);
-            };
-            const auto transport_location = [&](int x, int y, int z,
-                                                std::size_t location) {
-                if (active_total_[stage][location] <
-                    config_.migration.minimum_density) {
-                    return;
-                }
-                const double local_probability = velocity_ ? velocity_->weighted_transport_mass(location, stage) /
-                    active_total_[stage][location] : move_probability;
-                if (resource_guided && config_.schema_version >= 4) {
-                    ensure_guidance_cache(location);
-                }
-                const std::vector<double> guidance =
-                    resource_guided && config_.schema_version < 4
-                    ? guided_direction_weights(location)
-                    : std::vector<double>{};
-                std::array<double, 27> vacancies{};
-                if (conditional_vacancy) {
-                    for (std::size_t b = 1; b < active_direction_[stage].size(); ++b) {
-                        const auto step = direction_vector(direction_ids_[b - 1]);
-                        if (x + step.x < 0 || x + step.x >= nx ||
-                            y + step.y < 0 || y + step.y >= ny ||
-                            z + step.z < 0 || z + step.z >= nz) continue;
-                        const auto other = index(x + step.x, y + step.y, z + step.z);
-                        if (!vessel_blocks_cells(other)) vacancies[b] = std::pow(
-                            std::clamp(1.0 - occupied_fraction(other) /
-                                continuum.reaction.maximum_occupied_fraction, 0.0, 1.0), vacancy_exponent);
-                    }
-                }
-                const auto raw_guidance_value = [&](std::size_t bucket) {
-                    const double weight = config_.schema_version >= 4
-                        ? static_cast<double>(
-                              guidance_weight_cache_[bucket][location])
-                        : guidance[bucket];
-                    return weight;
-                };
-                const auto guidance_value = [&](std::size_t bucket) {
-                    return raw_guidance_value(bucket) * (conditional_vacancy ? vacancies[bucket] : 1.0);
-                };
-                for (std::size_t bucket = 0;
-                     bucket < active_direction_[stage].size(); ++bucket) {
-                    const double mass =
-                        active_direction_[stage][bucket][location];
-                    if (!(mass > 0.0)) continue;
-                    const double clock = std::max(0.0, static_cast<double>(
-                        active_clock_[stage][bucket][location]));
-                    if (mass < config_.migration.minimum_density) {
-                        if (collect_incoming) continue;
-                        active_work_[bucket][location] +=
-                            static_cast<float>(mass);
-                        clock_work_[bucket][location] +=
-                            static_cast<float>(clock);
-                        mark_sparse_target(location);
-                        continue;
-                    }
-                    const double clock_per_mass = clock / mass;
-                    double accepted_total = 0.0;
-                    double reset_direction = 0.0;
-                    const auto available = [&](std::size_t target_bucket) {
-                        const Vec3i step = direction_vector(
-                            direction_ids_[target_bucket - 1]);
-                        if (!(x + step.x >= 0 && x + step.x < nx &&
-                            y + step.y >= 0 && y + step.y < ny &&
-                            z + step.z >= 0 && z + step.z < nz)) {
-                            return false;
-                        }
-                        return conditional_vacancy ? vacancies[target_bucket] > 0.0 :
-                            !vessel_blocks_cells(index(x + step.x, y + step.y, z + step.z));
-                    };
-                    const auto move = [&](std::size_t target_bucket,
-                                          double direction_probability) {
-                        const Vec3i step = direction_vector(
-                            direction_ids_[target_bucket - 1]);
-                        const int ox = x + step.x;
-                        const int oy = y + step.y;
-                        const int oz = z + step.z;
-                        const std::size_t other = index(ox, oy, oz);
-                        if (vessel_blocks_cells(other)) return;
-                        const double occupied = std::clamp(
-                            occupied_fraction(other) /
-                                continuum.reaction.maximum_occupied_fraction,
-                            0.0, 1.0);
-                        const double availability = conditional_vacancy ? 1.0 : std::pow(
-                            std::max(0.0, 1.0 - occupied),
-                            vacancy_exponent);
-                        double moved = mass * local_probability *
-                            direction_probability * availability;
-                        if (!(moved > 0.0)) return;
-                        if (conditional_vacancy) {
-                            auto& demand = proposed_incoming[incoming_offset(ox, oy, oz)];
-                            if (collect_incoming) { demand += moved; return; }
-                            const double capacity = std::max(0.0,
-                                continuum.reaction.maximum_occupied_fraction - occupied_fraction(other)) /
-                                (stage == 1 ? large_cell_volume_ : 1.0);
-                            moved *= demand > 0.0 ? std::min(1.0, capacity / demand) : 0.0;
-                        }
-                        if (renewal_) renewal_->transfer(location, other, stage, moved);
-                        if (duration_) duration_->transfer(location, other, stage, moved);
-                        if (velocity_) velocity_->transfer(location, other, stage, moved);
-                        accepted_total += moved;
-                        active_work_[target_bucket][other] +=
-                            static_cast<float>(moved);
-                        clock_work_[target_bucket][other] +=
-                            static_cast<float>(moved * clock_per_mass);
-                        mark_sparse_target(other);
-                    };
-                    if (conditional_vacancy && bucket != 0) {
-                        // Average the literal ABM choice over independent
-                        // target-occupancy subsets. A blocked forward choice
-                        // transfers its prior to feasible turns; normalizing
-                        // mean vacancy weights would retain too much straight
-                        // motion through a partially occupied neighbourhood.
-                        std::vector<std::size_t> choices, uncertain;
-                        if (available(bucket) && raw_guidance_value(bucket) > 0) choices.push_back(bucket);
-                        for (auto turn : turn_buckets_[bucket])
-                            if (available(turn) && raw_guidance_value(turn) > 0) choices.push_back(turn);
-                        for (auto choice : choices) if (vacancies[choice] < 1.0) uncertain.push_back(choice);
-                        std::array<double, 27> probabilities{};
-                        for (std::size_t mask = 0; mask < (std::size_t(1) << uncertain.size()); ++mask) {
-                            std::array<bool, 27> selected{};
-                            for (auto choice : choices) selected[choice] = vacancies[choice] == 1.0;
-                            double probability = 1.0;
-                            for (std::size_t bit = 0; bit < uncertain.size(); ++bit) {
-                                const auto choice = uncertain[bit];
-                                selected[choice] = (mask >> bit) & 1U;
-                                probability *= selected[choice] ? vacancies[choice] : 1 - vacancies[choice];
-                            }
-                            if (!(probability > 0.0)) continue;
-                            std::size_t turns = 0;
-                            for (auto choice : choices) if (choice != bucket && selected[choice]) ++turns;
-                            std::array<double, 27> weights{};
-                            double sum = 0.0;
-                            for (auto choice : choices) {
-                                if (!selected[choice]) continue;
-                                const double prior = choice == bucket ? (turns ? continuum.base.continue_probability : 1.0) :
-                                    (selected[bucket] ? 1 - continuum.base.continue_probability : 1.0) / turns;
-                                weights[choice] = prior * raw_guidance_value(choice);
-                                sum += weights[choice];
-                            }
-                            if (sum > 0.0) for (auto choice : choices)
-                                probabilities[choice] += probability * weights[choice] / sum;
-                        }
-                        double choice_probability = 0.0;
-                        for (auto choice : choices) {
-                            choice_probability += probabilities[choice];
-                            if (probabilities[choice] > 0.0) move(choice, probabilities[choice]);
-                        }
-                        // The ABM clears direction history after an attempted
-                        // jump has no feasible forward/turn choice. Keep that
-                        // mass at this site, ready to choose any direction on
-                        // its next attempt, rather than trapping its history.
-                        reset_direction = mass * local_probability *
-                            std::clamp(1.0 - choice_probability, 0.0, 1.0);
-                    } else if (bucket != 0) {
-                        if (resource_guided) {
-                            const bool forward_available = available(bucket) &&
-                                guidance_value(bucket) > 0.0;
-                            std::array<std::size_t, 26> valid_turns{};
-                            std::size_t valid_turn_count = 0;
-                            for (const std::size_t turn :
-                                 turn_buckets_[bucket]) {
-                                if (available(turn) &&
-                                    guidance_value(turn) > 0.0) {
-                                    valid_turns[valid_turn_count++] = turn;
-                                }
-                            }
-                            double total_weight = 0.0;
-                            double forward_weight = 0.0;
-                            if (forward_available) {
-                                forward_weight = valid_turn_count == 0
-                                    ? guidance_value(bucket)
-                                    : continuum.base.continue_probability *
-                                        guidance_value(bucket);
-                                total_weight += forward_weight;
-                            }
-                            const double turn_prior = valid_turn_count == 0
-                                ? 0.0
-                                : (forward_available
-                                       ? 1.0 - continuum.base.continue_probability
-                                       : 1.0) /
-                                    static_cast<double>(valid_turn_count);
-                            for (std::size_t turn_index = 0;
-                                 turn_index < valid_turn_count; ++turn_index) {
-                                const std::size_t turn = valid_turns[turn_index];
-                                total_weight +=
-                                    turn_prior * guidance_value(turn);
-                            }
-                            if (total_weight > 0.0) {
-                                if (forward_weight > 0.0) {
-                                    move(bucket, forward_weight / total_weight);
-                                }
-                                for (std::size_t turn_index = 0;
-                                     turn_index < valid_turn_count; ++turn_index) {
-                                    const std::size_t turn =
-                                        valid_turns[turn_index];
-                                    move(turn,
-                                         turn_prior * guidance_value(turn) /
-                                             total_weight);
-                                }
-                            }
-                        } else {
-                            const bool forward_available = available(bucket);
-                            std::size_t valid_turns = 0;
-                            for (const std::size_t turn :
-                                 turn_buckets_[bucket]) {
-                                if (available(turn)) ++valid_turns;
-                            }
-                            if (forward_available) {
-                                move(bucket, valid_turns == 0 ? 1.0
-                                    : continuum.base.continue_probability);
-                            }
-                            if (valid_turns > 0) {
-                                const double total_turn_probability =
-                                    forward_available
-                                    ? 1.0 - continuum.base.continue_probability
-                                    : 1.0;
-                                const double turn_probability =
-                                    total_turn_probability / valid_turns;
-                                for (const std::size_t turn :
-                                     turn_buckets_[bucket]) {
-                                    if (available(turn)) {
-                                        move(turn, turn_probability);
-                                    }
-                                }
-                            }
-                        }
-                    } else if (conditional_vacancy) {
-                        double weight_sum = 0.0;
-                        for (std::size_t b = 1; b < active_direction_[stage].size(); ++b) {
-                            weight_sum += guidance_value(b);
-                        }
-                        if (weight_sum > 0.0)
-                            for (std::size_t b = 1; b < active_direction_[stage].size(); ++b)
-                                if (guidance_value(b) > 0.0) move(b, guidance_value(b) / weight_sum);
-                    }
-                    const double retained =
-                        std::max(0.0, mass - accepted_total);
-                    if (collect_incoming) continue;
-                    active_work_[bucket][location] +=
-                        static_cast<float>(std::max(0.0, retained - reset_direction));
-                    clock_work_[bucket][location] +=
-                        static_cast<float>(std::max(0.0, retained - reset_direction) * clock_per_mass);
-                    if (reset_direction > 0.0) {
-                        active_work_[0][location] += static_cast<float>(reset_direction);
-                        clock_work_[0][location] += static_cast<float>(reset_direction * clock_per_mass);
-                    }
-                    if (retained > 0.0) mark_sparse_target(location);
-                }
-            };
-
-            if (conditional_vacancy) {
-                // Reserve target vacancy against all simultaneous proposals.
-                // Rejected incoming flux remains at its source, conserving
-                // mass without relying on the reaction capacity clamp.
-                collect_incoming = true;
-                for (int z = old_bounds.z0; z < old_bounds.z1; ++z)
-                    for (int y = old_bounds.y0; y < old_bounds.y1; ++y)
-                        for (int x = old_bounds.x0; x < old_bounds.x1; ++x)
-                            transport_location(x, y, z, index(x, y, z));
-                collect_incoming = false;
-            }
-
-            if (sparse_transport) {
-                for (const std::size_t location : sparse_locations) {
-                    const int x = static_cast<int>(
-                        location % static_cast<std::size_t>(nx));
-                    const std::size_t yz =
-                        location / static_cast<std::size_t>(nx);
-                    const int y = static_cast<int>(
-                        yz % static_cast<std::size_t>(ny));
-                    const int z = static_cast<int>(
-                        yz / static_cast<std::size_t>(ny));
-                    transport_location(x, y, z, location);
-                }
-            } else if (config_.schema_version >= 4 &&
-                       continuum.base.thin_layer) {
-                // Sources on rows separated by three voxels have disjoint
-                // Moore-neighbourhood write regions. Process each of the
-                // three row colours in parallel without atomics; x remains
-                // ordered within a row, preserving the local accumulation
-                // order. This is algebraically the same transport operator.
-                const int workers = (renewal_ || duration_) ? 1 : std::max(1, std::min(
-                    continuum.base.threads, available_worker_threads()));
-                for (int row_colour = 0; row_colour < 3; ++row_colour) {
-                    const int first_y = old_bounds.y0 + row_colour;
-                    if (first_y >= old_bounds.y1) continue;
-                    const std::size_t row_count = static_cast<std::size_t>(
-                        (old_bounds.y1 - first_y + 2) / 3);
-                    const auto transport_row = [&](std::size_t row_offset) {
-                        const int y = first_y +
-                            3 * static_cast<int>(row_offset);
-                        const int z = old_bounds.z0;
-                        for (int x = old_bounds.x0;
-                             x < old_bounds.x1; ++x) {
-                            transport_location(x, y, z, index(x, y, z));
-                        }
-                    };
-                    // Interleave rows across workers. Central rows contain
-                    // more active mass and therefore more directional work;
-                    // contiguous static chunks leave several workers idle at
-                    // the barrier even though the row write sets are disjoint.
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static, 1) num_threads(workers)
-                    for (std::int64_t row_offset = 0;
-                         row_offset < static_cast<std::int64_t>(row_count);
-                         ++row_offset) {
-                        transport_row(static_cast<std::size_t>(row_offset));
-                    }
-#else
-                    for (std::size_t row_offset = 0;
-                         row_offset < row_count; ++row_offset) {
-                        transport_row(row_offset);
-                    }
-#endif
-                }
-            } else {
-                for (int z = old_bounds.z0; z < old_bounds.z1; ++z) {
-                    for (int y = old_bounds.y0; y < old_bounds.y1; ++y) {
-                        for (int x = old_bounds.x0; x < old_bounds.x1; ++x) {
-                            transport_location(x, y, z, index(x, y, z));
-                        }
-                    }
-                }
-            }
-            active_direction_[stage].swap(active_work_);
-            active_clock_[stage].swap(clock_work_);
-            if (!population_bounds_.valid) {
-                population_bounds_ = target_bounds;
-            } else {
-                population_bounds_.x0 = std::min(
-                    population_bounds_.x0, target_bounds.x0);
-                population_bounds_.y0 = std::min(
-                    population_bounds_.y0, target_bounds.y0);
-                population_bounds_.z0 = std::min(
-                    population_bounds_.z0, target_bounds.z0);
-                population_bounds_.x1 = std::max(
-                    population_bounds_.x1, target_bounds.x1);
-                population_bounds_.y1 = std::max(
-                    population_bounds_.y1, target_bounds.y1);
-                population_bounds_.z1 = std::max(
-                    population_bounds_.z1, target_bounds.z1);
-            }
-            if (sparse_transport) {
-                // After the swap, active_work_/clock_work_ contain the old
-                // input. Clear exactly those source sites so the work fields
-                // are globally clean for the next microstep.
-                for (const std::size_t location : sparse_locations) {
-                    active_total_[stage][location] = 0.0F;
-                    for (std::size_t bucket = 0;
-                         bucket < active_work_.size(); ++bucket) {
-                        active_work_[bucket][location] = 0.0F;
-                        clock_work_[bucket][location] = 0.0F;
-                    }
-                }
-                work_dirty_bounds_ = {};
-                std::sort(sparse_targets.begin(), sparse_targets.end());
-
-                std::vector<std::size_t> remaining_locations;
-                remaining_locations.reserve(sparse_targets.size());
-                StructuredActiveBounds3D next_bounds;
-                const double epsilon = config_.migration.minimum_density;
-                for (const std::size_t location : sparse_targets) {
-                    double total = 0.0;
-                    for (std::size_t bucket = 0;
-                         bucket < active_direction_[stage].size(); ++bucket) {
-                        auto& mass =
-                            active_direction_[stage][bucket][location];
-                        auto& clock_value =
-                            active_clock_[stage][bucket][location];
-                        const double mass_value = mass;
-                        const double clock = std::max(
-                            0.0, static_cast<double>(clock_value));
-                        if (mass_value <= epsilon ||
-                            clock <= mass_value * sub_dt +
-                                1.0e-6 * std::max(1.0, clock)) {
-                            if (mass_value > 0.0) {
-                                r_normal_[stage][location] += mass_value;
-                            }
-                            mass = 0.0F;
-                            clock_value = 0.0F;
-                        } else {
-                            clock_value = static_cast<float>(
-                                clock - mass_value * sub_dt);
-                            total += mass_value;
-                        }
-                    }
-                    active_total_[stage][location] =
-                        static_cast<float>(total);
-                    if (total < epsilon) continue;
-                    remaining_locations.push_back(location);
-                    const int x = static_cast<int>(
-                        location % static_cast<std::size_t>(nx));
-                    const std::size_t yz =
-                        location / static_cast<std::size_t>(nx);
-                    const int y = static_cast<int>(
-                        yz % static_cast<std::size_t>(ny));
-                    const int z = static_cast<int>(
-                        yz / static_cast<std::size_t>(ny));
-                    if (!next_bounds.valid) {
-                        next_bounds = {x, y, z, x + 1, y + 1, z + 1, true};
-                    } else {
-                        next_bounds.x0 = std::min(next_bounds.x0, x);
-                        next_bounds.y0 = std::min(next_bounds.y0, y);
-                        next_bounds.z0 = std::min(next_bounds.z0, z);
-                        next_bounds.x1 = std::max(next_bounds.x1, x + 1);
-                        next_bounds.y1 = std::max(next_bounds.y1, y + 1);
-                        next_bounds.z1 = std::max(next_bounds.z1, z + 1);
-                    }
-                }
-                sparse_locations.swap(remaining_locations);
-                active_bounds_[stage] = next_bounds;
-            } else {
-                work_dirty_bounds_ = old_bounds;
-                active_bounds_[stage] = target_bounds;
-                finish_duration_transport();
-                finish_velocity_transport();
-                expire_active(stage, sub_dt);
-                shrink_active_bounds(stage);
-            }
-            finish_division_transport();
-            if (!active_bounds_[stage].valid) break;
-        }
-    }
-}
-
-void StructuredPdeModel3D::exchange_active_r_with_K(double dt) {
-    if (config_.schema_version < 3 ||
-        config_.migration.crowding_exchange !=
-            "active_r_K_stage1_conservative_v1" ||
-        !active_bounds_[0].valid) {
-        return;
-    }
-
-    // This is the structured-PDE closure of the ABM singleton swap. Only
-    // small active-r and small K participate. A swap moves equal mass in
-    // opposite directions, so both global species mass and the occupied
-    // fraction at each endpoint are conserved by this operator.
-    struct SwapProposal {
-        std::size_t source{};
-        std::size_t target{};
-        std::size_t direction_bucket{};
-        double requested{};
-        double clock_per_mass{};
-    };
-
-    const auto& continuum = config_.continuum;
-    const int nx = continuum.grid.shape[0];
-    const int ny = continuum.grid.shape[1];
-    const int nz = continuum.grid.shape[2];
-    const auto bounds = active_bounds_[0];
-    const double rate = active_rate(StructuredStage3D::small);
-    const double move_probability = 1.0 - std::exp(-rate * dt);
-    const double maximum = continuum.reaction.maximum_occupied_fraction;
-    const double epsilon = config_.migration.minimum_density;
-    std::vector<SwapProposal> proposals;
-    std::unordered_map<std::size_t, double> demand_by_target;
-
-    for (int z = bounds.z0; z < bounds.z1; ++z) {
-        for (int y = bounds.y0; y < bounds.y1; ++y) {
-            for (int x = bounds.x0; x < bounds.x1; ++x) {
-                const std::size_t source = index(x, y, z);
-                const double active = active_total_[0][source];
-                if (active < epsilon || vessel_blocks_cells(source)) continue;
-
-                // The ABM only enters its swap path when no empty direction is
-                // available. In a density closure, the minimum neighbour
-                // occupancy is a continuous approximation of that condition:
-                // one empty neighbour makes blockedness zero; a fully packed
-                // neighbourhood makes it one.
-                double maximum_vacancy = 0.0;
-                bool has_cell_site_neighbor = false;
-                for (const DirectionId direction : direction_ids_) {
-                    const Vec3i step = direction_vector(direction);
-                    const int tx = x + step.x;
-                    const int ty = y + step.y;
-                    const int tz = z + step.z;
-                    if (tx < 0 || tx >= nx || ty < 0 || ty >= ny ||
-                        tz < 0 || tz >= nz) continue;
-                    const std::size_t target = index(tx, ty, tz);
-                    if (vessel_blocks_cells(target)) continue;
-                    has_cell_site_neighbor = true;
-                    const double occupied = std::clamp(
-                        occupied_fraction(target) / maximum, 0.0, 1.0);
-                    maximum_vacancy = std::max(maximum_vacancy, 1.0 - occupied);
-                }
-                if (!has_cell_site_neighbor) continue;
-                const double blockedness = 1.0 - maximum_vacancy;
-                if (blockedness <= epsilon) continue;
-
-                const std::vector<double> weights =
-                    guided_direction_weights(source, true);
-                double weight_sum = 0.0;
-                for (std::size_t bucket = 1; bucket < weights.size(); ++bucket) {
-                    if (!(weights[bucket] > 0.0)) continue;
-                    const Vec3i step = direction_vector(direction_ids_[bucket - 1]);
-                    const std::size_t target = index(
-                        x + step.x, y + step.y, z + step.z);
-                    if (K_[0][target] >= epsilon) weight_sum += weights[bucket];
-                }
-                if (!(weight_sum > 0.0)) continue;
-
-                double clock = 0.0;
-                for (const auto& field : active_clock_[0]) clock += field[source];
-                const double clock_per_mass = clock / active;
-                for (std::size_t bucket = 1; bucket < weights.size(); ++bucket) {
-                    if (!(weights[bucket] > 0.0)) continue;
-                    const Vec3i step = direction_vector(direction_ids_[bucket - 1]);
-                    const std::size_t target = index(
-                        x + step.x, y + step.y, z + step.z);
-                    const double partner = std::clamp(K_[0][target], 0.0, 1.0);
-                    if (partner < epsilon) continue;
-                    const double requested = active * move_probability *
-                        blockedness * weights[bucket] / weight_sum * partner;
-                    if (requested < epsilon) continue;
-                    proposals.push_back(
-                        {source, target, bucket, requested, clock_per_mass});
-                    demand_by_target[target] += requested;
-                }
-            }
-        }
-    }
-    if (proposals.empty()) return;
-    if (renewal_) renewal_->begin_transport();
-    if (duration_) duration_->begin_transport();
-    if (velocity_) velocity_->begin_transport();
-
-    std::unordered_map<std::size_t, double> outgoing_by_source;
-    std::unordered_map<std::size_t, double> K_delta;
-    StructuredActiveBounds3D clear_bounds = expanded_bounds(bounds);
-    if (work_dirty_bounds_.valid) {
-        clear_bounds.x0 = std::min(clear_bounds.x0, work_dirty_bounds_.x0);
-        clear_bounds.y0 = std::min(clear_bounds.y0, work_dirty_bounds_.y0);
-        clear_bounds.z0 = std::min(clear_bounds.z0, work_dirty_bounds_.z0);
-        clear_bounds.x1 = std::max(clear_bounds.x1, work_dirty_bounds_.x1);
-        clear_bounds.y1 = std::max(clear_bounds.y1, work_dirty_bounds_.y1);
-        clear_bounds.z1 = std::max(clear_bounds.z1, work_dirty_bounds_.z1);
-    }
-    clear_active_work(clear_bounds);
-    for (const SwapProposal& proposal : proposals) {
-        const double demand = demand_by_target.at(proposal.target);
-        const double target_scale = demand > K_[0][proposal.target]
-            ? K_[0][proposal.target] / demand : 1.0;
-        const double accepted = proposal.requested * target_scale;
-        if (!(accepted > 0.0)) continue;
-        if (duration_) duration_->transfer(proposal.source, proposal.target, 0, accepted);
-        if (velocity_) velocity_->transfer(proposal.source, proposal.target, 0, accepted);
-        if (renewal_) {
-            renewal_->transfer(proposal.source, proposal.target, 0, accepted);
-            renewal_->transfer(proposal.target, proposal.source, 2, accepted);
-        }
-        outgoing_by_source[proposal.source] += accepted;
-        K_delta[proposal.source] += accepted;
-        K_delta[proposal.target] -= accepted;
-        active_work_[proposal.direction_bucket][proposal.target] +=
-            static_cast<float>(accepted);
-        clock_work_[proposal.direction_bucket][proposal.target] +=
-            static_cast<float>(accepted * proposal.clock_per_mass);
-    }
-
-    const auto target_bounds = expanded_bounds(bounds);
-    for (int z = target_bounds.z0; z < target_bounds.z1; ++z) {
-        for (int y = target_bounds.y0; y < target_bounds.y1; ++y) {
-            for (int x = target_bounds.x0; x < target_bounds.x1; ++x) {
-                const std::size_t location = index(x, y, z);
-                const auto found = outgoing_by_source.find(location);
-                const double active = active_total_[0][location];
-                const double fraction = found == outgoing_by_source.end() ||
-                    !(active > 0.0) ? 0.0 :
-                    std::clamp(found->second / active, 0.0, 1.0);
-                double total = 0.0;
-                for (std::size_t bucket = 0;
-                     bucket < active_direction_[0].size(); ++bucket) {
-                    const double mass =
-                        active_direction_[0][bucket][location] * (1.0 - fraction) +
-                        active_work_[bucket][location];
-                    const double clock =
-                        active_clock_[0][bucket][location] * (1.0 - fraction) +
-                        clock_work_[bucket][location];
-                    active_direction_[0][bucket][location] =
-                        static_cast<float>(std::max(0.0, mass));
-                    active_clock_[0][bucket][location] =
-                        static_cast<float>(std::max(0.0, clock));
-                    total += std::max(0.0, mass);
-                }
-                active_total_[0][location] = static_cast<float>(total);
-            }
-        }
-    }
-    for (const auto& [location, delta] : K_delta) {
-        K_[0][location] = std::max(0.0, K_[0][location] + delta);
-    }
-    work_dirty_bounds_ = clear_bounds;
-    active_bounds_[0] = target_bounds;
-    shrink_active_bounds(0);
-    finish_division_transport();
-    finish_duration_transport();
-    finish_velocity_transport();
-}
-
-void StructuredPdeModel3D::build_local_counts(
-    std::vector<double>& r_counts,
-    std::vector<double>& K_counts) const {
-    const auto& continuum = config_.continuum;
-    if (!population_bounds_.valid) {
-        r_counts.clear();
-        K_counts.clear();
-        return;
-    }
-    const auto bounds = population_bounds_;
-    const int width = bounds.x1 - bounds.x0;
-    const int height = bounds.y1 - bounds.y0;
-    const int depth = bounds.z1 - bounds.z0;
-    const std::size_t box_size = static_cast<std::size_t>(width) * height * depth;
-    const int radius = std::max(0, static_cast<int>(std::floor(
-        0.5 * continuum.base.growth_density_window_edge /
-        continuum.grid.spacing_voxels)));
-    const int lower = config_.schema_version >= 7
-        ? static_cast<int>(std::floor(((continuum.base.growth_density_window_edge - 1) / 2) / continuum.grid.spacing_voxels))
-        : radius;
-    const int upper = config_.schema_version >= 7
-        ? static_cast<int>(std::floor((continuum.base.growth_density_window_edge -
-            (continuum.base.growth_density_window_edge - 1) / 2 - 1) / continuum.grid.spacing_voxels))
-        : radius;
-    if (continuum.base.thin_layer) {
-        const int pitch = width + 1;
-        const std::size_t prefix_size =
-            static_cast<std::size_t>(pitch) * (height + 1);
-        std::vector<double> r_prefix(prefix_size, 0.0);
-        std::vector<double> K_prefix(prefix_size, 0.0);
-        for (int y = 1; y <= height; ++y) {
-            double r_row = 0.0;
-            double K_row = 0.0;
-            for (int x = 1; x <= width; ++x) {
-                const std::size_t source =
-                    index(bounds.x0 + x - 1, bounds.y0 + y - 1, bounds.z0);
-                r_row += (r_normal_[0][source] + r_normal_[1][source] +
-                    r_active(StructuredStage3D::small, source) +
-                    r_active(StructuredStage3D::large, source)) * voxel_measure_;
-                K_row += (K_[0][source] + K_[1][source]) * voxel_measure_;
-                if(!external_r_.empty()) { r_row+=external_r_[source]*voxel_measure_;K_row+=external_K_[source]*voxel_measure_; }
-                const std::size_t here = static_cast<std::size_t>(y) * pitch + x;
-                r_prefix[here] = r_row;
-                K_prefix[here] = K_row;
-            }
-        }
-        for (int x = 1; x <= width; ++x) {
-            for (int y = 1; y <= height; ++y) {
-                const std::size_t here = static_cast<std::size_t>(y) * pitch + x;
-                r_prefix[here] += r_prefix[here - pitch];
-                K_prefix[here] += K_prefix[here - pitch];
-            }
-        }
-        const auto sum = [pitch](const std::vector<double>& prefix,
-                                 int x0, int y0, int x1, int y1) {
-            return prefix[static_cast<std::size_t>(y1) * pitch + x1]
-                - prefix[static_cast<std::size_t>(y0) * pitch + x1]
-                - prefix[static_cast<std::size_t>(y1) * pitch + x0]
-                + prefix[static_cast<std::size_t>(y0) * pitch + x0];
-        };
-        r_counts.assign(box_size, 0.0);
-        K_counts.assign(box_size, 0.0);
-        const int workers = std::max(
-            1, std::min(continuum.base.threads, available_worker_threads()));
-        deterministic_parallel_for(box_size, workers, [&](std::size_t offset) {
-            const int local_x = static_cast<int>(offset %
-                static_cast<std::size_t>(width));
-            const int local_y = static_cast<int>(offset /
-                static_cast<std::size_t>(width));
-            const std::size_t here = index(
-                bounds.x0 + local_x, bounds.y0 + local_y, bounds.z0);
-            if (config_.schema_version < 7 && occupied_fraction(here) <= 0.0) return;
-            const int x0 = std::max(0, local_x - lower);
-            const int y0 = std::max(0, local_y - lower);
-            const int x1 = std::min(width, local_x + upper + 1);
-            const int y1 = std::min(height, local_y + upper + 1);
-            r_counts[offset] = sum(r_prefix, x0, y0, x1, y1);
-            K_counts[offset] = sum(K_prefix, x0, y0, x1, y1);
-        });
-        return;
-    }
-
-    const int px = width + 1;
-    const int py = height + 1;
-    const int pz = depth + 1;
-    const auto pindex = [px, py](int x, int y, int z) {
-        return (static_cast<std::size_t>(z) * py + y) * px + x;
-    };
-    std::vector<double> r_prefix(static_cast<std::size_t>(px) * py * pz, 0.0);
-    std::vector<double> K_prefix(static_cast<std::size_t>(px) * py * pz, 0.0);
-    for (int z = 1; z <= depth; ++z) {
-        for (int y = 1; y <= height; ++y) {
-            for (int x = 1; x <= width; ++x) {
-                const std::size_t source = index(
-                    bounds.x0 + x - 1, bounds.y0 + y - 1,
-                    bounds.z0 + z - 1);
-                double r_value = (r_normal_[0][source] + r_normal_[1][source] +
-                    r_active(StructuredStage3D::small, source) +
-                    r_active(StructuredStage3D::large, source)) * voxel_measure_;
-                double K_value = (K_[0][source] + K_[1][source]) * voxel_measure_;
-                if(!external_r_.empty()) { r_value+=external_r_[source]*voxel_measure_;K_value+=external_K_[source]*voxel_measure_; }
-                const auto update = [&](std::vector<double>& prefix, double value) {
-                    prefix[pindex(x, y, z)] = value
-                        + prefix[pindex(x - 1, y, z)]
-                        + prefix[pindex(x, y - 1, z)]
-                        + prefix[pindex(x, y, z - 1)]
-                        - prefix[pindex(x - 1, y - 1, z)]
-                        - prefix[pindex(x - 1, y, z - 1)]
-                        - prefix[pindex(x, y - 1, z - 1)]
-                        + prefix[pindex(x - 1, y - 1, z - 1)];
-                };
-                update(r_prefix, r_value);
-                update(K_prefix, K_value);
-            }
-        }
-    }
-    const auto sum = [&](const std::vector<double>& prefix,
-                         int x0, int y0, int z0,
-                         int x1, int y1, int z1) {
-        return prefix[pindex(x1, y1, z1)]
-            - prefix[pindex(x0, y1, z1)] - prefix[pindex(x1, y0, z1)]
-            - prefix[pindex(x1, y1, z0)] + prefix[pindex(x0, y0, z1)]
-            + prefix[pindex(x0, y1, z0)] + prefix[pindex(x1, y0, z0)]
-            - prefix[pindex(x0, y0, z0)];
-    };
-    r_counts.assign(box_size, 0.0);
-    K_counts.assign(box_size, 0.0);
-    for (int z = 0; z < depth; ++z) {
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                const int x0 = std::max(0, x - lower);
-                const int y0 = std::max(0, y - lower);
-                const int z0 = std::max(0, z - lower);
-                const int x1 = std::min(width, x + upper + 1);
-                const int y1 = std::min(height, y + upper + 1);
-                const int z1 = std::min(depth, z + upper + 1);
-                const std::size_t offset =
-                    (static_cast<std::size_t>(z) * height + y) * width + x;
-                r_counts[offset] = sum(r_prefix, x0, y0, z0, x1, y1, z1);
-                K_counts[offset] = sum(K_prefix, x0, y0, z0, x1, y1, z1);
-            }
-        }
-    }
-}
-
-std::vector<StructuredPdeModel3D::SmallBirth3D> StructuredPdeModel3D::prepare_small_births(
-    const StructuredActiveBounds3D& bounds) const {
-    const auto& grid = config_.continuum.grid;
-    const auto width = static_cast<std::size_t>(bounds.x1 - bounds.x0);
-    const auto height = static_cast<std::size_t>(bounds.y1 - bounds.y0);
-    const auto depth = static_cast<std::size_t>(bounds.z1 - bounds.z0);
-    std::vector<SmallBirth3D> result(width * height * depth);
-    for (int z = bounds.z0; z < bounds.z1; ++z) {
-        for (int y = bounds.y0; y < bounds.y1; ++y) {
-            for (int x = bounds.x0; x < bounds.x1; ++x) {
-                const auto here = index(x, y, z);
-                if (r_normal_[0][here] + r_active(StructuredStage3D::small, here) + K_[0][here] <= 0.0) continue;
-                if (vessel_blocks_cells(here)) continue;
-                std::vector<double> availability(direction_ids_.size(), 0.0);
-                for (std::size_t d = 0; d < direction_ids_.size(); ++d) {
-                    const auto direction = direction_vector(direction_ids_[d]);
-                    const int ox = x + direction.x;
-                    const int oy = y + direction.y;
-                    const int oz = z + direction.z;
-                    if (ox < 0 || ox >= grid.shape[0] || oy < 0 || oy >= grid.shape[1] ||
-                        oz < 0 || oz >= grid.shape[2]) continue;
-                    const auto other = index(ox, oy, oz);
-                    if (transport_destination_blocks_cells(other, StructuredStage3D::small)) continue;
-                    availability[d] = 1.0 - std::clamp(occupied_fraction(other) /
-                        config_.continuum.reaction.maximum_occupied_fraction, 0.0, 1.0);
-                }
-                const auto probabilities = uniform_feasible_jump_probabilities(availability);
-                const auto offset = (static_cast<std::size_t>(z - bounds.z0) * height +
-                    static_cast<std::size_t>(y - bounds.y0)) * width + static_cast<std::size_t>(x - bounds.x0);
-                for (std::size_t d = 0; d < direction_ids_.size(); ++d) {
-                    result[offset].probabilities[direction_ids_[d]] = probabilities[d];
-                    result[offset].success += probabilities[d];
-                }
-                result[offset].success = std::clamp(result[offset].success, 0.0, 1.0);
-            }
-        }
-    }
-    return result;
-}
-
-void StructuredPdeModel3D::place_small_births(const StructuredActiveBounds3D& bounds,
-                                            const std::vector<SmallBirth3D>& births) {
-    const auto& grid = config_.continuum.grid;
-    const auto width = static_cast<std::size_t>(bounds.x1 - bounds.x0);
-    const auto height = static_cast<std::size_t>(bounds.y1 - bounds.y0);
-    std::map<std::size_t, std::array<double, 2>> incoming;
-    for (std::size_t offset = 0; offset < births.size(); ++offset) {
-        const auto& birth = births[offset];
-        if (birth.mass[0] + birth.mass[1] <= 0.0) continue;
-        const int x = bounds.x0 + static_cast<int>(offset % width);
-        const int y = bounds.y0 + static_cast<int>((offset / width) % height);
-        const int z = bounds.z0 + static_cast<int>(offset / (width * height));
-        for (const auto id : direction_ids_) {
-            const double probability = birth.probabilities[id];
-            if (probability <= 0.0) continue;
-            const auto direction = direction_vector(id);
-            auto& target = incoming[index(x + direction.x, y + direction.y, z + direction.z)];
-            for (std::size_t type = 0; type < 2; ++type) target[type] += birth.mass[type] * probability;
-        }
-    }
-    for (const auto& [here, mass] : incoming) {
-        const double available = std::max(0.0, config_.continuum.reaction.maximum_occupied_fraction -
-            occupied_fraction(here));
-        const double total = mass[0] + mass[1];
-        const double scale = total > available ? available / total : 1.0;
-        const double r_birth = scale * mass[0];
-        const double K_birth = scale * mass[1];
-        r_normal_[0][here] += r_birth;
-        K_[0][here] += K_birth;
-        if (renewal_) {
-            if (r_birth > 0.0) renewal_->add_fresh(here, 0, r_birth);
-            if (K_birth > 0.0) renewal_->add_fresh(here, 2, K_birth);
-        }
-        const int x = static_cast<int>(here % grid.shape[0]);
-        const int y = static_cast<int>((here / grid.shape[0]) % grid.shape[1]);
-        const int z = static_cast<int>(here / (static_cast<std::size_t>(grid.shape[0]) * grid.shape[1]));
-        if (r_birth + K_birth > 0.0) include_population_location(x, y, z);
-    }
-}
-
-void StructuredPdeModel3D::react(double dt) {
-    if (!population_bounds_.valid) return;
-    std::vector<double> r_counts;
-    std::vector<double> K_counts;
-    build_local_counts(r_counts, K_counts);
-    const auto& continuum = config_.continuum;
-    const double r_inherent = mean_growth_rate(CellType::r);
-    const double K_inherent = mean_growth_rate(CellType::K);
-    const double legacy_r_limit = continuum.base.thin_layer
-        ? continuum.base.legacy_mapping.source_r_limit : continuum.base.r_limit;
-    const double legacy_K_limit = continuum.base.thin_layer
-        ? continuum.base.legacy_mapping.source_K_limit : continuum.base.K_limit;
-    const double legacy_r_capacity = continuum.base.thin_layer
-        ? continuum.base.legacy_mapping.source_carrying_capacity_r
-        : continuum.base.carrying_capacity_r;
-    const double legacy_K_capacity = continuum.base.thin_layer
-        ? continuum.base.legacy_mapping.source_carrying_capacity_K
-        : continuum.base.carrying_capacity_K;
-    const double r_limit = config_.schema_version >= 5
-        ? continuum.nutrient.common_density_limit : legacy_r_limit;
-    const double K_limit = config_.schema_version >= 5
-        ? continuum.nutrient.common_density_limit : legacy_K_limit;
-    const double r_capacity = config_.schema_version >= 5
-        ? continuum.nutrient.common_carrying_capacity : legacy_r_capacity;
-    const double K_capacity = config_.schema_version >= 5
-        ? continuum.nutrient.common_carrying_capacity : legacy_K_capacity;
-    const int workers = (renewal_ || duration_) ? 1 : std::max(
-        1, std::min(continuum.base.threads, available_worker_threads()));
-    const auto bounds = population_bounds_;
-    const bool spatial_birth = config_.small_daughter_placement == "feasible_neighbor_birth_v2" &&
-        config_.division_operator_enabled;
-    auto births = spatial_birth ? prepare_small_births(bounds) : std::vector<SmallBirth3D>{};
-    const std::size_t bx = static_cast<std::size_t>(bounds.x1 - bounds.x0);
-    const std::size_t by = static_cast<std::size_t>(bounds.y1 - bounds.y0);
-    const std::size_t bz = static_cast<std::size_t>(bounds.z1 - bounds.z0);
-    deterministic_parallel_for(bx * by * bz, workers, [&](std::size_t offset) {
-        const int x = bounds.x0 + static_cast<int>(offset % bx);
-        const std::size_t yz = offset / bx;
-        const int y = bounds.y0 + static_cast<int>(yz % by);
-        const int z = bounds.z0 + static_cast<int>(yz / by);
-        const std::size_t location = index(x, y, z);
-        if (vessel_blocks_cells(location)) return;
-        const double occupied = occupied_fraction(location);
-        if (occupied <= 0.0) return;
-        const double multiplier = capacity_multiplier(nutrient_[location]);
-        const double r_count = r_counts[offset] / multiplier;
-        const double K_count = K_counts[offset] / multiplier;
-        const double total_count = r_count + K_count;
-        const double raw_r_growth = calculate_density_growth_rate_continuous(
-            static_cast<int>(CellType::r), r_inherent,
-            r_count, K_count, total_count, r_limit, K_limit,
-            continuum.base.alpha, continuum.base.beta, r_capacity, K_capacity);
-        const double raw_K_growth = calculate_density_growth_rate_continuous(
-            static_cast<int>(CellType::K), K_inherent,
-            r_count, K_count, total_count, r_limit, K_limit,
-            continuum.base.alpha, continuum.base.beta, r_capacity, K_capacity);
-        const double nutrient_factor = config_.schema_version >= 5
-            ? nutrient_[location] /
-                (continuum.nutrient.growth_half_saturation +
-                 nutrient_[location])
-            : 1.0;
-        const auto resource_limited = [&](double growth) {
-            return growth > 0.0 ? growth * nutrient_factor : growth;
-        };
-        const double r_growth = resource_limited(raw_r_growth);
-        const double K_growth = resource_limited(raw_K_growth);
-        const bool abm_work_clock = continuum.reaction.model ==
-            "abm_work_clock_neighbor_availability_v2";
-        const double r_division_rate = (config_.division_operator_enabled ? positive_part(r_growth) : 0.0) /
-            (continuum.base.division_timing.base_cycle_hours *
-             (abm_work_clock ? 1.0 : std::max(1.0e-12, r_inherent)));
-        const double K_division_rate = (config_.division_operator_enabled ? positive_part(K_growth) : 0.0) /
-            (continuum.base.division_timing.base_cycle_hours *
-             (abm_work_clock ? 1.0 : std::max(1.0e-12, K_inherent)));
-        const double r_death_rate =
-            r_growth <= continuum.base.death_growth_rate_threshold
-            ? 1.0 / continuum.base.r_death_delay_hours : 0.0;
-        const double K_death_rate =
-            K_growth <= continuum.base.death_growth_rate_threshold
-            ? 1.0 / continuum.base.K_death_delay_hours : 0.0;
-        const double vacancy = std::clamp(
-            1.0 - occupied / continuum.reaction.maximum_occupied_fraction,
-            0.0, 1.0);
-        const double large_success = external_transport_destination_ &&
-            transport_destination_blocks_cells(location, StructuredStage3D::large)
-            ? 0.0 : std::pow(vacancy, continuum.reaction.large_daughter_vacancy_exponent);
-        const double small_success = external_transport_destination_ &&
-            !spatial_birth && !external_transport_destination_(location)
-            ? 0.0 : spatial_birth ? births[offset].success : abm_work_clock
-            ? 1.0 - std::pow(
-                  1.0 - vacancy,
-                  continuum.reaction.small_daughter_vacancy_exponent)
-            : std::pow(
-                  vacancy,
-                  continuum.reaction.small_daughter_vacancy_exponent);
-        const auto conversion_probability = [&](std::size_t stage) {
-            if (!continuum.base.r_to_K_conversion.enabled) return 0.0;
-            const double density = config_.schema_version >= 3
-                ? activation_density_[stage][location] : occupied;
-            return density >= continuum.base.r_to_K_conversion.density_threshold
-                ? continuum.base.r_to_K_conversion.probability_per_division
-                : 0.0;
-        };
-
-        const std::array<double, 2> old_r{
-            r_normal_[0][location] + r_active(StructuredStage3D::small, location),
-            r_normal_[1][location] + r_active(StructuredStage3D::large, location)};
-        const std::array<double, 2> old_K{K_[0][location], K_[1][location]};
-        std::array<double, 4> completed{};
-        if (renewal_ && config_.division_operator_enabled) {
-            for (std::size_t stage = 0; stage < 2; ++stage) {
-                completed[stage] = renewal_->advance(location, stage, dt * positive_part(r_growth));
-                completed[stage + 2] = renewal_->advance(location, stage + 2, dt * positive_part(K_growth));
-            }
-        }
-        std::array<double, 2> delta_r{
-            -r_death_rate * old_r[0], -r_death_rate * old_r[1]};
-        std::array<double, 2> delta_K{
-            -K_death_rate * old_K[0], -K_death_rate * old_K[1]};
-
-        const double r_large_events = renewal_ ? completed[1] / dt : r_division_rate * old_r[1];
-        const double r_large_daughters = large_success * r_large_events;
-        const double r_shape_reductions =
-            (1.0 - large_success) * r_large_events;
-        const double large_conversion = conversion_probability(1);
-        delta_r[1] += (1.0 - large_conversion) * r_large_daughters
-            - r_shape_reductions;
-        delta_K[1] += large_conversion * r_large_daughters;
-        delta_r[0] += (2.0 - large_conversion) * r_shape_reductions;
-        delta_K[0] += large_conversion * r_shape_reductions;
-
-        const double K_large_events = renewal_ ? completed[3] / dt : K_division_rate * old_K[1];
-        const double K_large_daughters = large_success * K_large_events;
-        const double K_shape_reductions =
-            (1.0 - large_success) * K_large_events;
-        delta_K[1] += K_large_daughters - K_shape_reductions;
-        delta_K[0] += 2.0 * K_shape_reductions;
-
-        const double r_small_events = renewal_ ? completed[0] / dt : r_division_rate * old_r[0];
-        const double r_small_births = small_success * r_small_events;
-        const double small_conversion = conversion_probability(0);
-        delta_r[0] += (1.0 - small_conversion) * r_small_births
-            - (1.0 - small_success) * r_small_events *
-                continuum.reaction.failed_r_division_death_fraction;
-        delta_K[0] += small_conversion * r_small_births;
-        delta_K[0] += small_success * (renewal_ ? completed[2] / dt : K_division_rate * old_K[0]);
-        if (spatial_birth) {
-            const double K_small_events = renewal_ ? completed[2] / dt : K_division_rate * old_K[0];
-            births[offset].mass[0] = dt * (1.0 - small_conversion) * r_small_events;
-            births[offset].mass[1] = dt * (small_conversion * r_small_events + K_small_events);
-            delta_r[0] -= (1.0 - small_conversion) * r_small_births;
-            delta_K[0] -= small_conversion * r_small_births + small_success * K_small_events;
-        }
-
-        std::array<double, 2> positive_r{};
-        std::array<double, 2> positive_K{};
-        double base_occupied = 0.0;
-        double positive_occupied = 0.0;
-        for (std::size_t stage = 0; stage < 2; ++stage) {
-            const double r_negative = dt * std::min(0.0, delta_r[stage]);
-            const double r_factor = old_r[stage] > 0.0
-                ? std::clamp((old_r[stage] + r_negative) / old_r[stage], 0.0, 1.0)
-                : 0.0;
-            r_normal_[stage][location] *= r_factor;
-            if (config_.schema_version >= 7) {
-                r_refractory_[stage][location] *= r_factor;
-                refractory_clock_[stage][location] *= r_factor;
-            }
-            for (std::size_t bucket = 0;
-                 bucket < active_direction_[stage].size(); ++bucket) {
-                active_direction_[stage][bucket][location] = static_cast<float>(
-                    active_direction_[stage][bucket][location] * r_factor);
-                active_clock_[stage][bucket][location] = static_cast<float>(
-                    active_clock_[stage][bucket][location] * r_factor);
-            }
-            if (config_.schema_version >= 7) {
-                double active_sum = 0.0;
-                for (const auto& bucket : active_direction_[stage]) {
-                    active_sum += bucket[location];
-                }
-                active_total_[stage][location] = static_cast<float>(active_sum);
-            } else {
-                active_total_[stage][location] = static_cast<float>(
-                    active_total_[stage][location] * r_factor);
-            }
-            K_[stage][location] = std::max(
-                0.0, old_K[stage] + dt * std::min(0.0, delta_K[stage]));
-            positive_r[stage] = dt * std::max(0.0, delta_r[stage]);
-            positive_K[stage] = dt * std::max(0.0, delta_K[stage]);
-            const double volume = stage == 0 ? 1.0 : large_cell_volume_;
-            base_occupied += volume *
-                (r_normal_[stage][location] +
-                 r_active(static_cast<StructuredStage3D>(stage), location) +
-                 K_[stage][location]);
-            positive_occupied += volume *
-                (positive_r[stage] + positive_K[stage]);
-        }
-        const double available = std::max(
-            0.0, continuum.reaction.maximum_occupied_fraction - base_occupied -
-                (external_occupied_.empty()?0.0:external_occupied_[location]));
-        const double scale = positive_occupied > available && positive_occupied > 0.0
-            ? available / positive_occupied : 1.0;
-        for (std::size_t stage = 0; stage < 2; ++stage) {
-            // All newly created r mass begins in the ordinary state, matching
-            // the ABM division-cycle reset before a later density refresh.
-            r_normal_[stage][location] += scale * positive_r[stage];
-            K_[stage][location] += scale * positive_K[stage];
-            if (renewal_ || duration_) {
-                // Successful mothers reset activity as well as their work.
-                const double reset_fraction = old_r[stage] > 0.0
-                    ? std::clamp(renewal_ ? completed[stage] / old_r[stage] : dt * r_division_rate, 0.0, 1.0) : 0.0;
-                double active_sum = 0.0;
-                for (std::size_t bucket = 0; bucket < active_direction_[stage].size(); ++bucket) {
-                    const double before = active_direction_[stage][bucket][location];
-                    active_direction_[stage][bucket][location] = static_cast<float>(before * (1.0 - reset_fraction));
-                    active_clock_[stage][bucket][location] = static_cast<float>(
-                        active_clock_[stage][bucket][location] * (1.0 - reset_fraction));
-                    r_normal_[stage][location] += before - active_direction_[stage][bucket][location];
-                    active_sum += active_direction_[stage][bucket][location];
-                }
-                active_total_[stage][location] = static_cast<float>(active_sum);
-                if (duration_ && (active_sum > 0.0 || duration_->mass(location, stage) > 0.0))
-                    duration_->reconcile(location, stage, active_sum);
-                if (velocity_ && (active_sum > 0.0 || velocity_->mass(location, stage) > 0.0))
-                    velocity_->reconcile(location, stage, active_sum);
-                if (renewal_) renewal_->reconcile(location, stage, division_channel_mass(location, stage));
-                if (renewal_ && stage == 0) {
-                    // A K cell with no free daughter site retries; it does not
-                    // draw a fresh biological cycle after a failed attempt.
-                    const double retries = completed[2] * (1.0 - small_success * scale);
-                    if (retries > 0.0) renewal_->add(location, 2, retries,
-                        positive_part(K_growth) * continuum.base.division_timing.retry_delay_hours);
-                }
-                if (renewal_) renewal_->reconcile(location, stage + 2, K_[stage][location]);
-            }
-        }
-    });
-    if (spatial_birth) place_small_births(bounds, births);
 }
 
 std::array<double, 2> StructuredPdeModel3D::growth_counts_at(Vec3i site) const {
@@ -3578,7 +840,7 @@ std::array<double, 2> StructuredPdeModel3D::growth_counts_at(Vec3i site) const {
 
 double StructuredPdeModel3D::refractory_mass(
     StructuredStage3D stage, std::size_t location) const noexcept {
-    return config_.schema_version >= 7 ? r_refractory_[static_cast<std::size_t>(stage)][location] : 0.0;
+    return operators_.activation.transported_refractory ? r_refractory_[static_cast<std::size_t>(stage)][location] : 0.0;
 }
 
 double StructuredPdeModel3D::refractory_mean_hours(
@@ -3598,61 +860,45 @@ bool StructuredPdeModel3D::step() {
         same_time(time_hours_, continuum.end_time_hours)) return false;
     double target = std::min(
         time_hours_ + continuum.time_step_hours, continuum.end_time_hours);
-    if (config_.schema_version < 5 &&
+    if (!operators_.nutrient.transient_resources &&
         next_nutrient_refresh_hours_ < target &&
         !same_time(next_nutrient_refresh_hours_, target)) {
         target = next_nutrient_refresh_hours_;
     }
     const double dt = target - time_hours_;
-    advance_angiogenesis(dt);
+    operators_.vascular.advance(*this, dt);
     if(external_after_vascular_advance_) external_after_vascular_advance_();
     // Density is only the trigger. Active cohorts keep their own remaining
     // clock and therefore do not deactivate when this field later falls.
-    if (config_.activation_operator_enabled) refresh_activation(dt);
+    if (config_.activation_operator_enabled) operators_.activation.advance(*this, dt);
     if (config_.migration_operator_enabled) {
-        migrate_normal_and_K(dt);
-        migrate_active(dt);
-        if (config_.exchange_operator_enabled) exchange_active_r_with_K(dt);
+        operators_.transport.advance(*this, dt);
+        if (config_.exchange_operator_enabled) operators_.exchange.advance(*this, dt);
     } else {
-        for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
-            expire_active(stage, dt);
-        }
+        operators_.transport.expire(*this, dt);
     }
     // V4 conversion is evaluated at the post-transport division location.
     // At 200x migration, reusing the pre-transport 70x70 field can otherwise
     // classify mass hundreds of voxels away using its source neighbourhood.
-    if (config_.schema_version >= 4 &&
+    if (operators_.transport.cached_cohort_transport &&
         continuum.base.r_to_K_conversion.enabled) {
         build_activation_density();
     }
-    react(dt);
+    operators_.reaction.advance(*this, dt);
     // Diffusion expands the conservative work box by one voxel. Remove the
     // numerical halo after all operators have finished so subsequent steps
     // scale with the occupied support rather than the full production grid.
     shrink_population_bounds();
     time_hours_ = target;
     ++step_count_;
-    if (config_.schema_version >= 5) {
-        rebuild_moving_tumour_front();
-        advance_transient_nutrient(dt);
-        next_nutrient_refresh_hours_ =
-            time_hours_ + continuum.time_step_hours;
-    } else if (time_hours_ > next_nutrient_refresh_hours_ ||
-               same_time(time_hours_, next_nutrient_refresh_hours_)) {
-        solve_nutrient();
-        do {
-            next_nutrient_refresh_hours_ +=
-                continuum.nutrient.refresh_every_hours;
-        } while (time_hours_ > next_nutrient_refresh_hours_ ||
-                 same_time(time_hours_, next_nutrient_refresh_hours_));
-    }
+    operators_.nutrient.advance(*this, dt);
     validate_state();
     return true;
 }
 
 StructuredPdeDiagnostics3D StructuredPdeModel3D::diagnostics() const {
     StructuredPdeDiagnostics3D result;
-    if (config_.schema_version >= 13)
+    if (operators_.vascular.removal_diagnostics)
         result.vascular_removed_mass = vascular_removed_mass_;
     long double nutrient_sum = 0.0L;
     long double r_nutrient = 0.0L;
@@ -3727,7 +973,7 @@ StructuredPdeDiagnostics3D StructuredPdeModel3D::diagnostics() const {
         K_radius += K_here * radius;
         radial_mass[static_cast<std::size_t>(std::floor(radius / width))] += r_here;
         result.vessel_volume += vessel_[location] * voxel_measure_;
-        if (config_.schema_version >= 6 && tumour_mask_[location] != 0U) {
+        if (operators_.nutrient.moving_front && tumour_mask_[location] != 0U) {
             result.tumour_volume += voxel_measure_;
             tumour_nutrient += nutrient_[location];
             const int nx = config_.continuum.grid.shape[0];
@@ -3798,7 +1044,7 @@ StructuredPdeDiagnostics3D StructuredPdeModel3D::diagnostics() const {
 
 void StructuredPdeModel3D::validate_resources() const {
     const auto& mode = config_.continuum.nutrient.boundary_mode;
-    const bool local_validation = initialized_ && config_.schema_version >= 6 &&
+    const bool local_validation = initialized_ && operators_.nutrient.moving_front &&
         (mode == "moving_tumor_front_dirichlet_v2" ||
          mode == "moving_tumor_front_and_vessels_dirichlet_v2") &&
         nutrient_update_bounds_.valid;
@@ -3837,7 +1083,7 @@ void StructuredPdeModel3D::validate_state() const {
                 for (int x = bounds.x0; x < bounds.x1; ++x) {
                     const std::size_t location = index(x, y, z);
                     for (std::size_t stage = 0; stage < 2; ++stage) {
-                        if (config_.schema_version >= 7 &&
+                        if (operators_.activation.transported_refractory &&
                             (!std::isfinite(r_refractory_[stage][location]) ||
                              !std::isfinite(refractory_clock_[stage][location]) ||
                              r_refractory_[stage][location] < 0.0 ||
@@ -3897,7 +1143,7 @@ void StructuredPdeModel3D::validate_state() const {
             }
         }
     }
-    if (config_.schema_version >= 5) {
+    if (operators_.nutrient.transient_resources) {
         const auto refractory_bounds = initialized_ && step_count_ > 0
             ? population_bounds_
             : StructuredActiveBounds3D{
@@ -3946,7 +1192,7 @@ std::uint64_t StructuredPdeModel3D::state_checksum() const {
             for (int y = bounds.y0; y < bounds.y1; ++y) {
                 for (int x = bounds.x0; x < bounds.x1; ++x) {
                     state = hash_mix(state, std::bit_cast<std::uint64_t>(
-                        values[index(x, y, z)]));
+                        static_cast<double>(values[index(x, y, z)])));
                 }
             }
         }
@@ -3955,7 +1201,7 @@ std::uint64_t StructuredPdeModel3D::state_checksum() const {
     for (std::size_t stage = 0; stage < 2; ++stage) {
         hash_double_region(r_normal_[stage], population_bounds_);
         hash_double_region(K_[stage], population_bounds_);
-        if (config_.schema_version >= 7) {
+        if (operators_.activation.transported_refractory) {
             hash_double_region(r_refractory_[stage], population_bounds_);
             hash_double_region(refractory_clock_[stage], population_bounds_);
         }
@@ -3978,7 +1224,7 @@ std::uint64_t StructuredPdeModel3D::state_checksum() const {
             }
         }
     }
-    if (config_.schema_version >= 5) {
+    if (operators_.nutrient.transient_resources) {
         for (std::size_t stage = 0; stage < 2; ++stage) {
             for (std::size_t location = 0; location < voxel_count_; ++location) {
                 state = hash_mix(state, std::bit_cast<std::uint32_t>(
@@ -3997,7 +1243,7 @@ std::uint64_t StructuredPdeModel3D::state_checksum() const {
     if (renewal_) state = hash_mix(state, renewal_->checksum());
     if (duration_) state = hash_mix(state, duration_->checksum());
     if (velocity_) state = hash_mix(state, velocity_->checksum());
-    if (config_.schema_version >= 13) {
+    if (operators_.vascular.removal_diagnostics) {
         for (const auto* field : {&vascular_removed_mass_.r_normal,
                                   &vascular_removed_mass_.r_active,
                                   &vascular_removed_mass_.K}) {
@@ -4005,24 +1251,33 @@ std::uint64_t StructuredPdeModel3D::state_checksum() const {
                 state = hash_mix(state, std::bit_cast<std::uint64_t>(mass));
         }
     }
+    if (operators_.nutrient.persistent_workspaces) {
+        for (std::size_t stage = 0; stage < 2; ++stage) {
+            for (const auto* field : {&r_normal_[stage], &K_[stage],
+                                      &r_refractory_[stage], &refractory_clock_[stage]}) {
+                hash_double_region(*field, full_bounds);
+            }
+            for (const auto* fields : {&active_direction_[stage], &active_clock_[stage]}) {
+                for (const auto& field : *fields) {
+                    hash_double_region(field, full_bounds);
+                }
+            }
+            hash_double_region(active_total_[stage], full_bounds);
+        }
+        hash_double_region(nutrient_next_, full_bounds);
+        hash_bounds(tumour_mask_bounds_);
+        hash_bounds(nutrient_update_bounds_);
+        for (const auto value : tumour_mask_) {
+            state = hash_mix(state, value);
+        }
+        state = hash_mix(state, tumour_voxel_count_);
+        state = hash_mix(state, tumour_front_voxel_count_);
+    }
     return state;
 }
 
 std::uint32_t StructuredPdeModel3D::checkpoint_version() const noexcept {
-    if (config_.schema_version >= 13)
-        return 9U;
-    if (config_.schema_version >= 12)
-        return 8U;
-    if (config_.schema_version >= 11)
-        return 7U;
-    if (config_.schema_version >= 10)
-        return 6U;
-    if (config_.schema_version >= 8)
-        return 5U;
-    if (config_.schema_version >= 7)
-        return kCohortCheckpointVersion;
-    return config_.schema_version >= 5
-        ? kRefractoryCheckpointVersion : kLegacyCheckpointVersion;
+    return operators_.checkpoint_version;
 }
 
 void StructuredPdeModel3D::save_checkpoint(
@@ -4047,28 +1302,34 @@ void StructuredPdeModel3D::save_checkpoint(
     write_pod(stream, nutrient_solve_count_);
     const int nx = config_.continuum.grid.shape[0];
     const int ny = config_.continuum.grid.shape[1];
+    const StructuredActiveBounds3D full_bounds{
+        0, 0, 0, nx, ny, config_.continuum.grid.shape[2], true};
+    const auto population_fields = operators_.nutrient.persistent_workspaces
+        ? full_bounds : population_bounds_;
     write_bounds(stream, population_bounds_);
     for (std::size_t stage = 0; stage < 2; ++stage) {
-        write_region(stream, r_normal_[stage], population_bounds_, nx, ny);
-        write_region(stream, K_[stage], population_bounds_, nx, ny);
+        write_region(stream, r_normal_[stage], population_fields, nx, ny);
+        write_region(stream, K_[stage], population_fields, nx, ny);
         write_bounds(stream, active_bounds_[stage]);
+        const auto active_fields = operators_.nutrient.persistent_workspaces
+            ? full_bounds : active_bounds_[stage];
         for (const auto& bucket : active_direction_[stage]) {
-            write_region(stream, bucket, active_bounds_[stage], nx, ny);
+            write_region(stream, bucket, active_fields, nx, ny);
         }
         for (const auto& bucket : active_clock_[stage]) {
-            write_region(stream, bucket, active_bounds_[stage], nx, ny);
+            write_region(stream, bucket, active_fields, nx, ny);
         }
     }
-    if (config_.schema_version >= 5) {
+    if (operators_.nutrient.transient_resources) {
         for (std::size_t stage = 0; stage < 2; ++stage) {
             write_vector(stream, activation_cooldown_[stage]);
             write_vector(stream, activation_armed_[stage]);
         }
     }
-    if (config_.schema_version >= 7) {
+    if (operators_.activation.transported_refractory) {
         for (std::size_t stage = 0; stage < 2; ++stage) {
-            write_region(stream, r_refractory_[stage], population_bounds_, nx, ny);
-            write_region(stream, refractory_clock_[stage], population_bounds_, nx, ny);
+            write_region(stream, r_refractory_[stage], population_fields, nx, ny);
+            write_region(stream, refractory_clock_[stage], population_fields, nx, ny);
         }
     }
     write_vector(stream, nutrient_);
@@ -4077,12 +1338,23 @@ void StructuredPdeModel3D::save_checkpoint(
     if (renewal_) renewal_->save(stream);
     if (duration_) duration_->save(stream);
     if (velocity_) velocity_->save(stream);
-    if (config_.schema_version >= 13) {
+    if (operators_.vascular.removal_diagnostics) {
         for (const auto* field : {&vascular_removed_mass_.r_normal,
                                   &vascular_removed_mass_.r_active,
                                   &vascular_removed_mass_.K}) {
             for (const double mass : *field) write_pod(stream, mass);
         }
+    }
+    if (operators_.nutrient.persistent_workspaces) {
+        for (const auto& field : active_total_) {
+            write_vector(stream, field);
+        }
+        write_vector(stream, nutrient_next_);
+        write_bounds(stream, tumour_mask_bounds_);
+        write_bounds(stream, nutrient_update_bounds_);
+        write_vector(stream, tumour_mask_);
+        write_pod(stream, tumour_voxel_count_);
+        write_pod(stream, tumour_front_voxel_count_);
     }
     write_pod(stream, state_checksum());
     stream.flush();
@@ -4116,16 +1388,21 @@ void StructuredPdeModel3D::load_checkpoint(
     const int nx = config_.continuum.grid.shape[0];
     const int ny = config_.continuum.grid.shape[1];
     const int nz = config_.continuum.grid.shape[2];
+    const StructuredActiveBounds3D full_bounds{0, 0, 0, nx, ny, nz, true};
     population_bounds_ = read_bounds(stream, nx, ny, nz);
+    const auto population_fields = operators_.nutrient.persistent_workspaces
+        ? full_bounds : population_bounds_;
     for (std::size_t stage = 0; stage < 2; ++stage) {
-        read_region(stream, r_normal_[stage], population_bounds_, nx, ny);
-        read_region(stream, K_[stage], population_bounds_, nx, ny);
+        read_region(stream, r_normal_[stage], population_fields, nx, ny);
+        read_region(stream, K_[stage], population_fields, nx, ny);
         active_bounds_[stage] = read_bounds(stream, nx, ny, nz);
+        const auto active_fields = operators_.nutrient.persistent_workspaces
+            ? full_bounds : active_bounds_[stage];
         for (auto& bucket : active_direction_[stage]) {
-            read_region(stream, bucket, active_bounds_[stage], nx, ny);
+            read_region(stream, bucket, active_fields, nx, ny);
         }
         for (auto& bucket : active_clock_[stage]) {
-            read_region(stream, bucket, active_bounds_[stage], nx, ny);
+            read_region(stream, bucket, active_fields, nx, ny);
         }
         fill_field(active_total_[stage],0.0F);
         const auto bounds = active_bounds_[stage];
@@ -4150,10 +1427,10 @@ void StructuredPdeModel3D::load_checkpoint(
             read_vector(stream, activation_armed_[stage], voxel_count_);
         }
     }
-    if (config_.schema_version >= 7) {
+    if (operators_.activation.transported_refractory) {
         for (std::size_t stage = 0; stage < 2; ++stage) {
-            read_region(stream, r_refractory_[stage], population_bounds_, nx, ny);
-            read_region(stream, refractory_clock_[stage], population_bounds_, nx, ny);
+            read_region(stream, r_refractory_[stage], population_fields, nx, ny);
+            read_region(stream, refractory_clock_[stage], population_fields, nx, ny);
         }
     }
     read_vector(stream, nutrient_, voxel_count_);
@@ -4162,7 +1439,7 @@ void StructuredPdeModel3D::load_checkpoint(
     if (renewal_) renewal_->load(stream, voxel_count_);
     if (duration_) duration_->load(stream, voxel_count_);
     if (velocity_) velocity_->load(stream, voxel_count_);
-    if (config_.schema_version >= 13) {
+    if (operators_.vascular.removal_diagnostics) {
         for (auto* field : {&vascular_removed_mass_.r_normal,
                             &vascular_removed_mass_.r_active,
                             &vascular_removed_mass_.K}) {
@@ -4173,12 +1450,25 @@ void StructuredPdeModel3D::load_checkpoint(
             }
         }
     }
+    if (operators_.nutrient.persistent_workspaces) {
+        for (auto& field : active_total_) {
+            read_vector(stream, field, voxel_count_);
+        }
+        read_vector(stream, nutrient_next_, voxel_count_);
+        tumour_mask_bounds_ = read_bounds(stream, nx, ny, nz);
+        nutrient_update_bounds_ = read_bounds(stream, nx, ny, nz);
+        read_vector(stream, tumour_mask_, voxel_count_);
+        tumour_voxel_count_ = read_pod<decltype(tumour_voxel_count_)>(stream);
+        tumour_front_voxel_count_ = read_pod<decltype(tumour_front_voxel_count_)>(stream);
+    }
     const std::uint64_t expected_checksum = read_pod<std::uint64_t>(stream);
     if (stream.peek() != std::char_traits<char>::eof()) {
         throw std::runtime_error("structured checkpoint has trailing data");
     }
-    rebuild_moving_tumour_front();
-    nutrient_next_ = nutrient_;
+    if (!operators_.nutrient.persistent_workspaces) {
+        rebuild_moving_tumour_front();
+        nutrient_next_ = nutrient_;
+    }
     validate_resources();
     initialized_ = true;
     validate_state();

@@ -17,6 +17,11 @@ struct Migrator {
     std::set<std::filesystem::path> active;
     int grid_edge{};
     double nutrient_K_per_cell{-1};
+    std::string hybrid_model;
+    std::string output_name(const std::string& filename) const {
+        return directory.filename().string() + "_" +
+            std::filesystem::path(filename).stem().string();
+    }
     YAML::Node upgrade(YAML::Node y) {
         const auto name = y["schema"]["name"].as<std::string>();
         const int old = y["schema"]["version"].as<int>();
@@ -38,7 +43,7 @@ struct Migrator {
                 throw std::invalid_argument(
                     "structured v1-v4 migration requires explicit "
                     "shared-resource parameter calibration");
-            latest = 16;
+            latest = 17;
             if (!y["sector_mean_model"])
                 y["sector_mean_model"] = "published_sector_sums_v1";
             y["structured_migration"]["activation_stop"] =
@@ -47,6 +52,13 @@ struct Migrator {
                 y["storage"]["model"] = "dense_v1";
                 y["storage"]["maximum_active_voxels"] = 1000000;
             }
+        } else if (name == "atcg3d.hybrid_config" && !hybrid_model.empty()) {
+            if (hybrid_model != "hybrid_resource_restart_v5" || old < 4)
+                throw std::invalid_argument(
+                    "hybrid resource migration requires a v4+ front policy and "
+                    "--hybrid-model hybrid_resource_restart_v5");
+            latest = 5;
+            y["model"] = hybrid_model;
         } else if (name != "atcg3d.ode_config" &&
                    name != "atcg3d.hybrid_config")
             throw std::invalid_argument("unsupported configuration schema");
@@ -135,15 +147,14 @@ struct Migrator {
         if (y["nutrient"] && y["nutrient"]["output"] &&
             y["nutrient"]["output"]["directory"])
             y["nutrient"]["output"]["directory"] =
-                std::filesystem::path(filename).stem().string() +
-                "_nutrient_run";
+                output_name(filename) + "_nutrient_run";
         for (auto key : {"output", "run"})
             if (y[key] && y[key]["directory"])
                 y[key]["directory"] =
-                    std::filesystem::path(filename).stem().string() + "_run";
+                    output_name(filename) + "_run";
         if (y["output"] && y["output"]["directory"])
             y["output"]["directory"] =
-                std::filesystem::path(filename).stem().string() + "_run";
+                output_name(filename) + "_run";
         const auto path = directory / filename;
         std::ofstream out(path);
         out << y << '\n';
@@ -159,12 +170,14 @@ int main(int argc, char **argv) {
         std::filesystem::path input, directory;
         int grid_edge = 0;
         double nutrient_K = -1;
+        std::string hybrid_model;
         for (int i = 1; i < argc; ++i) {
             const std::string key = argv[i];
             if (key == "--help") {
                 std::cout << "Usage: atcg_config_migrate --input YAML "
                              "--output-directory NEW_DIR [--grid-edge "
-                             "N] [--nutrient-K-per-cell-hour RATE]\n"
+                             "N] [--nutrient-K-per-cell-hour RATE] "
+                             "[--hybrid-model hybrid_resource_restart_v5]\n"
                              "Copies referenced configs and upgrades "
                              "supported shared contracts to latest schemas.\n";
                 return 0;
@@ -179,6 +192,8 @@ int main(int argc, char **argv) {
                 nutrient_K = std::stod(argv[i]);
             else if (key == "--grid-edge")
                 grid_edge = std::stoi(argv[i]);
+            else if (key == "--hybrid-model")
+                hybrid_model = argv[i];
             else
                 throw std::invalid_argument("unknown migration option");
         }
@@ -187,7 +202,7 @@ int main(int argc, char **argv) {
             throw std::invalid_argument(
                 "migration requires input and a new output directory");
         std::filesystem::create_directories(directory);
-        const auto path = Migrator{directory, {}, grid_edge, nutrient_K}.copy(
+        const auto path = Migrator{directory, {}, grid_edge, nutrient_K, hybrid_model}.copy(
             input, "model.yaml");
         const auto name =
             YAML::LoadFile(path.string())["schema"]["name"].as<std::string>();
@@ -211,6 +226,12 @@ int main(int argc, char **argv) {
                "clocks;\nupgrading v5/v6 changes the old grid-local cooldown "
                "closure. Restart a new run;\nold checkpoint fingerprints are "
                "intentionally not reused by changed PDE contracts.\n"
+               "Structured schema 17 persists full population tails, nutrient "
+               "work buffers\nand moving-front workspace for exact continuation. "
+               "Existing live operator\nchoices and published sector sums are "
+               "preserved. Explicit hybrid v5 migration\ninitializes resource "
+               "fields and individual clocks before core classification;\n"
+               "the v4 invasion-front policy is retained.\n"
                "Nutrient v1 upgrades use the explicitly supplied per-cell K "
                "uptake rate\nand preserve the old r/K uptake ratio and common "
                "saturation. This is a new\ncalibration choice, not an exact "

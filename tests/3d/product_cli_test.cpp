@@ -3,6 +3,7 @@
 #include <cassert>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <string>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -27,11 +28,43 @@ int run(const std::filesystem::path &exe,
     assert(waitpid(child, &status, 0) == child);
     return WIFEXITED(status) ? WEXITSTATUS(status) : 128;
 }
+
+void validate_registry(const std::filesystem::path& source,
+                       const std::filesystem::path& entry) {
+    const auto registry = YAML::LoadFile((source / "docs/configuration_registry.json").string());
+    assert(registry["registry_version"].as<int>() == 1);
+    std::set<std::filesystem::path> registered;
+    const std::set<std::string> statuses{"recommended", "recommended_dependency",
+        "benchmark", "legacy", "reproduction"};
+    for (const auto& record : registry["configurations"]) {
+        const std::filesystem::path path = record["path"].as<std::string>();
+        assert(!path.is_absolute());
+        assert(std::filesystem::is_regular_file(source / path));
+        assert(registered.insert(path).second);
+        assert(statuses.contains(record["status"].as<std::string>()));
+    }
+    std::set<std::filesystem::path> outputs;
+    for (const auto* model : {"abm", "pde", "hybrid", "ode"}) {
+        const std::filesystem::path path = registry["recommended"][model].as<std::string>();
+        assert(registered.contains(path));
+        assert(run(entry, {"--model", model, "--config", (source / path).string(),
+            "--dry-run"}) == 0);
+        const auto output = std::string(model) == "hybrid"
+            ? atcg3d::hybrid::HybridConfig3D::load(source / path).output_directory
+            : std::string(model) == "ode"
+                ? atcg3d::ode::OdeConfig3D::load(source / path).output_directory
+                : atcg3d::structured_pde::StructuredPdeConfig3D::load(source / path)
+                    .continuum.output.directory;
+        assert(!output.is_absolute());
+        assert(outputs.insert(output).second);
+    }
+}
 } // namespace
 int main() {
     const auto binary = std::filesystem::path(ATCG_BINARY_DIR);
     const auto source = std::filesystem::path(ATCG_SOURCE_DIR);
     const auto entry = binary / "atcg_sim";
+    validate_registry(source, entry);
     for (auto [model, path] : std::vector<std::pair<std::string, std::string>>{
              {"abm", "ATCG3D_SharedRules/config/validation_v7.yaml"},
              {"pde", "ATCG3D_StructuredPDE/config/structured_sparse_v9.yaml"},
@@ -54,7 +87,7 @@ int main() {
              "--output-directory", output.string()}) == 0);
     auto migrated = atcg3d::structured_pde::StructuredPdeConfig3D::load(
         output / "model.yaml");
-    assert(migrated.schema_version == 16);
+    assert(migrated.schema_version == 17);
     assert(migrated.continuum.schema_version == 6);
     assert(!migrated.continuum.output.directory.is_absolute());
     assert(!migrated.continuum.base.output_directory.is_absolute());

@@ -11,9 +11,18 @@ only by structured schema 15 or a later explicitly compatible schema.
 VEGF production is the cell count per voxel, including footprint-distributed
 large cells, multiplied by `production * clamp(1-N/(Nmax*threshold),0,1)`.
 VEGF diffuses on reflecting faces and decays exponentially. Both models use
-the same field solver, source assembly and operator ordering. Individual tips
+the same field solver, source assembly and ordering within the vascular
+substep. Individual tips
 are separate agents with persistent identifiers and a checkpointed random
 counter. They do not use the published forward-cone walk.
+
+The tumor/resource drivers sample cell consumers at different macro boundaries:
+standalone ABM assembles current cells at its ending resource barrier, while
+structured PDE advances vasculature from its starting population before tumor
+transport/reaction. Adaptive hybrid uses the PDE schedule. The controlled
+frozen-consumer experiment has identical sources under these schedules;
+growing-tumor equivalence needs an additional source-sampling/splitting study.
+The shared microscopic vascular law alone does not remove this timing closure.
 
 For each axial face from i to j, the jump rate is
 `q(i,j) = Dtip/h^2 + chi*max(T[j]-T[i],0)/h^2`.
