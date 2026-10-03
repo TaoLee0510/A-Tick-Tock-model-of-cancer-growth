@@ -27,7 +27,7 @@ on the selected native model; invoke its `--help` for the complete list.
 | ABM | Native or nutrient YAML; shared structured YAML | Individual event clocks, directional migration and angiogenesis. Shared mode writes requested JSON reports and paired checkpoints. |
 | ODE | `ATCG3D_ODE/config/ode_smoke_v1.yaml` | Well-mixed mean-clock reaction, adaptive RK45, CSV and checkpoint. |
 | PDE | Continuum or structured YAML | Density fields, resource/vascular fields, CSV and native checkpoint. |
-| Hybrid | `ATCG3D_Hybrid/config/hybrid_regular_cycle_v2.yaml` | Dense PDE core and sparse/front ABM, conservative distribution exchanges, CSV and paired checkpoint. |
+| Hybrid | `ATCG3D_Hybrid/config/hybrid_regular_cycle_v3.yaml` | Smoothed-occupancy classification, volume/footprint coupling and conservative distribution exchanges, CSV and paired checkpoint. |
 
 Examples:
 
@@ -62,6 +62,11 @@ arithmetic; new rules and storage use new schema/model identifiers.
 Use [configuration_migration.md](configuration_migration.md) to create a new
 configuration graph, [pde_fields.md](pde_fields.md) for viewer/Studio field
 output, and [sparse_pde_storage.md](sparse_pde_storage.md) for 10000-square runs.
+The versioned volume/vascular accounting fixes and their full numeric results
+are described in [phase_a_report.md](phase_a_report.md). The present
+occupancy-based hybrid classifier requires the subsequent front-policy work;
+its smoke passes do not establish statistical equivalence.
+
 Model manuals, specifications, viewer and Studio instructions live in `docs/`;
 old module README paths are navigation pointers. `cmake --install build-codex
 --prefix install-root` installs the executables, YAML graph and documentation.

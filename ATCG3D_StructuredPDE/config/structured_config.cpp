@@ -263,7 +263,7 @@ StructuredPdeConfig3D StructuredPdeConfig3D::load(
 }
 
 void StructuredPdeConfig3D::validate() const {
-    if ((schema_version < 1 || schema_version > 12) || profile.empty()) {
+    if ((schema_version < 1 || schema_version > 13) || profile.empty()) {
         throw std::invalid_argument("structured PDE schema/profile is invalid");
     }
     if (schema_version < 9 && storage_model != "dense_v1") {

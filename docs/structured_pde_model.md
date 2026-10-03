@@ -8,7 +8,10 @@ activated density in the same fixed directions used by the ABM.
 The legacy profiles below retain their published mean-clock/rate closures.
 Schema 7 carries refractory mass with transport, schema 8 adds vascular fields,
 schema 9 adds sparse storage, and schema 10 supports a remaining division-work
-distribution. Schema 11/12 add activation-duration and speed distributions.
+distribution. Schema 11/12 add activation-duration and speed distributions. Schema 13
+records cumulative vascular-deletion mass by phenotype, activity and stage;
+its native checkpoint format version is 9. Older schemas retain their state
+and output columns unchanged.
 Use [the shared contract](shared_rule_contract.md),
 [division renewal](renewal_validation.md), and
 [activation distributions](activation_distribution.md) for these newer models

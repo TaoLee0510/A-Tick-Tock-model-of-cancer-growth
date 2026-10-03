@@ -39,7 +39,18 @@ struct StructuredInitialFields3D {
     std::array<std::vector<double>, kStructuredStageCount3D> refractory_remaining_hours;
 };
 
+struct VascularRemovedMass3D {
+    std::array<double, kStructuredStageCount3D> r_normal{};
+    std::array<double, kStructuredStageCount3D> r_active{};
+    std::array<double, kStructuredStageCount3D> K{};
+    double total() const noexcept {
+        return r_normal[0] + r_normal[1] + r_active[0] + r_active[1] +
+            K[0] + K[1];
+    }
+};
+
 struct StructuredPdeDiagnostics3D {
+    VascularRemovedMass3D vascular_removed_mass;
     std::array<double, kStructuredStageCount3D> r_normal_mass{};
     std::array<double, kStructuredStageCount3D> r_active_mass{};
     std::array<double, kStructuredStageCount3D> K_mass{};
@@ -116,6 +127,7 @@ public:
     double activation_density(StructuredStage3D stage,
                               std::size_t location) const noexcept;
     double occupied_fraction(std::size_t location) const noexcept;
+    double external_consumers(std::size_t location) const noexcept;
     std::array<double, 2> growth_counts_at(Vec3i site) const;
     double refractory_mass(StructuredStage3D stage, std::size_t location) const noexcept;
     double refractory_mean_hours(StructuredStage3D stage, std::size_t location) const noexcept;
@@ -181,12 +193,18 @@ private:
     void shrink_population_bounds();
     void validate_resources() const;
     void validate_state() const;
+    void record_vascular_removal(CellType type, CellStage stage,
+                                 bool active, double mass);
+    std::uint32_t checkpoint_version() const noexcept;
 
     StructuredPdeConfig3D config_;
     std::unique_ptr<continuum::AngiogenesisField3D> angiogenesis_;
-    // Derived external-agent fields are populated only by hybrid v1. They
+    // Derived external-agent fields are populated by hybrid models. They
     // participate in local rates/resources, never in PDE transported mass.
     std::vector<double> external_r_,external_K_,external_occupied_;
+    // Hybrid v3 separates anchor-count fields from footprint-averaged sinks.
+    std::vector<double> external_r_consumers_, external_K_consumers_;
+    VascularRemovedMass3D vascular_removed_mass_;
     std::function<void()> external_after_vascular_advance_;
     std::size_t voxel_count_{};
     double voxel_measure_{};

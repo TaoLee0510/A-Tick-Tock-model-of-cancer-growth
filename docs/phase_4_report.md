@@ -6,7 +6,9 @@ and retain published checkpoint fingerprints. Thin-layer hypoxic seeding now
 uses planar surfaces; this resolves outward tips blocked by a vertical bias.
 Continuum v6 and structured v8 add hypoxic VEGF production/diffusion/decay,
 upwind tip chemotaxis, branching/anastomosis, saturating vessel density,
-perfusion sources and thresholded cell displacement. The shared ABM environment
+perfusion sources and thresholded cell deletion. Excluded PDE cell mass is
+removed rather than relocated; structured v13 records the loss by phenotype,
+activity and cell stage in metrics and checkpoints. The shared ABM environment
 uses actual vessels for nutrient and evolves VEGF diagnostics. New PDE and
 paired ABM checkpoints include the vascular fields.
 

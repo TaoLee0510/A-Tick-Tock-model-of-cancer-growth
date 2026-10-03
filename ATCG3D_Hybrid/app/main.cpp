@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
             << ",\"to_pde\":" << d.to_pde << ",\"to_abm\":" << d.to_abm
             << ",\"exchanges\":" << d.exchanges
             << ",\"state_checksum\":" << simulation.state_checksum();
-        if (validation_report || config.schema_version == 2) {
+        if (validation_report || config.schema_version >= 2) {
             const auto radial = simulation.radial_mass();
             const double total = std::accumulate(radial.begin(), radial.end(), 0.0);
             const auto quantile = [&](double fraction) {

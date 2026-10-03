@@ -26,8 +26,11 @@ is configured in tips/hour. In the comparison, two tips per ABM root and the
 mean of inward/outward speeds set the continuum rate and deposition speed.
 Vessel volume fraction grows by saturating deposition and supplies nutrient
 through perfusion exchange. Fractions at the exclusion threshold become
-Dirichlet sources and displace cells, matching the ABM's replacement rule at
-coarse resolution. Substeps enforce the transport CFL.
+Dirichlet sources and delete overlapping PDE cell mass. This is a loss term,
+not a conservative relocation. Structured v13 cumulatively records removed
+normal r, active r and K mass separately for small and large stages. These six
+counters, and their total, appear in metrics and survive checkpoints. Hybrid
+v3 records removed agents in the same counters when driven by PDE vessels. Substeps enforce the transport CFL.
 
 The shared ABM environment evolves VEGF for diagnostics and uses actual ABM
 vessels for perfusion. The PDE evolves its continuous tip/vessel densities.

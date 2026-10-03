@@ -37,7 +37,8 @@ int main() {
              {"pde", "ATCG3D_StructuredPDE/config/structured_sparse_v9.yaml"},
              {"ode", "ATCG3D_ODE/config/ode_smoke_v1.yaml"},
              {"hybrid", "ATCG3D_Hybrid/config/hybrid_smoke_v1.yaml"},
-             {"hybrid", "ATCG3D_Hybrid/config/hybrid_regular_cycle_v2.yaml"}})
+             {"hybrid", "ATCG3D_Hybrid/config/hybrid_regular_cycle_v2.yaml"},
+             {"hybrid", "ATCG3D_Hybrid/config/hybrid_regular_cycle_v3.yaml"}})
         assert(run(entry, {"--model", model, "--config",
                            (source / path).string(), "--dry-run"}) == 0);
     assert(run(entry,
@@ -53,7 +54,7 @@ int main() {
              "--output-directory", output.string()}) == 0);
     auto migrated = atcg3d::structured_pde::StructuredPdeConfig3D::load(
         output / "model.yaml");
-    assert(migrated.schema_version == 12);
+    assert(migrated.schema_version == 13);
     assert(migrated.continuum.schema_version == 6);
     assert(!migrated.continuum.output.directory.is_absolute());
     assert(!migrated.continuum.base.output_directory.is_absolute());

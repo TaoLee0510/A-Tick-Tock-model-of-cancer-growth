@@ -11,6 +11,13 @@
 namespace atcg3d::structured_pde {
 namespace {
 
+const char* vascular_metrics_columns() noexcept {
+    return ",vascular_removed_r_normal_small,vascular_removed_r_normal_large,"
+           "vascular_removed_r_active_small,vascular_removed_r_active_large,"
+           "vascular_removed_K_small,vascular_removed_K_large,"
+           "vascular_removed_mass";
+}
+
 bool same_time(double lhs, double rhs) noexcept {
     return std::abs(lhs - rhs) <=
         1.0e-10 * std::max({1.0, std::abs(lhs), std::abs(rhs)});
@@ -64,6 +71,13 @@ StructuredPdeOutput3D::StructuredPdeOutput3D(
     std::filesystem::create_directories(directory_ / "config");
     const auto metrics_path = directory_ / "metrics.csv";
     const bool append = resume && std::filesystem::exists(metrics_path);
+    if (append && config_.schema_version >= 13) {
+        std::ifstream previous(metrics_path);
+        std::string header;
+        std::getline(previous, header);
+        if (header.find(vascular_metrics_columns()) == std::string::npos)
+            throw std::runtime_error("structured v13 metrics header mismatch");
+    }
     metrics_.open(metrics_path,
                   std::ios::binary | (append ? std::ios::app : std::ios::trunc));
     if (!metrics_) throw std::runtime_error("unable to open structured metrics");
@@ -81,6 +95,8 @@ StructuredPdeOutput3D::StructuredPdeOutput3D(
             metrics_ << ",tumour_volume,tumour_front_volume,"
                         "tumour_mean_nutrient,tumour_front_mean_nutrient";
         }
+        if (config_.schema_version >= 13)
+            metrics_ << vascular_metrics_columns();
         metrics_ << ",state_checksum\n";
     }
     if (resume) {
@@ -142,6 +158,12 @@ void StructuredPdeOutput3D::write_metrics(const StructuredPdeModel3D& model) {
                  << ',' << value.tumour_front_volume
                  << ',' << value.tumour_mean_nutrient
                  << ',' << value.tumour_front_mean_nutrient;
+    }
+    if (config_.schema_version >= 13) {
+        const auto& removed = value.vascular_removed_mass;
+        for (const auto* field : {&removed.r_normal, &removed.r_active, &removed.K})
+            for (const double mass : *field) metrics_ << ',' << mass;
+        metrics_ << ',' << removed.total();
     }
     metrics_ << ',' << model.state_checksum() << '\n';
     metrics_.flush();
@@ -276,8 +298,11 @@ void StructuredPdeOutput3D::finalize(const StructuredPdeModel3D& model) {
          << "  \"r_radius_90\": " << value.r_radius_90 << ",\n"
          << "  \"r_radius_99\": " << value.r_radius_99 << ",\n"
          << "  \"maximum_occupied_fraction\": "
-         << value.maximum_occupied_fraction << ",\n"
-         << "  \"state_checksum\": " << model.state_checksum() << "\n}\n";
+         << value.maximum_occupied_fraction << ",\n";
+    if (config_.schema_version >= 13)
+        json << "  \"vascular_removed_mass\": "
+             << value.vascular_removed_mass.total() << ",\n";
+    json << "  \"state_checksum\": " << model.state_checksum() << "\n}\n";
     write_text_atomic(directory_ / "final.json", json.str());
     finalized_ = true;
 }

@@ -15,13 +15,16 @@ structured PDE, including its nutrient, VEGF, tip and vessel equations.
 cell-state checksums match the corresponding standalone run exactly.
 
 Adaptive mode classifies smoothed occupancy with on/off hysteresis. Dense
-locations carry PDE populations; agents represent sparse locations and the
-front. At each macro step the PDE advances first, including nutrient and
+locations carry PDE populations; agents represent locations below the
+smoothed-occupancy thresholds. Classification currently uses occupancy alone,
+so front distance, active-r presence and nutrient gradient are not yet
+representation guarantees. At each macro step the PDE advances first, including nutrient and
 vascular fields. The ABM then runs to the same time with those fields held
 fixed. Agent occupancy blocks PDE transport/growth; density occupancy blocks
 agent placement, migration and division. Both populations contribute to the
 same growth/activation counts, nutrient consumption, VEGF production and
-moving-front mask. New perfused vessels displace either representation.
+moving-front mask. New perfused vessels delete overlapping cells in either representation.
+They do not conservatively relocate those cells.
 
 The fixed exchange interval must be an integer multiple of the PDE step.
 Agent-to-density conversion transfers one cell, stage, active direction and
@@ -107,3 +110,34 @@ paired sampling uncertainty; profile error uses delete-one jackknife
 uncertainty. Raw runs, uncertainty, coverage and pass/fail are retained in JSON
 and Markdown. This is a growing mixed-case verification, not calibration of
 arbitrary invasive fronts or proof of asymptotic convergence order.
+
+## Volume coupling v3
+
+`ATCG3D_Hybrid/config/hybrid_regular_cycle_v3.yaml` selects
+`hybrid_volume_coupling_v3` and structured v13. Published v1/v2 arithmetic,
+fingerprints, placement thresholds and checkpoint identifiers remain intact.
+The v3 manifest has a separate native format identifier.
+
+PDE anchor counts contribute to a large agent's activation density as
+`count / (edge^d / large_cell_volume)`, matching the native ABM denominator.
+Growth and activation counts remain anchor counts. Nutrient consumption and
+VEGF production use a separate consumer field: each large agent contributes
+one cell divided equally over its four planar or eight spatial voxels.
+Total demand is one biological cell. This is the same footprint weighting as
+the shared ABM environment. Occupancy remains one unit per footprint voxel.
+
+An entering footprint voxel must satisfy
+`PDE volume + live agent volume + 1 <= maximum_occupied_fraction`.
+`minimum_density` no longer defines an empty destination. The native thin-layer
+ABM stores the upper half of a large footprint at z=1; v3 checks that storage
+against the corresponding planar PDE voxel at z=0. The candidate agent is
+checked only at entering voxels during migration, as in the native grid.
+
+Structured v13 records deleted normal r, active r and K mass by small/large
+stage in metrics and checkpoint state. Adaptive v3 also records agents deleted
+by the shared vessel exclusion rule in those counters. This loss accounting
+is cumulative and is not a conservative vessel-displacement algorithm.
+
+The v3 ensemble repeats the existing seven native/mixed/refinement scenarios
+with 16 seeds and the exact previously declared tolerances. It remains a smoke
+comparison until the separate statistical-equivalence work is completed.

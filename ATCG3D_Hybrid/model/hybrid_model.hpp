@@ -59,6 +59,7 @@ class HybridModel3D {
     void convert_region(const std::vector<std::size_t> &region);
     void canonicalize();
     bool available(Vec3i point) const;
+    std::uint64_t checkpoint_magic() const noexcept;
     HybridConfig3D config_;
     std::unique_ptr<Simulation3D> abm_;
     std::unique_ptr<structured_pde::StructuredPdeModel3D> pde_;

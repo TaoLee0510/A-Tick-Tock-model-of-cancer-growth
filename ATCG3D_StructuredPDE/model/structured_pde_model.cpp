@@ -863,7 +863,7 @@ void StructuredPdeModel3D::advance_angiogenesis(double dt) {
     std::vector<double> consumers(voxel_count_,0.0);
     for(std::size_t here=0;here<voxel_count_;++here) {
         for(std::size_t stage=0;stage<2;++stage) consumers[here]+=r_normal_[stage][here]+active_total_[stage][here]+K_[stage][here];
-        if(!external_r_.empty()) consumers[here]+=external_r_[here]+external_K_[here];
+        if (!external_r_.empty()) consumers[here] += external_consumers(here);
     }
     angiogenesis_->advance(dt,consumers,nutrient_,config_.continuum.nutrient.vessel_value);
     vessel_=angiogenesis_->vessels();
@@ -921,6 +921,16 @@ void StructuredPdeModel3D::clear_cells_from_vessels() {
             throw std::invalid_argument("structured initial population overlaps an excluded vessel");
         }
         for (std::size_t stage = 0; stage < kStructuredStageCount3D; ++stage) {
+            if (config_.schema_version >= 13) {
+                const auto cell_stage = stage == 0
+                    ? CellStage::small : CellStage::large;
+                record_vascular_removal(CellType::r, cell_stage, false,
+                    r_normal_[stage][location] * voxel_measure_);
+                record_vascular_removal(CellType::r, cell_stage, true,
+                    active_total_[stage][location] * voxel_measure_);
+                record_vascular_removal(CellType::K, cell_stage, false,
+                    K_[stage][location] * voxel_measure_);
+            }
             r_normal_[stage][location] = 0.0;
             if (config_.schema_version >= 7) {
                 r_refractory_[stage][location] = 0.0;
@@ -941,6 +951,25 @@ void StructuredPdeModel3D::clear_cells_from_vessels() {
         shrink_active_bounds(stage);
     }
     shrink_population_bounds();
+}
+
+void StructuredPdeModel3D::record_vascular_removal(
+    CellType type, CellStage stage, bool active, double mass) {
+    const std::size_t phase = stage == CellStage::large ? 1 : 0;
+    if (type == CellType::K)
+        vascular_removed_mass_.K[phase] += mass;
+    else if (active)
+        vascular_removed_mass_.r_active[phase] += mass;
+    else
+        vascular_removed_mass_.r_normal[phase] += mass;
+}
+
+double StructuredPdeModel3D::external_consumers(
+    std::size_t location) const noexcept {
+    if (!external_r_consumers_.empty())
+        return external_r_consumers_[location] + external_K_consumers_[location];
+    return external_r_.empty()
+        ? 0.0 : external_r_[location] + external_K_[location];
 }
 
 double StructuredPdeModel3D::capacity_multiplier(double value) const noexcept {
@@ -1123,7 +1152,7 @@ void StructuredPdeModel3D::advance_transient_nutrient(double dt) {
             r_normal_[1][here] +
             r_active(StructuredStage3D::large, here) +
             K_[0][here] + K_[1][here];
-        if(!external_r_.empty()) consumers+=external_r_[here]+external_K_[here];
+        if (!external_r_.empty()) consumers += external_consumers(here);
         const double demand =
             nutrient.K_consumption_rate_per_hour * consumers;
         const double half = nutrient.K_consumption_half_saturation;
@@ -3338,6 +3367,8 @@ bool StructuredPdeModel3D::step() {
 
 StructuredPdeDiagnostics3D StructuredPdeModel3D::diagnostics() const {
     StructuredPdeDiagnostics3D result;
+    if (config_.schema_version >= 13)
+        result.vascular_removed_mass = vascular_removed_mass_;
     long double nutrient_sum = 0.0L;
     long double r_nutrient = 0.0L;
     long double K_nutrient = 0.0L;
@@ -3678,7 +3709,32 @@ std::uint64_t StructuredPdeModel3D::state_checksum() const {
     if (renewal_) state = hash_mix(state, renewal_->checksum());
     if (duration_) state = hash_mix(state, duration_->checksum());
     if (velocity_) state = hash_mix(state, velocity_->checksum());
+    if (config_.schema_version >= 13) {
+        for (const auto* field : {&vascular_removed_mass_.r_normal,
+                                  &vascular_removed_mass_.r_active,
+                                  &vascular_removed_mass_.K}) {
+            for (const double mass : *field)
+                state = hash_mix(state, std::bit_cast<std::uint64_t>(mass));
+        }
+    }
     return state;
+}
+
+std::uint32_t StructuredPdeModel3D::checkpoint_version() const noexcept {
+    if (config_.schema_version >= 13)
+        return 9U;
+    if (config_.schema_version >= 12)
+        return 8U;
+    if (config_.schema_version >= 11)
+        return 7U;
+    if (config_.schema_version >= 10)
+        return 6U;
+    if (config_.schema_version >= 8)
+        return 5U;
+    if (config_.schema_version >= 7)
+        return kCohortCheckpointVersion;
+    return config_.schema_version >= 5
+        ? kRefractoryCheckpointVersion : kLegacyCheckpointVersion;
 }
 
 void StructuredPdeModel3D::save_checkpoint(
@@ -3693,8 +3749,7 @@ void StructuredPdeModel3D::save_checkpoint(
     std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
     if (!stream) throw std::runtime_error("unable to create structured checkpoint");
     stream.write(kCheckpointMagic.data(), kCheckpointMagic.size());
-    write_pod(stream, config_.schema_version >= 12 ? 8U : config_.schema_version >= 11 ? 7U : config_.schema_version >= 10 ? 6U : config_.schema_version >= 8 ? 5U : config_.schema_version >= 7 ? kCohortCheckpointVersion : config_.schema_version >= 5
-        ? kRefractoryCheckpointVersion : kLegacyCheckpointVersion);
+    write_pod(stream, checkpoint_version());
     write_pod(stream, config_.dynamics_fingerprint());
     write_pod(stream, static_cast<std::uint64_t>(voxel_count_));
     write_pod(stream, static_cast<std::uint64_t>(direction_ids_.size()));
@@ -3734,6 +3789,13 @@ void StructuredPdeModel3D::save_checkpoint(
     if (renewal_) renewal_->save(stream);
     if (duration_) duration_->save(stream);
     if (velocity_) velocity_->save(stream);
+    if (config_.schema_version >= 13) {
+        for (const auto* field : {&vascular_removed_mass_.r_normal,
+                                  &vascular_removed_mass_.r_active,
+                                  &vascular_removed_mass_.K}) {
+            for (const double mass : *field) write_pod(stream, mass);
+        }
+    }
     write_pod(stream, state_checksum());
     stream.flush();
     if (!stream) throw std::runtime_error("unable to finish structured checkpoint");
@@ -3748,10 +3810,8 @@ void StructuredPdeModel3D::load_checkpoint(
     if (!stream) throw std::runtime_error("unable to open structured checkpoint");
     std::array<char, 8> magic{};
     stream.read(magic.data(), magic.size());
-    const std::uint32_t checkpoint_version = read_pod<std::uint32_t>(stream);
-    const auto expected_version = config_.schema_version >= 12 ? 8U : config_.schema_version >= 11 ? 7U : config_.schema_version >= 10 ? 6U : config_.schema_version >= 8 ? 5U : config_.schema_version >= 7 ? kCohortCheckpointVersion :
-        config_.schema_version >= 5 ? kRefractoryCheckpointVersion : kLegacyCheckpointVersion;
-    if (magic != kCheckpointMagic || checkpoint_version != expected_version) {
+    const std::uint32_t saved_version = read_pod<std::uint32_t>(stream);
+    if (magic != kCheckpointMagic || saved_version != checkpoint_version()) {
         throw std::runtime_error("unsupported structured checkpoint format");
     }
     if (read_pod<std::uint64_t>(stream) != config_.dynamics_fingerprint()) {
@@ -3796,7 +3856,7 @@ void StructuredPdeModel3D::load_checkpoint(
             }
         }
     }
-    if (checkpoint_version >= kRefractoryCheckpointVersion) {
+    if (saved_version >= kRefractoryCheckpointVersion) {
         for (std::size_t stage = 0; stage < 2; ++stage) {
             read_vector(stream, activation_cooldown_[stage], voxel_count_);
             read_vector(stream, activation_armed_[stage], voxel_count_);
@@ -3814,6 +3874,17 @@ void StructuredPdeModel3D::load_checkpoint(
     if (renewal_) renewal_->load(stream, voxel_count_);
     if (duration_) duration_->load(stream, voxel_count_);
     if (velocity_) velocity_->load(stream, voxel_count_);
+    if (config_.schema_version >= 13) {
+        for (auto* field : {&vascular_removed_mass_.r_normal,
+                            &vascular_removed_mass_.r_active,
+                            &vascular_removed_mass_.K}) {
+            for (double& mass : *field) {
+                mass = read_pod<double>(stream);
+                if (!std::isfinite(mass) || mass < 0.0)
+                    throw std::runtime_error("invalid vascular removed mass");
+            }
+        }
+    }
     const std::uint64_t expected_checksum = read_pod<std::uint64_t>(stream);
     if (stream.peek() != std::char_traits<char>::eof()) {
         throw std::runtime_error("structured checkpoint has trailing data");
