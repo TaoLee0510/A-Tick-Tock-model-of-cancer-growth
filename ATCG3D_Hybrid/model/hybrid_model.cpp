@@ -8,6 +8,8 @@
 #include <fstream>
 #include <limits>
 #include <numeric>
+#include <queue>
+#include <unordered_set>
 #include <yaml-cpp/yaml.h>
 #ifdef ATCG3D_HAS_HDF5_CHECKPOINT
 #include "io/checkpoint_hdf5.hpp"
@@ -80,6 +82,13 @@ HybridConfig3D HybridConfig3D::load(const std::filesystem::path &path) {
     c.smoothing_radius = h["smoothing_radius_voxels"].as<int>();
     c.core_on = h["core_on"].as<double>();
     c.core_off = h["core_off"].as<double>();
+    if (c.schema_version >= 4) {
+        c.front_band_voxels = h["front_band_voxels"].as<int>();
+        c.front_hysteresis_voxels = h["front_hysteresis_voxels"].as<int>();
+        c.active_guard_voxels = h["active_guard_voxels"].as<int>();
+        c.gradient_on = h["nutrient_gradient_on"].as<double>();
+        c.gradient_off = h["nutrient_gradient_off"].as<double>();
+    }
     c.validate();
     return c;
 }
@@ -87,8 +96,9 @@ void HybridConfig3D::validate() const {
     rules.validate();
     const bool distributions =
         (schema_version == 2 && model == "hybrid_distributions_v2") ||
-        (schema_version == 3 && model == "hybrid_volume_coupling_v3");
-    if (schema_version == 3 && rules.schema_version < 13)
+        (schema_version == 3 && model == "hybrid_volume_coupling_v3") ||
+        (schema_version == 4 && model == "hybrid_invasion_front_v4");
+    if (schema_version >= 3 && rules.schema_version < 13)
         throw std::invalid_argument("hybrid v3 requires structured schema v13+");
     if (!distributions && rules.migration.activation_clock != "beta_mean_remaining_cycle_v1")
         throw std::invalid_argument("wrapper v1 does not carry activation duration distributions");
@@ -100,6 +110,13 @@ void HybridConfig3D::validate() const {
     if ((!distributions && (schema_version != 1 || model != "hybrid_shared_grid_v1")) ||
         (mode != "adaptive" && mode != "all_abm" && mode != "all_pde"))
         throw std::invalid_argument("unsupported hybrid model");
+    if (schema_version >= 4 &&
+        (rules.schema_version < 14 || front_band_voxels < 0 ||
+         front_hysteresis_voxels < 0 || active_guard_voxels < 0 ||
+         rules.continuum.base.ultrasmall_enabled ||
+         !std::isfinite(gradient_on) || !std::isfinite(gradient_off) ||
+         gradient_off < 0.0 || gradient_on <= gradient_off))
+        throw std::invalid_argument("invalid hybrid invasion-front policy");
     const double ticks = exchange_every_hours / rules.continuum.time_step_hours;
     if (!std::isfinite(ticks) || ticks < 1 ||
         std::abs(ticks - std::round(ticks)) > 1e-10 || smoothing_radius < 0 ||
@@ -115,30 +132,54 @@ std::uint64_t HybridConfig3D::fingerprint() const {
     for (double v :
          {exchange_every_hours, double(smoothing_radius), core_on, core_off})
         h = mix(h ^ std::bit_cast<std::uint64_t>(v));
+    if (schema_version >= 4)
+        for (double v : {double(front_band_voxels), double(front_hysteresis_voxels),
+                         double(active_guard_voxels), gradient_on, gradient_off})
+            h = mix(h ^ std::bit_cast<std::uint64_t>(v));
     return h;
 }
 HybridModel3D::HybridModel3D(HybridConfig3D config)
     : config_(std::move(config)) {
     config_.validate();
-    pde_ =
-        std::make_unique<structured_pde::StructuredPdeModel3D>(config_.rules);
+    auto density_rules = config_.rules;
+    if (config_.schema_version >= 4 && config_.mode == "adaptive") {
+        density_rules.operator_model = "shared_operator_switches_v1";
+        density_rules.activation_operator_enabled = false;
+    }
+    pde_ = std::make_unique<structured_pde::StructuredPdeModel3D>(density_rules);
     auto env = std::make_unique<shared_rules::SharedResourceEnvironment3D>(
         config_.rules);
     environment_ = env.get();
     auto base = shared_rules::abm_config(config_.rules);
+    if (config_.sample_every_hours > 0.0) {
+        base.output_enabled = true;
+        base.preview_every_hours = config_.sample_every_hours;
+        base.full_every_hours = config_.sample_every_hours;
+        base.checkpoint_every_hours = config_.sample_every_hours;
+        base.preview_keyframe_every_hours = config_.sample_every_hours;
+        base.full_keyframe_every_hours = std::max(base.full_keyframe_every_hours, config_.sample_every_hours);
+        base.checkpoint_base_every_hours = std::max(base.checkpoint_base_every_hours, config_.sample_every_hours);
+    }
     if (config_.mode != "all_abm")
         base.angiogenesis.enabled = false;
     if (config_.mode == "adaptive") {
         environment_->externally_driven_ = true;
+        if (config_.schema_version >= 4 &&
+            config_.rules.continuum.angiogenesis.model == "shared_vegf_lattice_v2")
+            environment_->angiogenesis_.reset();
         environment_->next_refresh_ = 1.0e100;
         environment_->external_destination_ = [this](Vec3i p) {
-            return available(p);
+            return available(p, config_.schema_version >= 4);
         };
         environment_->external_counts_ = [this](Vec3i p) {
             std::array<double, 2> counts{};
             const int edge =
                 config_.rules.continuum.base.growth_density_window_edge;
             const int lower = (edge - 1) / 2, upper = edge - lower - 1;
+            if (config_.schema_version >= 4) {
+                const auto values = box_counts(p, lower, upper);
+                return std::array<double, 2>{values[0], values[1]};
+            }
             for (int z = config_.rules.continuum.base.thin_layer ? 0 : -lower;
                  z <= (config_.rules.continuum.base.thin_layer ? 0 : upper);
                  ++z)
@@ -162,6 +203,13 @@ HybridModel3D::HybridModel3D(HybridConfig3D config)
             const int edge = b.migration_activation_window_edge,
                       lower = (edge - 1) / 2, upper = edge - lower - 1;
             double sum = 0;
+            if (config_.schema_version >= 4) {
+                const auto values = box_counts(p, lower, upper);
+                sum = values[0] + values[1];
+                const double volume = stage == CellStage::large
+                    ? pde_->large_cell_volume_ : 1.0;
+                return sum / (std::pow(double(edge), b.thin_layer ? 2 : 3) / volume);
+            }
             for (int z = b.thin_layer ? 0 : -lower;
                  z <= (b.thin_layer ? 0 : upper); ++z)
                 for (int y = -lower; y <= upper; ++y)
@@ -206,14 +254,15 @@ std::vector<Vec3i> HybridModel3D::footprint(Vec3i anchor,
             out.push_back(p);
     return out;
 }
-bool HybridModel3D::available(Vec3i point) const {
+bool HybridModel3D::available(Vec3i point, bool replaces_agent) const {
     auto resource_point = point;
     if (config_.schema_version >= 3 &&
         config_.rules.continuum.base.thin_layer && point.z == 1)
         resource_point.z = 0;
     const auto i = location(resource_point);
     if (config_.schema_version >= 3) {
-        if (i >= core_.size() || core_[i] || pde_->vessel_blocks_cells(i))
+        if (i >= core_.size() ||
+            (config_.schema_version < 4 && core_[i]) || pde_->vessel_blocks_cells(i))
             return false;
         double pde_volume = 0.0;
         for (std::size_t stage = 0; stage < 2; ++stage) {
@@ -222,7 +271,13 @@ bool HybridModel3D::available(Vec3i point) const {
                 pde_->active_total_[stage][i] + pde_->K_[stage][i]);
         }
         const double agent_volume = abm_->grid_.occupants(point).size();
-        return pde_volume + agent_volume + 1.0 <=
+        // The grid's native collision checks reject ordinary occupied targets,
+        // retain a moving cell's overlapping footprint, and debit the partner
+        // of an accepted swap. The external obstacle must allow replacement
+        // of that existing unit, rather than counting it twice.
+        const double incoming_volume = replaces_agent
+            ? std::max(0.0, 1.0 - agent_volume) : 1.0;
+        return pde_volume + agent_volume + incoming_volume <=
             config_.rules.continuum.reaction.maximum_occupied_fraction;
     }
     return i < core_.size() && !core_[i] &&
@@ -252,9 +307,16 @@ void HybridModel3D::initialize() {
         attach_coupling();
     }
     initialized_ = true;
+    if (config_.schema_version >= 4)
+        update_representation_coverage();
 }
 void HybridModel3D::attach_coupling() {
     abm_->grid_.attach_external_blocker(environment_);
+    if (config_.schema_version >= 4 && config_.mode == "adaptive") {
+        pde_->external_transport_destination_ = [this](std::size_t location) {
+            return location < core_.size() && core_[location] != 0;
+        };
+    }
     pde_->external_after_vascular_advance_ = [this] {
         for (auto slot : abm_->cells_.alive_slots())
             for (auto point : footprint(abm_->cells_.anchor(slot),
@@ -280,6 +342,12 @@ void HybridModel3D::initialize_from_arrays(
     if (initialized_ || config_.mode != "adaptive")
         throw std::logic_error(
             "hybrid array initialization requires fresh adaptive model");
+    if (config_.schema_version >= 4)
+        for (int stage = 0; stage < 2; ++stage)
+            for (const auto* values : {&fields.r_normal[stage], &fields.r_active[stage]})
+                if (std::any_of(values->begin(), values->end(),
+                                [](double mass) { return mass != 0.0; }))
+                    throw std::invalid_argument("invasion hybrid requires individual r initialization");
     abm_->restore({}, 1, {}, {}, {});
     pde_->initialize_from_arrays(std::move(fields));
     attach_coupling();
@@ -335,6 +403,8 @@ void HybridModel3D::synchronize_environment(bool refresh_rates) {
             p.occupied_fraction(i) -
             (p.external_occupied_.empty() ? 0 : p.external_occupied_[i]);
     }
+    if (config_.schema_version >= 4)
+        rebuild_density_prefix();
     environment_->nutrient_ = p.nutrient_;
     environment_->vessels_ = p.vessel_;
     environment_->tumour_mask_ = p.tumour_mask_;
@@ -369,6 +439,10 @@ void HybridModel3D::remove_agent(Slot slot) {
 }
 void HybridModel3D::classify_core() {
     synchronize_environment(false);
+    if (config_.schema_version >= 4) {
+        classify_invasion_core();
+        return;
+    }
     const int radius = config_.smoothing_radius;
     const bool thin = config_.rules.continuum.base.thin_layer;
     for (std::size_t i = 0; i < core_.size(); ++i) {
@@ -413,6 +487,8 @@ void HybridModel3D::convert_to_density() {
         auto i = location(c.anchor);
         if (!core_[i])
             continue;
+        if (config_.schema_version >= 4 && c.type == CellType::r)
+            continue;
         // Ultrasmall colocations cannot be represented by this schema's two
         // stages.
         if (c.stage == CellStage::ultrasmall)
@@ -421,7 +497,8 @@ void HybridModel3D::convert_to_density() {
         bool valid = true;
         for (auto point : footprint_sites)
             if (location(point) >= core_.size() ||
-                pde_->vessel_blocks_cells(location(point)))
+                pde_->vessel_blocks_cells(location(point)) ||
+                (config_.schema_version >= 4 && !core_[location(point)]))
                 valid = false;
         if (!valid)
             continue;
@@ -490,6 +567,10 @@ void HybridModel3D::convert_to_agents() {
         convert_region(region);
 }
 void HybridModel3D::convert_region(const std::vector<std::size_t> &region) {
+    if (config_.schema_version >= 4) {
+        convert_invasion_region(region);
+        return;
+    }
     // Dependent rounding debits exact units from regional phenotype/stage
     // budgets. Fractional remainders stay in PDE compartments. Clearing all
     // eligible cohorts together permits mixed r/K voxels to become agents.
@@ -777,6 +858,8 @@ void HybridModel3D::exchange() {
     canonicalize();
     synchronize_environment(true);
     ++exchange_count_;
+    if (config_.schema_version >= 4 && initialized_)
+        update_representation_coverage();
 }
 double HybridModel3D::time_hours() const noexcept {
     return config_.mode == "all_abm" ? abm_->clock().time_hours
@@ -812,6 +895,8 @@ bool HybridModel3D::step() {
         if (pde_->step_count_ % ticks == 0)
             exchange();
     }
+    if (config_.schema_version >= 4)
+        update_representation_coverage();
     return true;
 }
 HybridDiagnostics3D HybridModel3D::diagnostics() const {
@@ -839,6 +924,13 @@ HybridDiagnostics3D HybridModel3D::diagnostics() const {
                                           environment_->nutrient().end(), 0.0) /
                           environment_->nutrient().size();
     d.total_mass = d.abm_mass + d.pde_mass;
+    if (config_.schema_version >= 4 && config_.mode == "adaptive")
+        for (std::size_t i = 0; i < core_.size(); ++i)
+            if (!core_[i])
+                d.front_pde_mass += (pde_->K_[0][i] + pde_->K_[1][i]) * pde_->voxel_measure_;
+    d.minimum_abm_fraction = minimum_abm_fraction_;
+    d.minimum_active_fraction = minimum_active_fraction_;
+    d.maximum_pde_fraction = maximum_pde_fraction_;
     return d;
 }
 std::vector<double> HybridModel3D::radial_mass() const {
@@ -874,6 +966,9 @@ std::uint64_t HybridModel3D::state_checksum() const {
     h = mix(h ^ to_abm_);
     for (auto x : core_)
         h = mix(h ^ x);
+    if (config_.schema_version >= 4)
+        for (double value : {minimum_abm_fraction_, minimum_active_fraction_, maximum_pde_fraction_})
+            h = mix(h ^ std::bit_cast<std::uint64_t>(value));
     for (const auto &[uid, r] : environment_->refractory_) {
         h = mix(h ^ uid);
         h = mix(h ^ std::bit_cast<std::uint64_t>(r.until));
@@ -882,6 +977,8 @@ std::uint64_t HybridModel3D::state_checksum() const {
     return h;
 }
 std::uint64_t HybridModel3D::checkpoint_magic() const noexcept {
+    if (config_.schema_version >= 4)
+        return 0x4154434748594234;
     if (config_.schema_version >= 3)
         return 0x4154434748594233;
     return config_.schema_version == 2 ? 0x4154434748594232 : 0x4154434748594231;
@@ -906,6 +1003,11 @@ void HybridModel3D::save_checkpoint(const std::filesystem::path &path) const {
     put(out, to_pde_);
     put(out, to_abm_);
     put_vector(out, core_);
+    if (config_.schema_version >= 4) {
+        put(out, minimum_abm_fraction_);
+        put(out, minimum_active_fraction_);
+        put(out, maximum_pde_fraction_);
+    }
     put(out, abm_->clock_);
     put(out, abm_->stats_);
     put(out, abm_->next_uid_);
@@ -955,6 +1057,11 @@ void HybridModel3D::load_checkpoint(const std::filesystem::path &path) {
     get(in, to_pde_);
     get(in, to_abm_);
     get_vector(in, core_);
+    if (config_.schema_version >= 4) {
+        get(in, minimum_abm_fraction_);
+        get(in, minimum_active_fraction_);
+        get(in, maximum_pde_fraction_);
+    }
     SimulationClock3D clock;
     SimulationStats3D stats;
     CellUid uid;

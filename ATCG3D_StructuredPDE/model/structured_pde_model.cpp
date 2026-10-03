@@ -942,6 +942,31 @@ bool StructuredPdeModel3D::vessel_blocks_cells(
         ? vessel_[location] > 0.0 : vessel_[location] >= config_.continuum.angiogenesis.exclusion_fraction);
 }
 
+bool StructuredPdeModel3D::transport_destination_blocks_cells(
+    std::size_t location, StructuredStage3D stage) const {
+    if (vessel_blocks_cells(location)) return true;
+    if (!external_transport_destination_) return false;
+    if (!external_transport_destination_(location)) return true;
+    if (stage == StructuredStage3D::small) return false;
+    const auto& shape = config_.continuum.grid.shape;
+    const int x = static_cast<int>(location % shape[0]);
+    const int y = static_cast<int>((location / shape[0]) % shape[1]);
+    const int z = static_cast<int>(location /
+        (static_cast<std::size_t>(shape[0]) * shape[1]));
+    const int depth = config_.continuum.base.thin_layer ? 1 : 2;
+    for (int dz = 0; dz < depth; ++dz) {
+        for (int dy = 0; dy < 2; ++dy) {
+            for (int dx = 0; dx < 2; ++dx) {
+                if (x + dx >= shape[0] || y + dy >= shape[1] ||
+                    z + dz >= shape[2] ||
+                    !external_transport_destination_(index(x + dx, y + dy, z + dz)))
+                    return true;
+            }
+        }
+    }
+    return false;
+}
+
 void StructuredPdeModel3D::clear_cells_from_vessels() {
     if (!config_.migration.vessel_exclusion) return;
     for (std::size_t location = 0; location < voxel_count_; ++location) {
@@ -1694,7 +1719,8 @@ void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
                             const int oz = z + jump.z;
                             if (ox < 0 || ox >= nx || oy < 0 || oy >= ny || oz < 0 || oz >= nz) continue;
                             const auto other = index(ox, oy, oz);
-                            if (vessel_blocks_cells(other)) continue;
+                            if (transport_destination_blocks_cells(
+                                    other, static_cast<StructuredStage3D>(stage))) continue;
                             const double vacancy = 1.0 - std::clamp(occupied_fraction(other) /
                                 continuum.reaction.maximum_occupied_fraction, 0.0, 1.0);
                             const double overlapping_sites = (2 - std::abs(jump.x)) *
@@ -1736,7 +1762,7 @@ void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
                     continuum.reaction.maximum_occupied_fraction,
                 0.0, 1.0);
             const double vacancy = 1.0 - local_occupied;
-            const double availability = vessel_blocks_cells(here)
+            const double availability = transport_destination_blocks_cells(here, stage)
                 ? 0.0 : std::pow(vacancy, vacancy_exponent);
             double delta = 0.0;
             const auto exchange = [&](int ox, int oy, int oz, DirectionId direction = kStayDirection) {
@@ -1748,7 +1774,7 @@ void StructuredPdeModel3D::migrate_normal_and_K(double dt) {
                         continuum.reaction.maximum_occupied_fraction,
                     0.0, 1.0);
                 const double other_vacancy = 1.0 - other_occupied;
-                const double other_availability = vessel_blocks_cells(other)
+                const double other_availability = transport_destination_blocks_cells(other, stage)
                     ? 0.0 : std::pow(other_vacancy, vacancy_exponent);
                 const double mobility = std::pow(
                     0.5 * (vacancy + other_vacancy),
@@ -3194,7 +3220,7 @@ std::vector<StructuredPdeModel3D::SmallBirth3D> StructuredPdeModel3D::prepare_sm
                     if (ox < 0 || ox >= grid.shape[0] || oy < 0 || oy >= grid.shape[1] ||
                         oz < 0 || oz >= grid.shape[2]) continue;
                     const auto other = index(ox, oy, oz);
-                    if (vessel_blocks_cells(other)) continue;
+                    if (transport_destination_blocks_cells(other, StructuredStage3D::small)) continue;
                     availability[d] = 1.0 - std::clamp(occupied_fraction(other) /
                         config_.continuum.reaction.maximum_occupied_fraction, 0.0, 1.0);
                 }
@@ -3335,9 +3361,12 @@ void StructuredPdeModel3D::react(double dt) {
         const double vacancy = std::clamp(
             1.0 - occupied / continuum.reaction.maximum_occupied_fraction,
             0.0, 1.0);
-        const double large_success = std::pow(
-            vacancy, continuum.reaction.large_daughter_vacancy_exponent);
-        const double small_success = spatial_birth ? births[offset].success : abm_work_clock
+        const double large_success = external_transport_destination_ &&
+            transport_destination_blocks_cells(location, StructuredStage3D::large)
+            ? 0.0 : std::pow(vacancy, continuum.reaction.large_daughter_vacancy_exponent);
+        const double small_success = external_transport_destination_ &&
+            !spatial_birth && !external_transport_destination_(location)
+            ? 0.0 : spatial_birth ? births[offset].success : abm_work_clock
             ? 1.0 - std::pow(
                   1.0 - vacancy,
                   continuum.reaction.small_daughter_vacancy_exponent)

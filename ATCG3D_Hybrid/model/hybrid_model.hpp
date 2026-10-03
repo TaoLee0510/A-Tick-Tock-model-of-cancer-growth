@@ -15,6 +15,10 @@ struct HybridConfig3D {
     double exchange_every_hours{1.0};
     int smoothing_radius{3};
     double core_on{0.5}, core_off{0.3};
+    int front_band_voxels{3}, front_hysteresis_voxels{2};
+    int active_guard_voxels{2};
+    double gradient_on{0.03}, gradient_off{0.02};
+    double sample_every_hours{};
     static HybridConfig3D load(const std::filesystem::path &path);
     void validate() const;
     std::uint64_t fingerprint() const;
@@ -24,6 +28,9 @@ struct HybridDiagnostics3D {
     double abm_mass{}, pde_mass{}, total_mass{}, active_mass{}, mean_nutrient{};
     double r_mass{}, K_mass{};
     std::uint64_t to_pde{}, to_abm{}, exchanges{};
+    double minimum_abm_fraction{1.0}, minimum_active_fraction{1.0};
+    double maximum_pde_fraction{};
+    double front_pde_mass{};
 };
 
 class HybridModel3D {
@@ -42,6 +49,8 @@ class HybridModel3D {
         return *pde_;
     }
     void exchange();
+    bool is_core(Vec3i point) const;
+    void run_abm_until(double target_hours);
     void save_checkpoint(const std::filesystem::path &path) const;
     void load_checkpoint(const std::filesystem::path &path);
 
@@ -54,11 +63,16 @@ class HybridModel3D {
     void synchronize_environment(bool refresh_rates);
     void remove_agent(Slot slot);
     void classify_core();
+    void classify_invasion_core();
+    void rebuild_density_prefix();
+    std::array<double, 3> box_counts(Vec3i point, int lower, int upper) const;
+    void update_representation_coverage();
     void convert_to_density();
     void convert_to_agents();
     void convert_region(const std::vector<std::size_t> &region);
+    void convert_invasion_region(const std::vector<std::size_t> &region);
     void canonicalize();
-    bool available(Vec3i point) const;
+    bool available(Vec3i point, bool replaces_agent = false) const;
     std::uint64_t checkpoint_magic() const noexcept;
     HybridConfig3D config_;
     std::unique_ptr<Simulation3D> abm_;
@@ -66,6 +80,12 @@ class HybridModel3D {
     shared_rules::SharedResourceEnvironment3D *environment_{};
     std::vector<std::uint8_t> core_;
     std::vector<double> own_r_, own_K_, own_occupied_;
+    std::vector<std::array<double, 3>> density_prefix_;
+    std::vector<std::uint8_t> front_mask_, active_guard_;
+    std::vector<int> front_distance_;
+    continuum::MovingTumorFrontWorkspace2D front_workspace_;
+    double minimum_abm_fraction_{1.0}, minimum_active_fraction_{1.0};
+    double maximum_pde_fraction_{};
     std::uint64_t exchange_count_{}, to_pde_{}, to_abm_{};
     bool initialized_{};
 };

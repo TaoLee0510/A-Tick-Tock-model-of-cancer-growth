@@ -184,6 +184,8 @@ private:
         bool allow_crowded_sectors = false) const;
     void build_guidance_prefix(double dt);
     bool vessel_blocks_cells(std::size_t location) const noexcept;
+    bool transport_destination_blocks_cells(
+        std::size_t location, StructuredStage3D stage) const;
     double capacity_multiplier(double nutrient) const noexcept;
     double mean_growth_rate(CellType type) const;
     double normal_diffusion(StructuredStage3D stage, CellType type) const noexcept;
@@ -213,6 +215,8 @@ private:
     std::vector<double> external_r_consumers_, external_K_consumers_;
     VascularRemovedMass3D vascular_removed_mass_;
     std::function<void()> external_after_vascular_advance_;
+    // Adaptive hybrid v4 confines density transport to its classified core.
+    std::function<bool(std::size_t)> external_transport_destination_;
     std::size_t voxel_count_{};
     double voxel_measure_{};
     double large_cell_volume_{};

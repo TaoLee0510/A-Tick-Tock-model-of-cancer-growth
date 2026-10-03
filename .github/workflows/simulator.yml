@@ -59,6 +59,7 @@ jobs:
             build-ci/validation-vascular-nonlinear/
             build-ci/validation-hybrid/
             build-ci/validation-hybrid-volume/
+            build-ci/validation-hybrid-invasion/
             build-ci/validation-statistical-spatial-birth/
             build-ci/validation-statistical-active-r20-v14/
             build-ci/validation-shared-angiogenesis/

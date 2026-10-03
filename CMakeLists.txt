@@ -293,7 +293,10 @@ if(ATCG_BUILD_3D)
         add_executable(atcg3d_shared_abm ATCG3D_SharedRules/app/main.cpp)
         target_link_libraries(atcg3d_shared_abm PRIVATE atcg3d_shared_rules_core)
 
-        add_library(atcg3d_hybrid_core ATCG3D_Hybrid/model/hybrid_model.cpp)
+        add_library(atcg3d_hybrid_core
+            ATCG3D_Hybrid/model/hybrid_model.cpp
+            ATCG3D_Hybrid/model/hybrid_invasion.cpp
+            ATCG3D_Hybrid/model/hybrid_conversion.cpp)
         target_include_directories(atcg3d_hybrid_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/ATCG3D_Hybrid)
         target_link_libraries(atcg3d_hybrid_core PUBLIC atcg3d_shared_rules_core PRIVATE ${ATCG3D_YAML_TARGET})
         add_executable(atcg3d_hybrid ATCG3D_Hybrid/app/main.cpp)
@@ -532,6 +535,11 @@ if(BUILD_TESTING)
             target_compile_options(atcg3d_hybrid_volume_test PRIVATE -UNDEBUG)
             target_compile_definitions(atcg3d_hybrid_volume_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
             add_test(NAME atcg3d_hybrid_volume_test COMMAND atcg3d_hybrid_volume_test)
+            add_executable(atcg3d_hybrid_invasion_test tests/3d/hybrid_invasion_test.cpp)
+            target_link_libraries(atcg3d_hybrid_invasion_test PRIVATE atcg3d_hybrid_core)
+            target_compile_options(atcg3d_hybrid_invasion_test PRIVATE -UNDEBUG)
+            target_compile_definitions(atcg3d_hybrid_invasion_test PRIVATE ATCG_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME atcg3d_hybrid_invasion_test COMMAND atcg3d_hybrid_invasion_test)
             add_executable(atcg3d_vascular_removal_test tests/3d/vascular_removal_test.cpp)
             target_link_libraries(atcg3d_vascular_removal_test PRIVATE atcg3d_structured_pde_core)
             target_compile_options(atcg3d_vascular_removal_test PRIVATE -UNDEBUG)
@@ -564,6 +572,13 @@ if(BUILD_TESTING)
             if(Python3_Interpreter_FOUND)
                 add_test(NAME atcg3d_equivalence_stats_test
                     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/3d/equivalence_stats_test.py)
+                add_test(NAME atcg3d_hybrid_invasion_stats_test
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/3d/hybrid_invasion_stats_test.py)
+                add_test(NAME atcg3d_hybrid_invasion_trace_test
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/3d/hybrid_invasion_trace_test.py
+                        --exe $<TARGET_FILE:atcg3d_hybrid>
+                        --native-exe $<TARGET_FILE:atcg3d_shared_abm>
+                        --root ${CMAKE_CURRENT_SOURCE_DIR})
                 add_test(NAME atcg3d_shared_angiogenesis_stats_test
                     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/3d/shared_angiogenesis_stats_test.py)
                 add_test(NAME atcg3d_validation_trace_test
@@ -606,6 +621,12 @@ if(BUILD_TESTING)
                         set_tests_properties(atcg3d_long_${long_case}_validation PROPERTIES LABELS validation_long TIMEOUT 604800)
                     endforeach()
                 endif()
+                add_test(NAME atcg3d_hybrid_invasion_validation
+                    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_hybrid_invasion.py
+                        --exe $<TARGET_FILE:atcg3d_hybrid>
+                        --native-exe $<TARGET_FILE:atcg3d_shared_abm>
+                        --seeds 16 --output ${CMAKE_CURRENT_BINARY_DIR}/validation-hybrid-invasion)
+                set_tests_properties(atcg3d_hybrid_invasion_validation PROPERTIES LABELS validation TIMEOUT 3600)
                 add_test(NAME atcg3d_hybrid_validation
                     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/validate_hybrid.py
                         --exe $<TARGET_FILE:atcg3d_hybrid>
