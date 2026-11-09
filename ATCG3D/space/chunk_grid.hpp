@@ -13,6 +13,7 @@
 namespace atcg3d {
 
 class SparseVesselGrid3D;
+class LocalDensityModifier3D;
 
 class SparseChunkGrid3D {
 public:
@@ -27,8 +28,12 @@ public:
     bool empty(Vec3i site) const;
     bool available(Vec3i site) const;
     bool blocked_by_vessel(Vec3i site) const;
+    void attach_external_blocker(const LocalDensityModifier3D* environment) noexcept { external_blocker_=environment; }
     void attach_vessel_grid(const SparseVesselGrid3D* vessels) noexcept {
         vessels_ = vessels;
+    }
+    void attach_static_vasculature(const StaticVascularGeometry3D* geometry) noexcept {
+        static_vasculature_ = geometry;
     }
 
     template <class Visitor>
@@ -81,6 +86,8 @@ private:
     DomainPolicy domain_;
     std::unordered_map<Vec3i, std::unique_ptr<Chunk>, Vec3iHash> chunks_;
     const SparseVesselGrid3D* vessels_{};
+    const StaticVascularGeometry3D* static_vasculature_{};
+    const LocalDensityModifier3D* external_blocker_{};
 };
 
 }  // namespace atcg3d

@@ -62,7 +62,7 @@ vascular:
 
 output:
   enabled: true
-  directory: atcg3d_continuum_smoke_run
+  directory: atcg3d_continuum_smoke_v1_run
   metrics_every_hours: 1.0
   field_every_hours: 4.0
   radial_profile_every_hours: 4.0

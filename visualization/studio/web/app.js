@@ -152,13 +152,13 @@ function t(key, parameters = {}) {
 }
 
 const defaults = {
-  binary: "/Volumes/Work_Active/simulation/ver7/build/atcg3d",
-  launcher: "/Users/taolee/Documents/GitHub/Ver7/scripts/launch_atcg3d_detached.sh",
-  config: "/Users/taolee/Documents/GitHub/Ver7/configs/single_r_stage0_2160h_seed1.yaml",
-  run: "/Volumes/Work_Active/simulation/ver7/run_single_r_stage0_2160h_seed1",
-  pvpython: "/Applications/ParaView-6.1.1.app/Contents/bin/pvpython",
-  viewer: "/Users/taolee/Documents/GitHub/Ver7/visualization/viewer/app.py",
-  pythonpath: `${localStorage.getItem("HOME") || "/Users/taolee"}/.pyenv/versions/atcg3d-paraview-3.12.7/lib/python3.12/site-packages`,
+  binary: "",
+  launcher: "",
+  config: "",
+  run: "",
+  pvpython: "",
+  viewer: "",
+  pythonpath: "",
 };
 
 let configObject = null;

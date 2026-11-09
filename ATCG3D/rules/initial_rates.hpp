@@ -12,6 +12,8 @@ struct InitialCellRates3D {
     double migration_rate{};
 };
 
+double expected_initial_growth_rate(const Model3DConfig& config, CellType type);
+
 // These functions are pure and stateless. Their output is keyed only by the
 // effective configuration, seed, immutable cell UID, and cell type; they never
 // read or advance the simulation event RNG sequence.

@@ -1,0 +1,67 @@
+schema:
+  name: atcg3d.continuum_model_config
+  version: 2
+profile: continuum_legacy_2d_2000_r200_reaction_fixed_v4
+base_config: ../../configs/atcg2d_legacy_native_r200_aligned_v4.yaml
+
+run:
+  mode: resume
+  resume_checkpoint: ../../atcg3d_structured_legacy_2d_2000_r200_reaction_fixed_v4_run/checkpoints/checkpoint_step_000000002880_time_4086800000000000.structured.bin
+initialization:
+  mode: base_model
+  abm_checkpoint: null
+
+grid:
+  shape: [2000, 2000, 1]
+  origin: [-1000.0, -1000.0, -0.5]
+  spacing_voxels: 1.0
+numerics:
+  start_time_hours: 0.0
+  end_time_hours: 2160.0
+  time_step_hours: 0.25
+
+migration:
+  mapping: fixed_26_from_base_means_v1
+  diffusion_scale: 1.0
+  large_mobility_multiplier: 0.5
+  activated_r_mobility_multiplier: 200.0
+  crowding_exponent: 1.0
+reaction:
+  model: abm_work_clock_neighbor_availability_v2
+  large_daughter_vacancy_exponent: 4.0
+  small_daughter_vacancy_exponent: 8.0
+  failed_r_division_death_fraction: 1.0
+  maximum_occupied_fraction: 1.0
+
+nutrient:
+  model: effective_resource_surplus_v1
+  solver: deterministic_quasi_steady_jacobi_v1
+  diffusion_voxels2_per_hour: 1.0
+  decay_per_hour: 0.006944444444444444
+  vessel_exchange_per_hour: 10.0
+  vessel_value: 1.0
+  consumption:
+    K_per_cell_hour: 0.01
+    r_to_K_ratio: 1.2
+    half_saturation: 0.25
+  capacity:
+    half_saturation: 0.25
+    maximum_multiplier: 2.0
+  refresh_every_hours: 4.0
+  solver_iterations: 32
+  relaxation: 0.8
+
+vascular:
+  source_mode: synthetic_central_line
+  synthetic_axis: y
+  synthetic_center: [-40.0, 0.0, 0.0]
+  synthetic_radius_voxels: 3.0
+
+output:
+  enabled: true
+  directory: atcg3d_continuum_legacy_2d_2000_r200_reaction_fixed_v4_resume_720_run
+  metrics_every_hours: 24.0
+  field_every_hours: 2160.0
+  field_stride: 1
+  radial_profile_every_hours: 0.0
+  checkpoint_every_hours: 720.0

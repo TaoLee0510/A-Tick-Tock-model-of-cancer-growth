@@ -25,5 +25,6 @@ nutrient:
   solver_iterations: 128
   relaxation: 0.8
   output:
+    directory: atcg3d_nutrient_legacy_v1_run
     metrics_every_hours: 1.0
     field_snapshot_every_hours: 0.0

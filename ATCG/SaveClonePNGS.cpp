@@ -6,6 +6,7 @@
 //  Copyright © 2023 Tao Lee. All rights reserved.
 //
 
+#include "png_font_path.hpp"
 #include "SaveClonePNGS.hpp"
 
 #include <stdio.h>
@@ -20,7 +21,7 @@ void SaveClonePNGS(int Visual_range_x, int Visual_range_y, int &T, double alpha,
     char filedir11 [100] = {'\0'};
     snprintf(filedir11, sizeof(filedir11), "%.04d h",T);
     char filedir12 [100] = {'\0'};
-    snprintf(filedir12, sizeof(filedir12), "/Users/taolee/Library/Fonts/Calisto MT.ttf");
+    snprintf(filedir12, sizeof(filedir12), "%s", legacy_png_font_path());
     FILE * fid6;
     fid6=fopen (filedir10,"wb");
     pngwriter image1(Visual_range_x, Visual_range_y, 0, filedir10);

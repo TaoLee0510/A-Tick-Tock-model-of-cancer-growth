@@ -348,6 +348,8 @@ class ParaViewBackend:
         self.slice_thickness = 2.0
         self.slice_invert = False
         self.cancelled_full_tokens: set[int] = set()
+        self.field_mode = False
+        self.field_scalar = "r_total"
         self.cell_count = 0
         self.displayed_cell_count = 0
 
@@ -430,6 +432,14 @@ class ParaViewBackend:
         self.cell_display = None
 
     def _build_cell_render(self) -> None:
+        if self.field_mode and self.cell_source is not None:
+            self.cell_render_source, self.cell_clip_filters = self._build_clipped_pipeline(self.cell_source)
+            self.cell_display = self.pv.Show(self.cell_render_source, self.view)
+            self.cell_display.Representation = "Surface"
+            self.pv.ColorBy(self.cell_display, ("POINTS", self.field_scalar))
+            self.cell_display.RescaleTransferFunctionToDataRange(True, False)
+            self.cell_display.SetScalarBarVisibility(self.view, True)
+            return
         if self.cell_radius_calculator is None:
             return
         self.cell_render_source, self.cell_clip_filters = \
@@ -565,7 +575,7 @@ class ParaViewBackend:
         self.show_k = bool(show_k)
         self.show_vessels = bool(show_vessels)
         self.show_influence = bool(show_influence)
-        if self.cell_display is not None:
+        if self.cell_display is not None and not self.field_mode:
             lookup = self.cell_display.LookupTable
             lookup.IndexedOpacities = [1.0 if self.show_r else 0.0,
                                        1.0 if self.show_k else 0.0]
@@ -592,6 +602,20 @@ class ParaViewBackend:
             new_source = self.pv.OpenDataFile(str(frame.path))
         new_source.UpdatePipeline()
         displayed_count = int(new_source.GetDataInformation().GetNumberOfPoints())
+        if frame.storage == "pde_vtkhdf":
+            old_source, old_calculator = self.cell_source, self.cell_radius_calculator
+            self._clear_cell_render()
+            self.cell_source, self.cell_radius_calculator = new_source, None
+            self.field_mode = True
+            self._build_cell_render()
+            if old_calculator is not None:
+                self.pv.Delete(old_calculator)
+            if old_source is not None:
+                self.pv.Delete(old_source)
+            self.cell_count = self.displayed_cell_count = displayed_count
+            self.pv.Render(self.view)
+            return FrameCounts(displayed_count, displayed_count)
+        self.field_mode = False
         total_count = self._read_total_cell_count(new_source, displayed_count)
         if quality == "full" and token in self.cancelled_full_tokens:
             self.pv.Delete(new_source)
@@ -620,6 +644,19 @@ class ParaViewBackend:
         if quality == "full":
             self.cancelled_full_tokens.discard(token)
         return FrameCounts(total_count, displayed_count)
+
+    def set_field_scalar(self, name: str) -> None:
+        if not self.field_mode or self.cell_source is None:
+            return
+        if name not in self.cell_source.PointData.keys():
+            raise ValueError("unknown PDE field")
+        self.cell_display.SetScalarBarVisibility(self.view, False)
+        self.field_scalar = name
+        self.pv.ColorBy(self.cell_display, ("POINTS", name))
+        self.cell_display.LookupTable = self.pv.GetColorTransferFunction(name)
+        self.cell_display.SetScalarBarVisibility(self.view, True)
+        self.cell_display.RescaleTransferFunctionToDataRange(True, False)
+        self.pv.Render(self.view)
 
     def set_cell_radius_scale(self, scale: float) -> None:
         scale = float(scale)
@@ -798,6 +835,9 @@ def build_app(run_directory: Path, debounce_ms: int = 250,
     state.quality = "none"
     state.quality_label = localized_viewer_status(
         language, "quality", state.quality)
+    state.field_mode = bool(catalog.preview and catalog.preview[0].storage == "pde_vtkhdf")
+    state.field_scalar = "r_total"
+    state.field_options = []
     state.cell_count = 0
     state.displayed_cell_count = 0
     state.vessel_count = 0
@@ -870,6 +910,8 @@ def build_app(run_directory: Path, debounce_ms: int = 250,
         state.time_index = index
         state.time_hours = state.times[index]
         state.quality = timeline.on_slider(state.time_hours, int(time.monotonic() * 1000))
+        if backend.field_mode:
+            state.field_options = list(backend.cell_source.PointData.keys())
         state.cell_count = timeline.current_count
         state.displayed_cell_count = timeline.current_displayed_count
         state.vessel_count = timeline.current_vessel_count
@@ -884,6 +926,11 @@ def build_app(run_directory: Path, debounce_ms: int = 250,
     @state.change("time_index")
     def _time_changed(time_index, **_):
         load_index(time_index)
+
+    @state.change("field_scalar")
+    def _field_changed(field_scalar, **_):
+        backend.set_field_scalar(str(field_scalar))
+        ctrl.view_update()
 
     @state.change("radius_scale")
     def _radius_changed(radius_scale, **_):
@@ -998,7 +1045,7 @@ def build_app(run_directory: Path, debounce_ms: int = 250,
             html.Span(
                 f"{tr('time')}={{{{ Number(time_hours).toFixed(3) }}}} h")
             html.Span(
-                f"{tr('cells')}={{{{ cell_count.toLocaleString() }}}}")
+                f"{'Grid samples' if state.field_mode else tr('cells')}={{{{ cell_count.toLocaleString() }}}}")
             html.Span(
                 f"{tr('displayed')}="
                 "{{ displayed_cell_count.toLocaleString() }}")
@@ -1029,12 +1076,14 @@ def build_app(run_directory: Path, debounce_ms: int = 250,
 
                 vuetify3.VDivider(classes="mb-3")
                 html.Div(tr("objects"), classes="text-subtitle-2 mb-1")
+                vuetify3.VSelect(v_if="field_mode", v_model=("field_scalar", "r_total"),
+                                 items=("field_options",), label="Field", density="compact")
                 vuetify3.VSwitch(
-                    v_model=("show_r", True), label=tr("r_cells"), color="green",
+                    v_if="!field_mode", v_model=("show_r", True), label=tr("r_cells"), color="green",
                     hide_details=True, density="compact",
                 )
                 vuetify3.VSwitch(
-                    v_model=("show_k", True), label=tr("k_cells"), color="red",
+                    v_if="!field_mode", v_model=("show_k", True), label=tr("k_cells"), color="red",
                     hide_details=True, density="compact",
                 )
                 vuetify3.VSwitch(
@@ -1053,7 +1102,7 @@ def build_app(run_directory: Path, debounce_ms: int = 250,
                     classes="mb-2",
                 )
                 vuetify3.VSlider(
-                    v_model=("radius_scale", 4.0), min=0.1, max=8.0, step=0.1,
+                    v_if="!field_mode", v_model=("radius_scale", 4.0), min=0.1, max=8.0, step=0.1,
                     label=tr("cell_point_size"), hide_details=True,
                     classes="mb-2",
                 )

@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 
 #include <cstddef>
 #include <cstdint>
@@ -17,6 +18,27 @@ class LocalDensityModifier3D {
 public:
     virtual ~LocalDensityModifier3D() = default;
     virtual double retained_density(Vec3i site) const noexcept = 0;
+
+    // Normalized effective resource supply used only by explicitly
+    // resource-guided migration profiles.  Density-only environments and the
+    // uncoupled ABM expose a spatially uniform value, preserving their legacy
+    // direction probabilities.
+    virtual double normalized_resource(Vec3i site) const noexcept {
+        (void)site;
+        return 1.0;
+    }
+    virtual bool contains_resource_site(Vec3i site) const noexcept {
+        (void)site;
+        return true;
+    }
+    virtual double shared_density_limit() const noexcept { return 0.0; }
+    virtual double shared_carrying_capacity() const noexcept { return 0.0; }
+    virtual double growth_resource_scale(Vec3i) const noexcept { return 1.0; }
+    virtual bool pure_nutrient_guidance() const noexcept { return false; }
+    virtual double nutrient_direction_weight(Vec3i, DirectionId) const { return 1.0; }
+    virtual std::array<double,2> external_growth_counts(Vec3i) const { return {}; }
+    virtual double external_activation_density(Vec3i,CellStage) const { return 0.0; }
+    virtual bool destination_available(Vec3i) const noexcept { return true; }
 };
 
 struct EnvironmentInitializationResult3D {
@@ -43,6 +65,14 @@ public:
     virtual std::uint64_t refresh_count() const noexcept = 0;
     virtual std::size_t allocated_bytes() const noexcept = 0;
     virtual std::uint64_t field_checksum() const noexcept = 0;
+    virtual bool individual_refractory() const noexcept { return false; }
+    virtual bool activation_ready(CellUid, double, double) { return true; }
+    virtual void activation_expired(CellUid, double) {}
+    virtual bool migration_operator_enabled() const noexcept { return true; }
+    virtual bool division_operator_enabled() const noexcept { return true; }
+    virtual bool resident_site_excluded(Vec3i) const noexcept { return false; }
+    virtual bool enforces_resident_exclusion() const noexcept { return false; }
+    virtual void record_vascular_removal(CellType, CellStage, bool) {}
 };
 
 }  // namespace atcg3d

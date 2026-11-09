@@ -105,6 +105,7 @@ std::uint64_t mix(std::uint64_t state, std::uint64_t value) noexcept {
 }  // namespace
 
 void NutrientFieldConfig3D::validate() const {
+    static_vasculature.validate();
     if (model != "effective_resource_surplus_v1") {
         throw std::invalid_argument("unsupported nutrient field model: " + model);
     }
@@ -117,8 +118,10 @@ void NutrientFieldConfig3D::validate() const {
     }
     if (!(diffusion_voxels2_per_hour > 0.0) || decay_per_hour < 0.0 ||
         vessel_exchange_per_hour < 0.0 || !(vessel_value > 0.0) ||
-        r_consumption_per_voxel_hour < 0.0 ||
-        K_consumption_per_voxel_hour < 0.0 ||
+        (consumption_model != "per_occupied_voxel_v1" &&
+         consumption_model != "per_cell_ratio_v2") ||
+        r_consumption_rate_per_hour < 0.0 ||
+        K_consumption_rate_per_hour < 0.0 ||
         !(r_consumption_half_saturation > 0.0) ||
         !(K_consumption_half_saturation > 0.0) ||
         !(capacity_half_saturation > 0.0) ||
@@ -135,12 +138,17 @@ std::uint64_t NutrientFieldConfig3D::fingerprint() const noexcept {
     std::uint64_t value = 0x415443474e555431ULL;
     for (const unsigned char character : model) value = mix(value, character);
     for (const unsigned char character : solver) value = mix(value, character);
+    if (consumption_model != "per_occupied_voxel_v1") {
+        for (const unsigned char character : consumption_model) {
+            value = mix(value, character);
+        }
+    }
     value = mix(value, static_cast<std::uint64_t>(block_edge));
     value = mix(value, static_cast<std::uint64_t>(halo_voxels));
     for (const double number : {
              diffusion_voxels2_per_hour, decay_per_hour,
              vessel_exchange_per_hour, vessel_value,
-             r_consumption_per_voxel_hour, K_consumption_per_voxel_hour,
+             r_consumption_rate_per_hour, K_consumption_rate_per_hour,
              r_consumption_half_saturation, K_consumption_half_saturation,
              capacity_half_saturation, maximum_capacity_multiplier,
              refresh_every_hours, relaxation, metrics_every_hours,
@@ -148,14 +156,19 @@ std::uint64_t NutrientFieldConfig3D::fingerprint() const noexcept {
         value = mix(value, std::bit_cast<std::uint64_t>(number));
     }
     value = mix(value, static_cast<std::uint64_t>(solver_iterations));
+    if (static_vasculature.enabled()) {
+        value = mix(value, static_vasculature.fingerprint());
+    }
     return value;
 }
 
 std::string NutrientFieldConfig3D::to_json() const {
     std::ostringstream out;
-    out << std::setprecision(17)
-        << '{'
-        << "\"model\":\"" << json_escape(model) << "\","
+    out << std::setprecision(17) << '{';
+    if (static_vasculature.enabled()) {
+        out << "\"static_vasculature\":" << static_vasculature.to_json() << ',';
+    }
+    out << "\"model\":\"" << json_escape(model) << "\","
         << "\"solver\":\"" << json_escape(solver) << "\","
         << "\"block_edge\":" << block_edge << ','
         << "\"halo_voxels\":" << halo_voxels << ','
@@ -163,8 +176,9 @@ std::string NutrientFieldConfig3D::to_json() const {
         << "\"decay_per_hour\":" << decay_per_hour << ','
         << "\"vessel_exchange_per_hour\":" << vessel_exchange_per_hour << ','
         << "\"vessel_value\":" << vessel_value << ','
-        << "\"r_consumption_per_voxel_hour\":" << r_consumption_per_voxel_hour << ','
-        << "\"K_consumption_per_voxel_hour\":" << K_consumption_per_voxel_hour << ','
+        << "\"consumption_model\":\"" << json_escape(consumption_model) << "\","
+        << "\"r_consumption_rate_per_hour\":" << r_consumption_rate_per_hour << ','
+        << "\"K_consumption_rate_per_hour\":" << K_consumption_rate_per_hour << ','
         << "\"r_consumption_half_saturation\":" << r_consumption_half_saturation << ','
         << "\"K_consumption_half_saturation\":" << K_consumption_half_saturation << ','
         << "\"capacity_half_saturation\":" << capacity_half_saturation << ','
@@ -187,7 +201,7 @@ NutrientModelConfig3D NutrientModelConfig3D::load(
         throw std::invalid_argument(
             "unable to load nutrient config " + path.string() + ": " + error.what());
     }
-    check_mapping(root, "$", {"schema", "profile", "base_config", "nutrient"});
+    check_mapping(root, "$", {"schema", "profile", "base_config", "nutrient", "vascular_geometry"});
     const YAML::Node schema = require(root, "schema", "$");
     check_mapping(schema, "$.schema", {"name", "version"});
 
@@ -198,7 +212,7 @@ NutrientModelConfig3D NutrientModelConfig3D::load(
     result.schema_version = strict_int(
         require(schema, "version", "$.schema"), "$.schema.version");
     if (result.schema_name != "atcg3d.nutrient_model_config" ||
-        result.schema_version != 1) {
+        (result.schema_version < 1 || result.schema_version > 3)) {
         config_error("$.schema", "unsupported nutrient schema identity");
     }
     result.profile = scalar_string(require(root, "profile", "$"), "$.profile");
@@ -257,21 +271,45 @@ NutrientModelConfig3D NutrientModelConfig3D::load(
         "$.nutrient.relaxation");
 
     const YAML::Node consumption = require(nutrient, "consumption", "$.nutrient");
-    check_mapping(consumption, "$.nutrient.consumption",
-                  {"r_per_voxel_hour", "K_per_voxel_hour",
-                   "r_half_saturation", "K_half_saturation"});
-    field.r_consumption_per_voxel_hour = finite_double(
-        require(consumption, "r_per_voxel_hour", "$.nutrient.consumption"),
-        "$.nutrient.consumption.r_per_voxel_hour");
-    field.K_consumption_per_voxel_hour = finite_double(
-        require(consumption, "K_per_voxel_hour", "$.nutrient.consumption"),
-        "$.nutrient.consumption.K_per_voxel_hour");
-    field.r_consumption_half_saturation = finite_double(
-        require(consumption, "r_half_saturation", "$.nutrient.consumption"),
-        "$.nutrient.consumption.r_half_saturation");
-    field.K_consumption_half_saturation = finite_double(
-        require(consumption, "K_half_saturation", "$.nutrient.consumption"),
-        "$.nutrient.consumption.K_half_saturation");
+    if (result.schema_version == 1) {
+        check_mapping(consumption, "$.nutrient.consumption",
+                      {"r_per_voxel_hour", "K_per_voxel_hour",
+                       "r_half_saturation", "K_half_saturation"});
+        field.consumption_model = "per_occupied_voxel_v1";
+        field.r_consumption_rate_per_hour = finite_double(
+            require(consumption, "r_per_voxel_hour", "$.nutrient.consumption"),
+            "$.nutrient.consumption.r_per_voxel_hour");
+        field.K_consumption_rate_per_hour = finite_double(
+            require(consumption, "K_per_voxel_hour", "$.nutrient.consumption"),
+            "$.nutrient.consumption.K_per_voxel_hour");
+        field.r_consumption_half_saturation = finite_double(
+            require(consumption, "r_half_saturation", "$.nutrient.consumption"),
+            "$.nutrient.consumption.r_half_saturation");
+        field.K_consumption_half_saturation = finite_double(
+            require(consumption, "K_half_saturation", "$.nutrient.consumption"),
+            "$.nutrient.consumption.K_half_saturation");
+    } else {
+        check_mapping(consumption, "$.nutrient.consumption",
+                      {"K_per_cell_hour", "r_to_K_ratio", "half_saturation"});
+        field.consumption_model = "per_cell_ratio_v2";
+        field.K_consumption_rate_per_hour = finite_double(
+            require(consumption, "K_per_cell_hour", "$.nutrient.consumption"),
+            "$.nutrient.consumption.K_per_cell_hour");
+        const double ratio = finite_double(
+            require(consumption, "r_to_K_ratio", "$.nutrient.consumption"),
+            "$.nutrient.consumption.r_to_K_ratio");
+        if (!(ratio > 0.0)) {
+            config_error("$.nutrient.consumption.r_to_K_ratio",
+                         "must be positive");
+        }
+        field.r_consumption_rate_per_hour =
+            ratio * field.K_consumption_rate_per_hour;
+        field.r_consumption_half_saturation =
+            field.K_consumption_half_saturation = finite_double(
+                require(consumption, "half_saturation",
+                        "$.nutrient.consumption"),
+                "$.nutrient.consumption.half_saturation");
+    }
 
     const YAML::Node capacity = require(nutrient, "capacity", "$.nutrient");
     check_mapping(capacity, "$.nutrient.capacity",
@@ -285,13 +323,66 @@ NutrientModelConfig3D NutrientModelConfig3D::load(
 
     const YAML::Node output = require(nutrient, "output", "$.nutrient");
     check_mapping(output, "$.nutrient.output",
-                  {"metrics_every_hours", "field_snapshot_every_hours"});
+                  {"directory", "metrics_every_hours", "field_snapshot_every_hours"});
+    if (const YAML::Node directory = output["directory"]) {
+        result.base.output_directory = scalar_string(
+            directory, "$.nutrient.output.directory");
+        result.base.validate();
+    }
     field.metrics_every_hours = finite_double(
         require(output, "metrics_every_hours", "$.nutrient.output"),
         "$.nutrient.output.metrics_every_hours");
     field.field_snapshot_every_hours = finite_double(
         require(output, "field_snapshot_every_hours", "$.nutrient.output"),
         "$.nutrient.output.field_snapshot_every_hours");
+    if (result.schema_version >= 3) {
+        const auto vascular = require(root, "vascular_geometry", "$");
+        check_mapping(vascular, "$.vascular_geometry", {"shape", "origin", "spacing_voxels",
+            "source_mode", "synthetic_axis", "synthetic_center", "synthetic_radius_voxels", "static_sources"});
+        auto& geometry = field.static_vasculature;
+        geometry.model = "shared_static_v3";
+        const auto shape = require(vascular, "shape", "$.vascular_geometry");
+        const auto origin = require(vascular, "origin", "$.vascular_geometry");
+        const auto centre = require(vascular, "synthetic_center", "$.vascular_geometry");
+        if (!shape.IsSequence() || shape.size() != 3 || !origin.IsSequence() || origin.size() != 3 ||
+            !centre.IsSequence() || centre.size() != 3) {
+            config_error("$.vascular_geometry", "shape, origin and centre must have three entries");
+        }
+        for (int axis = 0; axis < 3; ++axis) {
+            geometry.shape[axis] = strict_int(shape[axis], "$.vascular_geometry.shape");
+            geometry.origin[axis] = finite_double(origin[axis], "$.vascular_geometry.origin");
+            geometry.synthetic_center[axis] = finite_double(centre[axis], "$.vascular_geometry.synthetic_center");
+        }
+        geometry.spacing_voxels = finite_double(require(vascular, "spacing_voxels", "$.vascular_geometry"),
+            "$.vascular_geometry.spacing_voxels");
+        if (geometry.spacing_voxels != 1.0) {
+            config_error("$.vascular_geometry.spacing_voxels", "ABM shared geometry requires unit spacing");
+        }
+        geometry.source_mode = scalar_string(require(vascular, "source_mode", "$.vascular_geometry"),
+            "$.vascular_geometry.source_mode");
+        geometry.synthetic_axis = scalar_string(require(vascular, "synthetic_axis", "$.vascular_geometry"),
+            "$.vascular_geometry.synthetic_axis");
+        geometry.synthetic_radius_voxels = finite_double(require(vascular, "synthetic_radius_voxels", "$.vascular_geometry"),
+            "$.vascular_geometry.synthetic_radius_voxels");
+        geometry.thin_layer = result.base.thin_layer;
+        if (const auto sites = vascular["static_sources"]) {
+            if (!sites.IsSequence()) config_error("$.vascular_geometry.static_sources", "must be a sequence");
+            for (const auto& site : sites) {
+                if (!site.IsSequence() || site.size() != 3) {
+                    config_error("$.vascular_geometry.static_sources", "each site must have three coordinates");
+                }
+                geometry.static_sources.push_back({strict_int(site[0], "static source x"),
+                    strict_int(site[1], "static source y"), strict_int(site[2], "static source z")});
+            }
+        }
+        if (field.halo_voxels < result.base.direction_density_radius) {
+            config_error("$.nutrient.halo_voxels", "must cover the direction radius");
+        }
+        result.base.static_vasculature = geometry;
+        result.base.validate();
+    } else if (root["vascular_geometry"]) {
+        config_error("$.vascular_geometry", "requires nutrient schema v3");
+    }
     field.validate();
     return result;
 }

@@ -41,6 +41,7 @@ private:
     NutrientEnvironment3D& environment_;
     std::filesystem::path directory_;
     std::ofstream metrics_;
+    bool legacy_metrics_columns_{};
     double next_metrics_{};
     double next_field_snapshot_{};
     double next_checkpoint_{};

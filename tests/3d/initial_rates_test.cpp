@@ -135,6 +135,11 @@ int main() {
         production.initial_r_growth_truncated_normal)) < 0.001);
     assert(std::abs(K_growth_mean - truncated_normal_expected_mean(
         production.initial_K_growth_truncated_normal)) < 0.002);
+    assert(std::abs(expected_initial_growth_rate(production, CellType::r) -
+        truncated_normal_expected_mean(production.initial_r_growth_truncated_normal)) < 1.0e-14);
+    assert(std::abs(expected_initial_growth_rate(production, CellType::K) -
+        truncated_normal_expected_mean(production.initial_K_growth_truncated_normal)) < 1.0e-14);
+    assert(expected_initial_growth_rate(smoke, CellType::r) == smoke.initial_r_growth_rate);
 
     // K has E[Beta(5,5)]*0.25 = 0.125. Activated r uses the schema-v3 default
     // scale 1; its very low-shape distribution also includes the configured

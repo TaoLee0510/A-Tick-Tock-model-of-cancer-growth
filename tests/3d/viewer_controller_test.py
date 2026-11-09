@@ -65,6 +65,19 @@ def write_series(path: Path, subdirectory: str, times):
 
 
 class ViewerControllerTest(unittest.TestCase):
+    def test_pde_fields_timeline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "fields.vtkhdf.series").write_text(json.dumps({
+                "file-series-version": "1.0",
+                "files": [{"name": "fields/field_00000000.vtkhdf", "time": 2.0}],
+            }))
+            catalog = SeriesCatalog(root)
+            frame = catalog.nearest_preview(2.0)
+            self.assertEqual(frame.storage, "pde_vtkhdf")
+            self.assertEqual(catalog.exact_full(2.0), frame)
+            self.assertEqual(catalog.times, [2.0])
+
     def test_studio_languages_are_complete_and_default_to_english(self):
         root = Path(__file__).resolve().parents[2]
         html_source = (

@@ -4,9 +4,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <vector>
 
 #include "config/continuum_config.hpp"
+#include "model/moving_tumor_front.hpp"
 
 namespace atcg3d {
 class Simulation3D;
@@ -33,6 +35,10 @@ struct ContinuumDiagnostics3D {
     double mean_nutrient{};
     double maximum_nutrient{};
     double vessel_volume{};
+    double tumour_volume{};
+    double tumour_front_volume{};
+    double tumour_mean_nutrient{};
+    double tumour_front_mean_nutrient{};
 };
 
 class ContinuumModel3D {
@@ -53,14 +59,20 @@ public:
         return nutrient_solve_count_;
     }
     std::size_t voxel_count() const noexcept { return voxel_count_; }
+    int migration_substeps() const noexcept { return migration_substeps_; }
     double voxel_measure() const noexcept { return voxel_measure_; }
     double large_cell_volume() const noexcept { return large_cell_volume_; }
+    const AngiogenesisField3D* angiogenesis() const noexcept { return angiogenesis_.get(); }
     const std::vector<double>& population(PopulationField3D field) const noexcept {
         return populations_[static_cast<std::size_t>(field)];
     }
     const std::vector<double>& nutrient() const noexcept { return nutrient_; }
     const std::vector<double>& vessel_fraction() const noexcept { return vessel_; }
+    const std::vector<std::uint8_t>& tumour_mask() const noexcept {
+        return tumour_mask_;
+    }
     double occupied_fraction(std::size_t index) const noexcept;
+    std::array<double, 2> growth_counts_at(Vec3i site) const;
     std::array<double, 3> coordinate(std::size_t index) const noexcept;
     ContinuumDiagnostics3D diagnostics() const;
     std::uint64_t state_checksum() const;
@@ -72,7 +84,13 @@ private:
     std::size_t index(int x, int y, int z) const noexcept;
     bool grid_coordinate(Vec3i site, int& x, int& y, int& z) const noexcept;
     void add_synthetic_vessel();
+    void advance_angiogenesis(double dt);
+    bool vessel_blocks_cells(std::size_t location) const noexcept;
     void solve_nutrient();
+    void advance_transient_nutrient(double dt);
+    void rebuild_moving_tumour_front();
+    bool nutrient_source(int x, int y, int z,
+                         std::size_t location) const noexcept;
     void migrate(double dt);
     void react(double dt);
     void build_local_counts(std::vector<double>& r_counts,
@@ -84,14 +102,22 @@ private:
     void validate_state() const;
 
     ContinuumModelConfig3D config_;
+    std::unique_ptr<AngiogenesisField3D> angiogenesis_;
     std::size_t voxel_count_{};
     double voxel_measure_{};
     double large_cell_volume_{};
+    int migration_substeps_{1};
     std::array<std::vector<double>, kPopulationFieldCount3D> populations_;
     std::array<std::vector<double>, kPopulationFieldCount3D> work_;
     std::vector<double> nutrient_;
     std::vector<double> nutrient_next_;
     std::vector<double> vessel_;
+    std::vector<std::uint8_t> tumour_mask_;
+    std::vector<double> tumour_occupancy_work_;
+    std::vector<std::uint8_t> tumour_local_mask_work_;
+    MovingTumorFrontWorkspace2D tumour_front_workspace_;
+    std::size_t tumour_voxel_count_{};
+    std::size_t tumour_front_voxel_count_{};
     double time_hours_{};
     double next_nutrient_refresh_hours_{};
     std::uint64_t step_count_{};

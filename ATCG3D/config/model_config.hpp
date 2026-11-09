@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/types.hpp"
+#include "config/static_vascular.hpp"
 
 namespace atcg3d {
 
@@ -92,6 +93,7 @@ struct AngiogenesisConfig {
     double stage2_biological_volume_voxels3{0.5};
 
     std::string seed_process_model{"density_modulated_poisson_v1"};
+    double seed_hypoxia_threshold{0.30};
     std::string seed_process_scope{"per_eligible_lesion"};
     double seed_rate_sites_per_30_days{10.0};
     double seed_rate_sites_per_hour{10.0 / 720.0};
@@ -123,6 +125,7 @@ struct AngiogenesisConfig {
     // migration rates are moves/hour and one fixed-26 step can span sqrt(3)
     // voxels, whereas vessel speed is already expressed in voxels/hour.
     double outward_speed_voxels_per_hour{2.0};
+    std::string outward_speed_policy{"strict_supremum_v1"};
     // Lower bound for the inward path budget.  Production roots expand this
     // budget from the source-lesion scale so a large lesion cannot strand a
     // tip merely because it outgrew this legacy fixed value.
@@ -179,6 +182,7 @@ struct Model3DConfig {
     Vec3i domain_min{-1000000, -1000000, -1000000};
     Vec3i domain_max{1000000, 1000000, 1000000};
     bool thin_layer{false};
+    StaticVascularGeometry3D static_vasculature;
 
     std::string direction_set{"fixed_26_v1"};
     double continue_probability{0.90};
@@ -188,6 +192,14 @@ struct Model3DConfig {
     double direction_density_threshold{0.60};
     bool persistence_uses_density{false};
     double distance_weight_exponent{0.0};
+    // Activated-r direction selection.  The legacy model gates initial
+    // directions by density and samples the survivors uniformly (apart from
+    // the distance weight).  The resource-guided model additionally weights
+    // eligible directions by low density and normalized resource supply.
+    std::string direction_guidance_model{"density_gate_uniform_v1"};
+    double direction_density_guidance_exponent{1.0};
+    double direction_resource_guidance_exponent{1.0};
+    double direction_minimum_guidance_weight{1.0e-6};
     bool migration_activation_enabled{true};
     int migration_activation_window_edge{70};
     int migration_activation_block_edge{32};
@@ -200,6 +212,10 @@ struct Model3DConfig {
     std::string activated_r_migration_rate_model{"beta"};
     BetaRateConfig activated_r_migration_beta{
         0.01, 0.0566666667, 1.0, true, 0.5, 0.25};
+    // Alternative rule-aligned mode: the active rate is this multiplier times
+    // the same cell's ordinary low-density rate.  Existing beta profiles keep
+    // their historical behaviour unless they explicitly select this mode.
+    double activated_r_normal_multiplier{1.0};
     double migration_activation_duration_alpha{0.005};
     double migration_activation_duration_mean_fraction{0.30};
     double migration_activation_duration_beta{0.011666666666666667};

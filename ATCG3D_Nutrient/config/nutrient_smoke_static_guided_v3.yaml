@@ -1,0 +1,39 @@
+schema:
+  name: atcg3d.nutrient_model_config
+  version: 3
+profile: nutrient_smoke_static_guided_v3
+base_config: ../../configs/atcg2d_static_bounded_r20_v4.yaml
+
+nutrient:
+  model: effective_resource_surplus_v1
+  solver: deterministic_quasi_steady_jacobi_v1
+  block_edge: 4
+  halo_voxels: 35
+  diffusion_voxels2_per_hour: 1.0
+  decay_per_hour: 0.006944444444444444
+  vessel_exchange_per_hour: 10.0
+  vessel_value: 1.0
+  consumption:
+    K_per_cell_hour: 0.01
+    r_to_K_ratio: 1.2
+    half_saturation: 0.25
+  capacity:
+    half_saturation: 0.25
+    maximum_multiplier: 2.0
+  refresh_every_hours: 4.0
+  solver_iterations: 16
+  relaxation: 0.8
+  output:
+    directory: atcg3d_nutrient_smoke_static_guided_v3_run
+    metrics_every_hours: 1.0
+    field_snapshot_every_hours: 0.0
+
+vascular_geometry:
+  shape: [256, 256, 1]
+  origin: [-128.0, -128.0, -0.5]
+  spacing_voxels: 1.0
+  source_mode: synthetic_central_line
+  synthetic_axis: y
+  synthetic_center: [-40.0, 0.0, 0.0]
+  synthetic_radius_voxels: 3.0
+  static_sources: [[40, 0, 0]]

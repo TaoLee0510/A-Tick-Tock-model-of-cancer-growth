@@ -1,7 +1,9 @@
 #include "model/continuum_model.hpp"
+#include "model/shared_resource.hpp"
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <bit>
 #include <cmath>
 #include <fstream>
@@ -10,6 +12,7 @@
 #include <type_traits>
 
 #include "common/density_growth_rule.hpp"
+#include "engine/parallelism.hpp"
 #include "engine/simulation.hpp"
 #include "geometry/footprint.hpp"
 
@@ -62,6 +65,9 @@ double positive_part(double value) noexcept {
 
 ContinuumModel3D::ContinuumModel3D(ContinuumModelConfig3D config)
     : config_(std::move(config)) {
+    if (config_.schema_version >= 5) {
+        config_.base.static_vasculature = config_.shared_vascular_geometry();
+    }
     config_.validate();
     voxel_count_ = static_cast<std::size_t>(config_.grid.shape[0]) *
         static_cast<std::size_t>(config_.grid.shape[1]) *
@@ -74,17 +80,39 @@ ContinuumModel3D::ContinuumModel3D(ContinuumModelConfig3D config)
     nutrient_.assign(voxel_count_, 0.0);
     nutrient_next_.assign(voxel_count_, 0.0);
     vessel_.assign(voxel_count_, 0.0);
+    if(config_.angiogenesis.model != "disabled") {
+        const auto& c=config_;
+        angiogenesis_=std::make_unique<AngiogenesisField3D>(c.angiogenesis,c.grid.shape,c.grid.spacing_voxels,c.base.thin_layer,c.base.threads);
+    }
 
-    double maximum_diffusion = 0.0;
+    tumour_mask_.assign(voxel_count_, 0U);
+
+    // The activated-r coefficient is only used on faces whose occupied
+    // fraction reaches the activation threshold.  On those same faces the
+    // exclusion mobility is at most (1-threshold)^crowding_exponent.  Use the
+    // maximum effective face coefficient for the explicit CFL bound instead
+    // of treating the activated coefficient as a low-density coefficient.
+    double maximum_effective_diffusion = 0.0;
+    const double activated_mobility = std::pow(
+        std::max(0.0, 1.0 - config_.base.migration_activation_threshold),
+        config_.migration.crowding_exponent);
     for (std::size_t field = 0; field < kPopulationFieldCount3D; ++field) {
-        maximum_diffusion = std::max(
-            maximum_diffusion,
-            base_diffusion(static_cast<PopulationField3D>(field), 1.0));
+        const auto population = static_cast<PopulationField3D>(field);
+        const double low_density = base_diffusion(population, 0.0);
+        const double activated =
+            base_diffusion(population, 1.0) * activated_mobility;
+        maximum_effective_diffusion = std::max(
+            maximum_effective_diffusion, std::max(low_density, activated));
     }
     const double cfl = config_.time_step_hours * 2.0 * dimensions *
-        maximum_diffusion /
+        maximum_effective_diffusion /
         (config_.grid.spacing_voxels * config_.grid.spacing_voxels);
-    if (cfl > 0.45 + 1.0e-12) {
+    if (config_.schema_version >= 5) {
+        if (!std::isfinite(cfl) || cfl > 450000.0) {
+            throw std::invalid_argument("continuum migration requires too many substeps");
+        }
+        migration_substeps_ = std::max(1, static_cast<int>(std::ceil(cfl / 0.45)));
+    } else if (cfl > 0.45 + 1.0e-12) {
         throw std::invalid_argument(
             "continuum time step violates the explicit migration CFL bound");
     }
@@ -135,7 +163,13 @@ void ContinuumModel3D::initialize_from_abm(const Simulation3D& simulation) {
                                          : PopulationField3D::K_small);
         auto& target = populations_[static_cast<std::size_t>(field)];
         if (stage == CellStage::large) {
-            for (const Vec3i site : large_footprint(simulation.cells().anchor(slot))) {
+            const Vec3i anchor = simulation.cells().anchor(slot);
+            for (const Vec3i site : large_footprint(anchor)) {
+                // Thin-layer ABM runs retain the common 3D footprint helper,
+                // but the continuum state has exactly one z plane.  Project
+                // the large-cell footprint onto that plane instead of trying
+                // to import the helper's second z layer.
+                if (config_.base.thin_layer && site.z != anchor.z) continue;
                 int x{}, y{}, z{};
                 if (!grid_coordinate(site, x, y, z)) {
                     throw std::runtime_error(
@@ -166,7 +200,8 @@ void ContinuumModel3D::initialize_from_abm(const Simulation3D& simulation) {
             vessel_[location] = std::min(1.0, vessel_[location] + 1.0 / voxel_measure_);
         }
     }
-    if (config_.vascular.source_mode == "synthetic_central_line" ||
+    if (config_.schema_version >= 5 ||
+        config_.vascular.source_mode == "synthetic_central_line" ||
         config_.vascular.source_mode == "abm_plus_synthetic_line") {
         add_synthetic_vessel();
     }
@@ -176,8 +211,14 @@ void ContinuumModel3D::initialize_from_abm(const Simulation3D& simulation) {
         time_hours_ >= config_.end_time_hours) {
         throw std::runtime_error("ABM import time is outside continuum run bounds");
     }
+    if (config_.schema_version >= 3) {
+        std::fill(nutrient_.begin(), nutrient_.end(),
+                  config_.nutrient.initial_value);
+    }
+    rebuild_moving_tumour_front();
     solve_nutrient();
     next_nutrient_refresh_hours_ = time_hours_ + config_.nutrient.refresh_every_hours;
+    if(angiogenesis_) angiogenesis_->initialize(vessel_);
     initialized_ = true;
     validate_state();
 }
@@ -202,18 +243,53 @@ void ContinuumModel3D::initialize_from_arrays(
     }
     populations_ = std::move(populations);
     vessel_ = std::move(vessel_fraction);
-    if (config_.vascular.source_mode == "synthetic_central_line" ||
+    if (config_.schema_version >= 5 ||
+        config_.vascular.source_mode == "synthetic_central_line" ||
         config_.vascular.source_mode == "abm_plus_synthetic_line") {
         add_synthetic_vessel();
     }
     time_hours_ = time_hours;
+    if (config_.schema_version >= 3) {
+        std::fill(nutrient_.begin(), nutrient_.end(),
+                  config_.nutrient.initial_value);
+    }
+    rebuild_moving_tumour_front();
     solve_nutrient();
     next_nutrient_refresh_hours_ = time_hours_ + config_.nutrient.refresh_every_hours;
+    if(angiogenesis_) angiogenesis_->initialize(vessel_);
     initialized_ = true;
     validate_state();
 }
 
+void ContinuumModel3D::advance_angiogenesis(double dt) {
+    if(!angiogenesis_) return;
+    std::vector<double> consumers(voxel_count_,0.0);
+    for(std::size_t here=0;here<voxel_count_;++here) {
+        for(const auto& field:populations_) consumers[here]+=field[here];
+    }
+    angiogenesis_->advance(dt,consumers,nutrient_,config_.nutrient.vessel_value);
+    vessel_=angiogenesis_->vessels();
+    for(std::size_t here=0;here<voxel_count_;++here) if(vessel_blocks_cells(here)) for(auto& field:populations_) field[here]=0.0;
+}
+
+bool ContinuumModel3D::vessel_blocks_cells(std::size_t here) const noexcept {
+    return config_.schema_version < 6 ? vessel_[here]>0.0 : vessel_[here]>=config_.angiogenesis.exclusion_fraction;
+}
+
 void ContinuumModel3D::add_synthetic_vessel() {
+    if (config_.schema_version >= 5) {
+        const auto geometry = config_.shared_vascular_geometry();
+        const int nx = geometry.shape[0];
+        const int ny = geometry.shape[1];
+        for (std::size_t location = 0; location < voxel_count_; ++location) {
+            const int x = static_cast<int>(location % nx);
+            const auto yz = location / nx;
+            const int y = static_cast<int>(yz % ny);
+            const int z = static_cast<int>(yz / ny);
+            if (geometry.source_voxel({x, y, z})) vessel_[location] = 1.0;
+        }
+        return;
+    }
     const int axis = config_.vascular.synthetic_axis == "x" ? 0
         : (config_.vascular.synthetic_axis == "y" ? 1 : 2);
     const double radius_squared =
@@ -255,6 +331,7 @@ std::array<double, 3> ContinuumModel3D::coordinate(
 }
 
 double ContinuumModel3D::capacity_multiplier(double value) const noexcept {
+    if (config_.schema_version >= 3) return 1.0;
     const double local = std::clamp(value, 0.0, config_.nutrient.vessel_value);
     const double raw = local / (config_.nutrient.capacity_half_saturation + local);
     const double at_vessel = config_.nutrient.vessel_value /
@@ -265,7 +342,131 @@ double ContinuumModel3D::capacity_multiplier(double value) const noexcept {
         saturation;
 }
 
+void ContinuumModel3D::rebuild_moving_tumour_front() {
+    if (config_.schema_version < 4) return;
+    const auto& mode = config_.nutrient.boundary_mode;
+    if (mode != "moving_tumor_front_dirichlet_v2" &&
+        mode != "moving_tumor_front_and_vessels_dirichlet_v2") return;
+    const int nx = config_.grid.shape[0];
+    const int ny = config_.grid.shape[1];
+    tumour_occupancy_work_.resize(voxel_count_);
+    for (std::size_t location = 0; location < voxel_count_; ++location) {
+        tumour_occupancy_work_[location] = occupied_fraction(location);
+    }
+    const auto summary = build_moving_tumor_front_mask_2d(
+        tumour_occupancy_work_, nx, ny,
+        config_.nutrient.tumor_front_smoothing_radius_voxels,
+        config_.nutrient.tumor_front_density_threshold,
+        tumour_front_workspace_, tumour_local_mask_work_);
+    tumour_mask_ = tumour_local_mask_work_;
+    tumour_voxel_count_ = summary.tumour_voxels;
+    tumour_front_voxel_count_ = summary.front_voxels;
+}
+
+bool ContinuumModel3D::nutrient_source(
+    int x, int y, int z, std::size_t location) const noexcept {
+    if (config_.schema_version < 3) return false;
+    const auto& mode = config_.nutrient.boundary_mode;
+    if (config_.schema_version >= 4 &&
+        (mode == "moving_tumor_front_dirichlet_v2" ||
+         mode == "moving_tumor_front_and_vessels_dirichlet_v2")) {
+        const bool use_vessels = mode ==
+            "moving_tumor_front_and_vessels_dirichlet_v2";
+        return tumour_mask_[location] == 0U ||
+            (use_vessels && (config_.schema_version < 6 ? vessel_[location] > 0.0 : vessel_[location] >= config_.angiogenesis.exclusion_fraction));
+    }
+    const bool planar_edge = x == 0 || x + 1 == config_.grid.shape[0] ||
+        y == 0 || y + 1 == config_.grid.shape[1] ||
+        (!config_.base.thin_layer &&
+         (z == 0 || z + 1 == config_.grid.shape[2]));
+    const bool use_edges = mode != "vessels_dirichlet_v1";
+    const bool use_vessels = mode != "planar_edges_dirichlet_v1";
+    return (use_edges && planar_edge) ||
+        (use_vessels && (config_.schema_version < 6 ? vessel_[location] > 0.0 : vessel_[location] >= config_.angiogenesis.exclusion_fraction));
+}
+
+void ContinuumModel3D::advance_transient_nutrient(double dt) {
+    const int nx = config_.grid.shape[0];
+    const int ny = config_.grid.shape[1];
+    const int dimensions = config_.base.thin_layer ? 2 : 3;
+    const double inverse_h2 = 1.0 /
+        (config_.grid.spacing_voxels * config_.grid.spacing_voxels);
+    const double mu = config_.nutrient.diffusion_voxels2_per_hour * dt *
+        inverse_h2;
+    if (mu > 1.0 / (2.0 * dimensions) + 1.0e-12) {
+        throw std::runtime_error(
+            "transient nutrient diffusion violates the explicit CFL limit");
+    }
+    const double source_value = config_.nutrient.vessel_value;
+    const double decay = std::exp(-config_.nutrient.decay_per_hour * dt);
+    const int workers = std::max(
+        1, std::min(config_.base.threads, available_worker_threads()));
+    deterministic_parallel_for(voxel_count_, workers, [&](std::size_t here) {
+        const int x = static_cast<int>(here % static_cast<std::size_t>(nx));
+        const std::size_t yz = here / static_cast<std::size_t>(nx);
+        const int y = static_cast<int>(yz % static_cast<std::size_t>(ny));
+        const int z = static_cast<int>(yz / static_cast<std::size_t>(ny));
+        if (nutrient_source(x, y, z, here)) {
+            nutrient_next_[here] = source_value;
+            return;
+        }
+        const double old = nutrient_[here];
+        // When planar edges are not fixed sources, close the remaining outer
+        // boundary with zero normal flux. Reusing the centre value is the
+        // one-sided ghost-cell representation of that condition.
+        double neighbor_sum =
+            (x > 0 ? nutrient_[index(x - 1, y, z)] : old) +
+            (x + 1 < nx ? nutrient_[index(x + 1, y, z)] : old) +
+            (y > 0 ? nutrient_[index(x, y - 1, z)] : old) +
+            (y + 1 < ny ? nutrient_[index(x, y + 1, z)] : old);
+        if (!config_.base.thin_layer) {
+            const int nz = config_.grid.shape[2];
+            neighbor_sum +=
+                (z > 0 ? nutrient_[index(x, y, z - 1)] : old) +
+                (z + 1 < nz ? nutrient_[index(x, y, z + 1)] : old);
+        }
+        const double diffused = std::clamp(
+            old + mu * (neighbor_sum - 2.0 * dimensions * old),
+            0.0, source_value) * decay;
+        const double consumers = populations_[0][here] +
+            populations_[1][here] + populations_[2][here] +
+            populations_[3][here];
+        const double demand =
+            config_.nutrient.K_consumption_rate_per_hour * consumers;
+        const double half = config_.nutrient.K_consumption_half_saturation;
+        const double b = half + dt * demand - diffused;
+        const double discriminant = std::max(
+            0.0, b * b + 4.0 * half * diffused);
+        nutrient_next_[here] = config_.schema_version >= 5
+            ? resource_after_uptake(diffused, consumers, config_.nutrient.K_consumption_rate_per_hour,
+                half, dt, source_value)
+            : std::clamp(0.5 * (-b + std::sqrt(discriminant)), 0.0, source_value);
+        if(angiogenesis_) nutrient_next_[here]=source_value-(source_value-nutrient_next_[here])*
+            std::exp(-dt*config_.angiogenesis.perfusion_exchange_per_hour*vessel_[here]);
+    });
+    nutrient_.swap(nutrient_next_);
+    ++nutrient_solve_count_;
+}
+
 void ContinuumModel3D::solve_nutrient() {
+    if (config_.schema_version >= 3) {
+        const int nx = config_.grid.shape[0];
+        const int ny = config_.grid.shape[1];
+        for (std::size_t here = 0; here < voxel_count_; ++here) {
+            const int x = static_cast<int>(
+                here % static_cast<std::size_t>(nx));
+            const std::size_t yz = here / static_cast<std::size_t>(nx);
+            const int y = static_cast<int>(
+                yz % static_cast<std::size_t>(ny));
+            const int z = static_cast<int>(
+                yz / static_cast<std::size_t>(ny));
+            if (nutrient_source(x, y, z, here)) {
+                nutrient_[here] = config_.nutrient.vessel_value;
+            }
+        }
+        ++nutrient_solve_count_;
+        return;
+    }
     const int nx = config_.grid.shape[0];
     const int ny = config_.grid.shape[1];
     const int nz = config_.grid.shape[2];
@@ -273,48 +474,53 @@ void ContinuumModel3D::solve_nutrient() {
     const double diffusion = config_.nutrient.diffusion_voxels2_per_hour /
         (config_.grid.spacing_voxels * config_.grid.spacing_voxels);
     const double laplacian_diagonal = 2.0 * dimensions * diffusion;
+    const int workers = std::max(
+        1, std::min(config_.base.threads, available_worker_threads()));
     for (int iteration = 0; iteration < config_.nutrient.solver_iterations;
          ++iteration) {
-        for (int z = 0; z < nz; ++z) {
-            for (int y = 0; y < ny; ++y) {
-                for (int x = 0; x < nx; ++x) {
-                    const std::size_t here = index(x, y, z);
-                    double neighbor_sum = 0.0;
-                    if (x > 0) neighbor_sum += nutrient_[index(x - 1, y, z)];
-                    if (x + 1 < nx) neighbor_sum += nutrient_[index(x + 1, y, z)];
-                    if (y > 0) neighbor_sum += nutrient_[index(x, y - 1, z)];
-                    if (y + 1 < ny) neighbor_sum += nutrient_[index(x, y + 1, z)];
-                    if (!config_.base.thin_layer) {
-                        if (z > 0) neighbor_sum += nutrient_[index(x, y, z - 1)];
-                        if (z + 1 < nz) neighbor_sum += nutrient_[index(x, y, z + 1)];
-                    }
-                    const double old = nutrient_[here];
-                    const double r_occupied = populations_[0][here] +
-                        large_cell_volume_ * populations_[1][here];
-                    const double K_occupied = populations_[2][here] +
-                        large_cell_volume_ * populations_[3][here];
-                    const double r_sink =
-                        config_.nutrient.r_consumption_per_occupied_voxel_hour *
-                        r_occupied /
-                        (config_.nutrient.r_consumption_half_saturation + old);
-                    const double K_sink =
-                        config_.nutrient.K_consumption_per_occupied_voxel_hour *
-                        K_occupied /
-                        (config_.nutrient.K_consumption_half_saturation + old);
-                    const double exchange = config_.nutrient.vessel_exchange_per_hour *
-                        std::clamp(vessel_[here], 0.0, 1.0);
-                    const double denominator = laplacian_diagonal +
-                        config_.nutrient.decay_per_hour + exchange + r_sink + K_sink;
-                    const double candidate = denominator > 0.0
-                        ? (diffusion * neighbor_sum +
-                           exchange * config_.nutrient.vessel_value) / denominator
-                        : 0.0;
-                    nutrient_next_[here] = std::clamp(
-                        old + config_.nutrient.relaxation * (candidate - old),
-                        0.0, config_.nutrient.vessel_value);
-                }
+        deterministic_parallel_for(voxel_count_, workers, [&](std::size_t here) {
+            const int x = static_cast<int>(here % static_cast<std::size_t>(nx));
+            const std::size_t yz = here / static_cast<std::size_t>(nx);
+            const int y = static_cast<int>(yz % static_cast<std::size_t>(ny));
+            const int z = static_cast<int>(yz / static_cast<std::size_t>(ny));
+            double neighbor_sum = 0.0;
+            if (x > 0) neighbor_sum += nutrient_[index(x - 1, y, z)];
+            if (x + 1 < nx) neighbor_sum += nutrient_[index(x + 1, y, z)];
+            if (y > 0) neighbor_sum += nutrient_[index(x, y - 1, z)];
+            if (y + 1 < ny) neighbor_sum += nutrient_[index(x, y + 1, z)];
+            if (!config_.base.thin_layer) {
+                if (z > 0) neighbor_sum += nutrient_[index(x, y, z - 1)];
+                if (z + 1 < nz) neighbor_sum += nutrient_[index(x, y, z + 1)];
             }
-        }
+            const double old = nutrient_[here];
+            const bool per_cell = config_.nutrient.consumption_model ==
+                "per_cell_ratio_v2";
+            const double large_consumption_weight =
+                per_cell ? 1.0 : large_cell_volume_;
+            const double r_consumers = populations_[0][here] +
+                large_consumption_weight * populations_[1][here];
+            const double K_consumers = populations_[2][here] +
+                large_consumption_weight * populations_[3][here];
+            const double r_sink =
+                config_.nutrient.r_consumption_rate_per_hour *
+                r_consumers /
+                (config_.nutrient.r_consumption_half_saturation + old);
+            const double K_sink =
+                config_.nutrient.K_consumption_rate_per_hour *
+                K_consumers /
+                (config_.nutrient.K_consumption_half_saturation + old);
+            const double exchange = config_.nutrient.vessel_exchange_per_hour *
+                std::clamp(vessel_[here], 0.0, 1.0);
+            const double denominator = laplacian_diagonal +
+                config_.nutrient.decay_per_hour + exchange + r_sink + K_sink;
+            const double candidate = denominator > 0.0
+                ? (diffusion * neighbor_sum +
+                   exchange * config_.nutrient.vessel_value) / denominator
+                : 0.0;
+            nutrient_next_[here] = std::clamp(
+                old + config_.nutrient.relaxation * (candidate - old),
+                0.0, config_.nutrient.vessel_value);
+        });
         nutrient_.swap(nutrient_next_);
     }
     ++nutrient_solve_count_;
@@ -344,7 +550,8 @@ double ContinuumModel3D::base_diffusion(
         : (config_.base.initial_K_migration_rate_model == "fixed"
                ? config_.base.initial_K_migration_rate
                : beta_mean(config_.base.initial_K_migration_beta));
-    double diffusion = kFixed26DiffusionFactor * migration_rate *
+    double diffusion = (config_.base.thin_layer && config_.migration.mapping == "shared_fixed_lattice_means_v2"
+        ? 3.0 / 8.0 : kFixed26DiffusionFactor) * migration_rate *
         config_.migration.diffusion_scale;
     if (r_type && config_.base.migration_activation_enabled &&
         local_occupied_fraction >= config_.base.migration_activation_threshold) {
@@ -355,14 +562,78 @@ double ContinuumModel3D::base_diffusion(
 }
 
 void ContinuumModel3D::migrate(double dt) {
-    for (std::size_t field = 0; field < kPopulationFieldCount3D; ++field) {
-        work_[field] = populations_[field];
-    }
     const int nx = config_.grid.shape[0];
     const int ny = config_.grid.shape[1];
     const int nz = config_.grid.shape[2];
     const double inverse_h2 = 1.0 /
         (config_.grid.spacing_voxels * config_.grid.spacing_voxels);
+    if (config_.base.thin_layer) {
+        const int workers = std::max(
+            1, std::min(config_.base.threads, available_worker_threads()));
+        std::atomic<bool> invalid_negative{false};
+        deterministic_parallel_for(voxel_count_, workers, [&](std::size_t here) {
+            const int x = static_cast<int>(here % static_cast<std::size_t>(nx));
+            const int y = static_cast<int>(here / static_cast<std::size_t>(nx));
+            const double phi = std::clamp(
+                occupied_fraction(here) /
+                    config_.reaction.maximum_occupied_fraction,
+                0.0, 1.0);
+            const double vacancy = 1.0 - phi;
+            std::array<std::size_t, 4> neighbors{};
+            std::size_t neighbor_count = 0;
+            if (x > 0) neighbors[neighbor_count++] = index(x - 1, y, 0);
+            if (x + 1 < nx) neighbors[neighbor_count++] = index(x + 1, y, 0);
+            if (y > 0) neighbors[neighbor_count++] = index(x, y - 1, 0);
+            if (y + 1 < ny) neighbors[neighbor_count++] = index(x, y + 1, 0);
+
+            for (std::size_t field = 0; field < kPopulationFieldCount3D;
+                 ++field) {
+                const bool large = field ==
+                        static_cast<std::size_t>(PopulationField3D::r_large) ||
+                    field == static_cast<std::size_t>(PopulationField3D::K_large);
+                const double vacancy_exponent = large ? large_cell_volume_ : 1.0;
+                const double local_availability =
+                    (config_.schema_version >= 5 && vessel_blocks_cells(here))
+                        ? 0.0 : std::pow(vacancy, vacancy_exponent);
+                double delta = 0.0;
+                for (std::size_t position = 0; position < neighbor_count;
+                     ++position) {
+                    const std::size_t other = neighbors[position];
+                    const double other_phi = std::clamp(
+                        occupied_fraction(other) /
+                            config_.reaction.maximum_occupied_fraction,
+                        0.0, 1.0);
+                    const double other_vacancy = 1.0 - other_phi;
+                    const double mobility = std::pow(
+                        0.5 * (vacancy + other_vacancy),
+                        config_.migration.crowding_exponent);
+                    const double diffusion = base_diffusion(
+                        static_cast<PopulationField3D>(field),
+                        0.5 * (phi + other_phi));
+                    const double other_availability =
+                        (config_.schema_version >= 5 && vessel_blocks_cells(other))
+                            ? 0.0 : std::pow(other_vacancy, vacancy_exponent);
+                    delta += diffusion * inverse_h2 * mobility *
+                        (populations_[field][other] * local_availability -
+                         populations_[field][here] * other_availability);
+                }
+                const double value = populations_[field][here] + dt * delta;
+                if (value < -1.0e-10) invalid_negative.store(true);
+                work_[field][here] = std::max(0.0, value);
+            }
+        });
+        if (invalid_negative.load()) {
+            throw std::runtime_error(
+                "continuum migration produced negative density");
+        }
+        for (std::size_t field = 0; field < kPopulationFieldCount3D; ++field) {
+            populations_[field].swap(work_[field]);
+        }
+        return;
+    }
+    for (std::size_t field = 0; field < kPopulationFieldCount3D; ++field) {
+        work_[field] = populations_[field];
+    }
     const auto exchange_face = [&](std::size_t lhs, std::size_t rhs) {
         const double lhs_phi = std::clamp(
             occupied_fraction(lhs) / config_.reaction.maximum_occupied_fraction,
@@ -383,8 +654,10 @@ void ContinuumModel3D::migrate(double dt) {
                     static_cast<std::size_t>(PopulationField3D::r_large) ||
                 field == static_cast<std::size_t>(PopulationField3D::K_large);
             const double vacancy_exponent = large ? large_cell_volume_ : 1.0;
-            const double lhs_availability = std::pow(lhs_vacancy, vacancy_exponent);
-            const double rhs_availability = std::pow(rhs_vacancy, vacancy_exponent);
+            const double lhs_availability = (config_.schema_version >= 5 && vessel_blocks_cells(lhs))
+                ? 0.0 : std::pow(lhs_vacancy, vacancy_exponent);
+            const double rhs_availability = (config_.schema_version >= 5 && vessel_blocks_cells(rhs))
+                ? 0.0 : std::pow(rhs_vacancy, vacancy_exponent);
             const double rate = diffusion * inverse_h2 * mobility *
                 (populations_[field][lhs] * rhs_availability -
                  populations_[field][rhs] * lhs_availability);
@@ -421,6 +694,74 @@ void ContinuumModel3D::build_local_counts(
     const int nx = config_.grid.shape[0];
     const int ny = config_.grid.shape[1];
     const int nz = config_.grid.shape[2];
+    const int radius = std::max(0, static_cast<int>(std::floor(
+        0.5 * config_.base.growth_density_window_edge /
+        config_.grid.spacing_voxels)));
+    const int lower = config_.schema_version >= 5
+        ? static_cast<int>(std::floor(((config_.base.growth_density_window_edge - 1) / 2) / config_.grid.spacing_voxels))
+        : radius;
+    const int upper = config_.schema_version >= 5
+        ? static_cast<int>(std::floor((config_.base.growth_density_window_edge -
+            (config_.base.growth_density_window_edge - 1) / 2 - 1) / config_.grid.spacing_voxels))
+        : radius;
+
+    if (config_.base.thin_layer) {
+        const int pitch = nx + 1;
+        const std::size_t prefix_size =
+            static_cast<std::size_t>(pitch) * (ny + 1);
+        std::vector<double> r_prefix(prefix_size, 0.0);
+        std::vector<double> K_prefix(prefix_size, 0.0);
+        const int workers = std::max(
+            1, std::min(config_.base.threads, available_worker_threads()));
+        deterministic_parallel_for(
+            static_cast<std::size_t>(ny), workers, [&](std::size_t row) {
+            const int y = static_cast<int>(row) + 1;
+            double r_row = 0.0;
+            double K_row = 0.0;
+            for (int x = 1; x <= nx; ++x) {
+                const std::size_t source = index(x - 1, y - 1, 0);
+                r_row += (populations_[0][source] + populations_[1][source]) *
+                    voxel_measure_;
+                K_row += (populations_[2][source] + populations_[3][source]) *
+                    voxel_measure_;
+                const std::size_t here = static_cast<std::size_t>(y) * pitch + x;
+                r_prefix[here] = r_row;
+                K_prefix[here] = K_row;
+            }
+        });
+        deterministic_parallel_for(
+            static_cast<std::size_t>(nx), workers, [&](std::size_t column) {
+            const int x = static_cast<int>(column) + 1;
+            for (int y = 1; y <= ny; ++y) {
+                const std::size_t here = static_cast<std::size_t>(y) * pitch + x;
+                r_prefix[here] += r_prefix[here - pitch];
+                K_prefix[here] += K_prefix[here - pitch];
+            }
+        });
+
+        r_counts.assign(voxel_count_, 0.0);
+        K_counts.assign(voxel_count_, 0.0);
+        const auto rectangle_sum = [pitch](const std::vector<double>& prefix,
+                                            int x0, int y0, int x1, int y1) {
+            return prefix[static_cast<std::size_t>(y1) * pitch + x1]
+                - prefix[static_cast<std::size_t>(y0) * pitch + x1]
+                - prefix[static_cast<std::size_t>(y1) * pitch + x0]
+                + prefix[static_cast<std::size_t>(y0) * pitch + x0];
+        };
+        deterministic_parallel_for(voxel_count_, workers, [&](std::size_t here) {
+            if (config_.schema_version < 5 && occupied_fraction(here) <= 0.0) return;
+            const int x = static_cast<int>(here % static_cast<std::size_t>(nx));
+            const int y = static_cast<int>(here / static_cast<std::size_t>(nx));
+            const int x0 = std::max(0, x - lower);
+            const int y0 = std::max(0, y - lower);
+            const int x1 = std::min(nx, x + upper + 1);
+            const int y1 = std::min(ny, y + upper + 1);
+            r_counts[here] = rectangle_sum(r_prefix, x0, y0, x1, y1);
+            K_counts[here] = rectangle_sum(K_prefix, x0, y0, x1, y1);
+        });
+        return;
+    }
+
     const int px = nx + 1;
     const int py = ny + 1;
     const int pz = nz + 1;
@@ -455,9 +796,6 @@ void ContinuumModel3D::build_local_counts(
             }
         }
     }
-    const int radius = std::max(0, static_cast<int>(std::floor(
-        0.5 * config_.base.growth_density_window_edge /
-        config_.grid.spacing_voxels)));
     r_counts.assign(voxel_count_, 0.0);
     K_counts.assign(voxel_count_, 0.0);
     const auto box_sum = [&](const std::vector<double>& prefix,
@@ -475,12 +813,12 @@ void ContinuumModel3D::build_local_counts(
     for (int z = 0; z < nz; ++z) {
         for (int y = 0; y < ny; ++y) {
             for (int x = 0; x < nx; ++x) {
-                const int x0 = std::max(0, x - radius);
-                const int y0 = std::max(0, y - radius);
-                const int z0 = config_.base.thin_layer ? 0 : std::max(0, z - radius);
-                const int x1 = std::min(nx, x + radius + 1);
-                const int y1 = std::min(ny, y + radius + 1);
-                const int z1 = config_.base.thin_layer ? 1 : std::min(nz, z + radius + 1);
+                const int x0 = std::max(0, x - lower);
+                const int y0 = std::max(0, y - lower);
+                const int z0 = config_.base.thin_layer ? 0 : std::max(0, z - lower);
+                const int x1 = std::min(nx, x + upper + 1);
+                const int y1 = std::min(ny, y + upper + 1);
+                const int z1 = config_.base.thin_layer ? 1 : std::min(nz, z + upper + 1);
                 const std::size_t here = index(x, y, z);
                 r_counts[here] = box_sum(r_prefix, x0, y0, z0, x1, y1, z1);
                 K_counts[here] = box_sum(K_prefix, x0, y0, z0, x1, y1, z1);
@@ -489,56 +827,92 @@ void ContinuumModel3D::build_local_counts(
     }
 }
 
+std::array<double, 2> ContinuumModel3D::growth_counts_at(Vec3i site) const {
+    int x{}, y{}, z{};
+    if (!grid_coordinate(site, x, y, z)) return {};
+    std::vector<double> r_counts, K_counts;
+    build_local_counts(r_counts, K_counts);
+    const auto location = index(x, y, z);
+    return {r_counts[location], K_counts[location]};
+}
+
 void ContinuumModel3D::react(double dt) {
     std::vector<double> r_counts;
     std::vector<double> K_counts;
     build_local_counts(r_counts, K_counts);
     const double r_inherent = mean_growth_rate(CellType::r);
     const double K_inherent = mean_growth_rate(CellType::K);
-    const double r_limit = config_.base.thin_layer
+    const double legacy_r_limit = config_.base.thin_layer
         ? config_.base.legacy_mapping.source_r_limit : config_.base.r_limit;
-    const double K_limit = config_.base.thin_layer
+    const double legacy_K_limit = config_.base.thin_layer
         ? config_.base.legacy_mapping.source_K_limit : config_.base.K_limit;
-    const double r_capacity = config_.base.thin_layer
+    const double legacy_r_capacity = config_.base.thin_layer
         ? config_.base.legacy_mapping.source_carrying_capacity_r
         : config_.base.carrying_capacity_r;
-    const double K_capacity = config_.base.thin_layer
+    const double legacy_K_capacity = config_.base.thin_layer
         ? config_.base.legacy_mapping.source_carrying_capacity_K
         : config_.base.carrying_capacity_K;
+    const double r_limit = config_.schema_version >= 3
+        ? config_.nutrient.common_density_limit : legacy_r_limit;
+    const double K_limit = config_.schema_version >= 3
+        ? config_.nutrient.common_density_limit : legacy_K_limit;
+    const double r_capacity = config_.schema_version >= 3
+        ? config_.nutrient.common_carrying_capacity : legacy_r_capacity;
+    const double K_capacity = config_.schema_version >= 3
+        ? config_.nutrient.common_carrying_capacity : legacy_K_capacity;
     const std::array<double, 4> volume_weight{1.0, large_cell_volume_,
                                                1.0, large_cell_volume_};
 
-    for (std::size_t location = 0; location < voxel_count_; ++location) {
+    const int workers = std::max(
+        1, std::min(config_.base.threads, available_worker_threads()));
+    deterministic_parallel_for(voxel_count_, workers, [&](std::size_t location) {
+        const double occupied = occupied_fraction(location);
+        if (occupied <= 0.0) return;
         const double multiplier = capacity_multiplier(nutrient_[location]);
         const double r_count = r_counts[location] / multiplier;
         const double K_count = K_counts[location] / multiplier;
         const double total_count = r_count + K_count;
-        const double r_growth = calculate_density_growth_rate_continuous(
+        const double raw_r_growth = calculate_density_growth_rate_continuous(
             static_cast<int>(CellType::r), r_inherent,
             r_count, K_count, total_count, r_limit, K_limit,
             config_.base.alpha, config_.base.beta, r_capacity, K_capacity);
-        const double K_growth = calculate_density_growth_rate_continuous(
+        const double raw_K_growth = calculate_density_growth_rate_continuous(
             static_cast<int>(CellType::K), K_inherent,
             r_count, K_count, total_count, r_limit, K_limit,
             config_.base.alpha, config_.base.beta, r_capacity, K_capacity);
+        const double nutrient_factor = config_.schema_version >= 3
+            ? nutrient_[location] /
+                (config_.nutrient.growth_half_saturation + nutrient_[location])
+            : 1.0;
+        const auto resource_limited = [&](double growth) {
+            return growth > 0.0 ? growth * nutrient_factor : growth;
+        };
+        const double r_growth = resource_limited(raw_r_growth);
+        const double K_growth = resource_limited(raw_K_growth);
+        const bool abm_work_clock = config_.reaction.model ==
+            "abm_work_clock_neighbor_availability_v2";
         const double r_division_rate = positive_part(r_growth) /
             (config_.base.division_timing.base_cycle_hours *
-             std::max(1.0e-12, r_inherent));
+             (abm_work_clock ? 1.0 : std::max(1.0e-12, r_inherent)));
         const double K_division_rate = positive_part(K_growth) /
             (config_.base.division_timing.base_cycle_hours *
-             std::max(1.0e-12, K_inherent));
+             (abm_work_clock ? 1.0 : std::max(1.0e-12, K_inherent)));
         const double r_death_rate = r_growth <= config_.base.death_growth_rate_threshold
             ? 1.0 / config_.base.r_death_delay_hours : 0.0;
         const double K_death_rate = K_growth <= config_.base.death_growth_rate_threshold
             ? 1.0 / config_.base.K_death_delay_hours : 0.0;
-        const double occupied = occupied_fraction(location);
         const double vacancy = std::clamp(
             1.0 - occupied / config_.reaction.maximum_occupied_fraction,
             0.0, 1.0);
         const double large_success = std::pow(
             vacancy, config_.reaction.large_daughter_vacancy_exponent);
-        const double small_success = std::pow(
-            vacancy, config_.reaction.small_daughter_vacancy_exponent);
+        const double small_success = abm_work_clock
+            ? 1.0 - std::pow(
+                  1.0 - vacancy,
+                  config_.reaction.small_daughter_vacancy_exponent)
+            : std::pow(
+                  vacancy,
+                  config_.reaction.small_daughter_vacancy_exponent);
         const double conversion_probability =
             config_.base.r_to_K_conversion.enabled &&
             occupied >= config_.base.r_to_K_conversion.density_threshold
@@ -593,7 +967,7 @@ void ContinuumModel3D::react(double dt) {
             populations_[field][location] =
                 base[field] + positive_scale * positive[field];
         }
-    }
+    });
 }
 
 bool ContinuumModel3D::step() {
@@ -602,17 +976,25 @@ bool ContinuumModel3D::step() {
         same_time(time_hours_, config_.end_time_hours)) return false;
     double target = std::min(time_hours_ + config_.time_step_hours,
                              config_.end_time_hours);
-    if (next_nutrient_refresh_hours_ < target &&
+    if (config_.schema_version < 3 &&
+        next_nutrient_refresh_hours_ < target &&
         !same_time(next_nutrient_refresh_hours_, target)) {
         target = next_nutrient_refresh_hours_;
     }
     const double dt = target - time_hours_;
-    migrate(dt);
+    advance_angiogenesis(dt);
+    for (int substep = 0; substep < migration_substeps_; ++substep) {
+        migrate(dt / migration_substeps_);
+    }
     react(dt);
     time_hours_ = target;
     ++step_count_;
-    if (time_hours_ > next_nutrient_refresh_hours_ ||
-        same_time(time_hours_, next_nutrient_refresh_hours_)) {
+    if (config_.schema_version >= 3) {
+        rebuild_moving_tumour_front();
+        advance_transient_nutrient(dt);
+        next_nutrient_refresh_hours_ = time_hours_ + config_.time_step_hours;
+    } else if (time_hours_ > next_nutrient_refresh_hours_ ||
+               same_time(time_hours_, next_nutrient_refresh_hours_)) {
         solve_nutrient();
         do {
             next_nutrient_refresh_hours_ += config_.nutrient.refresh_every_hours;
@@ -628,6 +1010,8 @@ ContinuumDiagnostics3D ContinuumModel3D::diagnostics() const {
     std::array<long double, 2> nutrient_weight{};
     std::array<long double, 2> radius_weight{};
     long double nutrient_sum = 0.0L;
+    long double tumour_nutrient = 0.0L;
+    long double tumour_front_nutrient = 0.0L;
     for (std::size_t location = 0; location < voxel_count_; ++location) {
         const auto point = coordinate(location);
         const double radius = std::sqrt(point[0] * point[0] + point[1] * point[1] +
@@ -649,9 +1033,36 @@ ContinuumDiagnostics3D ContinuumModel3D::diagnostics() const {
         result.maximum_nutrient = std::max(result.maximum_nutrient,
                                            nutrient_[location]);
         result.vessel_volume += vessel_[location] * voxel_measure_;
+        if (config_.schema_version >= 4 && tumour_mask_[location] != 0U) {
+            result.tumour_volume += voxel_measure_;
+            tumour_nutrient += nutrient_[location];
+            const int nx = config_.grid.shape[0];
+            const int ny = config_.grid.shape[1];
+            const int x = static_cast<int>(
+                location % static_cast<std::size_t>(nx));
+            const int y = static_cast<int>(
+                location / static_cast<std::size_t>(nx));
+            const bool front =
+                (x > 0 && tumour_mask_[index(x - 1, y, 0)] == 0U) ||
+                (x + 1 < nx && tumour_mask_[index(x + 1, y, 0)] == 0U) ||
+                (y > 0 && tumour_mask_[index(x, y - 1, 0)] == 0U) ||
+                (y + 1 < ny && tumour_mask_[index(x, y + 1, 0)] == 0U);
+            if (front) {
+                result.tumour_front_volume += voxel_measure_;
+                tumour_front_nutrient += nutrient_[location];
+            }
+        }
     }
     result.mean_nutrient = voxel_count_ == 0 ? 0.0
         : static_cast<double>(nutrient_sum / voxel_count_);
+    result.tumour_mean_nutrient = result.tumour_volume > 0.0
+        ? static_cast<double>(tumour_nutrient /
+              (result.tumour_volume / voxel_measure_))
+        : 0.0;
+    result.tumour_front_mean_nutrient = result.tumour_front_volume > 0.0
+        ? static_cast<double>(tumour_front_nutrient /
+              (result.tumour_front_volume / voxel_measure_))
+        : 0.0;
     for (std::size_t type = 0; type < 2; ++type) {
         if (result.type_mass[type] > 0.0) {
             result.mean_nutrient_by_type[type] = static_cast<double>(
@@ -674,6 +1085,10 @@ void ContinuumModel3D::validate_state() const {
             if (!std::isfinite(field[location]) || field[location] < 0.0) {
                 throw std::runtime_error("continuum population state is invalid");
             }
+        }
+        if (config_.schema_version >= 5 && vessel_blocks_cells(location) &&
+            occupied_fraction(location) > 1.0e-10) {
+            throw std::runtime_error("continuum population overlaps an excluded vessel");
         }
         if (occupied_fraction(location) >
                 config_.reaction.maximum_occupied_fraction + 1.0e-8 ||
@@ -704,6 +1119,7 @@ std::uint64_t ContinuumModel3D::state_checksum() const {
     for (const double value : vessel_) {
         result = hash_mix(result, std::bit_cast<std::uint64_t>(value));
     }
+    if(angiogenesis_) result=hash_mix(result,angiogenesis_->checksum());
     return result;
 }
 
@@ -721,7 +1137,7 @@ void ContinuumModel3D::save_checkpoint(const std::filesystem::path& path) const 
     std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
     if (!stream) throw std::runtime_error("unable to create continuum checkpoint");
     stream.write(kCheckpointMagic.data(), kCheckpointMagic.size());
-    write_pod(stream, kCheckpointVersion);
+    write_pod(stream, config_.schema_version >= 6 ? 2U : kCheckpointVersion);
     write_pod(stream, config_.dynamics_fingerprint());
     for (const int extent : config_.grid.shape) write_pod(stream, extent);
     write_pod(stream, static_cast<std::uint64_t>(voxel_count_));
@@ -737,6 +1153,7 @@ void ContinuumModel3D::save_checkpoint(const std::filesystem::path& path) const 
     for (const auto& field : populations_) write_field(field);
     write_field(nutrient_);
     write_field(vessel_);
+    if(angiogenesis_) angiogenesis_->save(stream);
     stream.flush();
     if (!stream) throw std::runtime_error("unable to finish continuum checkpoint");
     stream.close();
@@ -750,7 +1167,7 @@ void ContinuumModel3D::load_checkpoint(const std::filesystem::path& path) {
     std::array<char, 8> magic{};
     stream.read(magic.data(), magic.size());
     if (!stream || magic != kCheckpointMagic ||
-        read_pod<std::uint32_t>(stream) != kCheckpointVersion) {
+        read_pod<std::uint32_t>(stream) != (config_.schema_version >= 6 ? 2U : kCheckpointVersion)) {
         throw std::runtime_error("unsupported continuum checkpoint format");
     }
     if (read_pod<std::uint64_t>(stream) != config_.dynamics_fingerprint()) {
@@ -777,9 +1194,11 @@ void ContinuumModel3D::load_checkpoint(const std::filesystem::path& path) {
     for (auto& field : populations_) read_field(field);
     read_field(nutrient_);
     read_field(vessel_);
+    if(angiogenesis_) angiogenesis_->load(stream);
     if (stream.peek() != std::char_traits<char>::eof()) {
         throw std::runtime_error("continuum checkpoint has trailing data");
     }
+    rebuild_moving_tumour_front();
     initialized_ = true;
     validate_state();
     if (time_hours_ >= config_.end_time_hours &&

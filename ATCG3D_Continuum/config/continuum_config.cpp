@@ -143,6 +143,11 @@ void hash_double(std::uint64_t& state, double value) noexcept {
     state = mix(state, std::bit_cast<std::uint64_t>(value));
 }
 
+bool close(double lhs, double rhs) noexcept {
+    return std::abs(lhs - rhs) <=
+        1.0e-12 * std::max({1.0, std::abs(lhs), std::abs(rhs)});
+}
+
 }  // namespace
 
 ContinuumModelConfig3D ContinuumModelConfig3D::load(
@@ -156,7 +161,7 @@ ContinuumModelConfig3D ContinuumModelConfig3D::load(
     }
     mapping(root, "$", {"schema", "profile", "base_config", "run",
                           "initialization", "grid", "numerics", "migration",
-                          "reaction", "nutrient", "vascular", "output"});
+                          "reaction", "nutrient", "vascular", "output", "angiogenesis"});
 
     ContinuumModelConfig3D result;
     result.source_path = std::filesystem::absolute(path).lexically_normal();
@@ -167,7 +172,9 @@ ContinuumModelConfig3D ContinuumModelConfig3D::load(
     result.schema_version = integer(required(schema, "version", "$.schema"),
                                     "$.schema.version");
     if (result.schema_name != "atcg3d.continuum_model_config" ||
-        result.schema_version != 1) fail("$.schema", "unsupported schema identity");
+        (result.schema_version < 1 || result.schema_version > 6)) {
+        fail("$.schema", "unsupported schema identity");
+    }
     result.profile = text_value(required(root, "profile", "$"), "$.profile");
     if (result.profile.empty()) fail("$.profile", "must not be empty");
 
@@ -266,6 +273,8 @@ ContinuumModelConfig3D ContinuumModelConfig3D::load(
     mapping(nutrient, "$.nutrient",
             {"model", "solver", "diffusion_voxels2_per_hour", "decay_per_hour",
              "vessel_exchange_per_hour", "vessel_value", "consumption", "capacity",
+             "boundary_mode", "initial_value", "growth_half_saturation",
+             "common_density_limit", "common_carrying_capacity", "tumor_front",
              "refresh_every_hours", "solver_iterations", "relaxation"});
     auto& n = result.nutrient;
     n.model = text_value(required(nutrient, "model", "$.nutrient"),
@@ -290,22 +299,81 @@ ContinuumModelConfig3D ContinuumModelConfig3D::load(
         "$.nutrient.solver_iterations");
     n.relaxation = number(required(nutrient, "relaxation", "$.nutrient"),
                           "$.nutrient.relaxation");
+    if (result.schema_version >= 3) {
+        n.boundary_mode = text_value(
+            required(nutrient, "boundary_mode", "$.nutrient"),
+            "$.nutrient.boundary_mode");
+        n.initial_value = number(
+            required(nutrient, "initial_value", "$.nutrient"),
+            "$.nutrient.initial_value");
+        n.growth_half_saturation = number(
+            required(nutrient, "growth_half_saturation", "$.nutrient"),
+            "$.nutrient.growth_half_saturation");
+        n.common_density_limit = number(
+            required(nutrient, "common_density_limit", "$.nutrient"),
+            "$.nutrient.common_density_limit");
+        n.common_carrying_capacity = number(
+            required(nutrient, "common_carrying_capacity", "$.nutrient"),
+            "$.nutrient.common_carrying_capacity");
+    }
+    if (result.schema_version >= 4 &&
+        (result.schema_version == 4 || nutrient["tumor_front"])) {
+        const YAML::Node tumor_front = required(
+            nutrient, "tumor_front", "$.nutrient");
+        mapping(tumor_front, "$.nutrient.tumor_front",
+                {"density_threshold", "smoothing_radius_voxels",
+                 "component_policy"});
+        n.tumor_front_density_threshold = number(
+            required(tumor_front, "density_threshold",
+                     "$.nutrient.tumor_front"),
+            "$.nutrient.tumor_front.density_threshold");
+        n.tumor_front_smoothing_radius_voxels = integer(
+            required(tumor_front, "smoothing_radius_voxels",
+                     "$.nutrient.tumor_front"),
+            "$.nutrient.tumor_front.smoothing_radius_voxels");
+        n.tumor_front_component_policy = text_value(
+            required(tumor_front, "component_policy",
+                     "$.nutrient.tumor_front"),
+            "$.nutrient.tumor_front.component_policy");
+    }
     const YAML::Node consumption = required(nutrient, "consumption", "$.nutrient");
-    mapping(consumption, "$.nutrient.consumption",
-            {"r_per_occupied_voxel_hour", "K_per_occupied_voxel_hour",
-             "r_half_saturation", "K_half_saturation"});
-    n.r_consumption_per_occupied_voxel_hour = number(
-        required(consumption, "r_per_occupied_voxel_hour", "$.nutrient.consumption"),
-        "$.nutrient.consumption.r_per_occupied_voxel_hour");
-    n.K_consumption_per_occupied_voxel_hour = number(
-        required(consumption, "K_per_occupied_voxel_hour", "$.nutrient.consumption"),
-        "$.nutrient.consumption.K_per_occupied_voxel_hour");
-    n.r_consumption_half_saturation = number(
-        required(consumption, "r_half_saturation", "$.nutrient.consumption"),
-        "$.nutrient.consumption.r_half_saturation");
-    n.K_consumption_half_saturation = number(
-        required(consumption, "K_half_saturation", "$.nutrient.consumption"),
-        "$.nutrient.consumption.K_half_saturation");
+    if (result.schema_version == 1) {
+        mapping(consumption, "$.nutrient.consumption",
+                {"r_per_occupied_voxel_hour", "K_per_occupied_voxel_hour",
+                 "r_half_saturation", "K_half_saturation"});
+        n.consumption_model = "per_occupied_voxel_v1";
+        n.r_consumption_rate_per_hour = number(
+            required(consumption, "r_per_occupied_voxel_hour", "$.nutrient.consumption"),
+            "$.nutrient.consumption.r_per_occupied_voxel_hour");
+        n.K_consumption_rate_per_hour = number(
+            required(consumption, "K_per_occupied_voxel_hour", "$.nutrient.consumption"),
+            "$.nutrient.consumption.K_per_occupied_voxel_hour");
+        n.r_consumption_half_saturation = number(
+            required(consumption, "r_half_saturation", "$.nutrient.consumption"),
+            "$.nutrient.consumption.r_half_saturation");
+        n.K_consumption_half_saturation = number(
+            required(consumption, "K_half_saturation", "$.nutrient.consumption"),
+            "$.nutrient.consumption.K_half_saturation");
+    } else {
+        mapping(consumption, "$.nutrient.consumption",
+                {"K_per_cell_hour", "r_to_K_ratio", "half_saturation"});
+        n.consumption_model = "per_cell_ratio_v2";
+        n.K_consumption_rate_per_hour = number(
+            required(consumption, "K_per_cell_hour", "$.nutrient.consumption"),
+            "$.nutrient.consumption.K_per_cell_hour");
+        const double ratio = number(
+            required(consumption, "r_to_K_ratio", "$.nutrient.consumption"),
+            "$.nutrient.consumption.r_to_K_ratio");
+        if (!(ratio > 0.0)) {
+            fail("$.nutrient.consumption.r_to_K_ratio", "must be positive");
+        }
+        n.r_consumption_rate_per_hour =
+            ratio * n.K_consumption_rate_per_hour;
+        n.r_consumption_half_saturation = n.K_consumption_half_saturation =
+            number(required(consumption, "half_saturation",
+                            "$.nutrient.consumption"),
+                   "$.nutrient.consumption.half_saturation");
+    }
     const YAML::Node capacity = required(nutrient, "capacity", "$.nutrient");
     mapping(capacity, "$.nutrient.capacity",
             {"half_saturation", "maximum_multiplier"});
@@ -319,7 +387,7 @@ ContinuumModelConfig3D ContinuumModelConfig3D::load(
     const YAML::Node vascular = required(root, "vascular", "$");
     mapping(vascular, "$.vascular",
             {"source_mode", "synthetic_axis", "synthetic_center",
-             "synthetic_radius_voxels"});
+             "synthetic_radius_voxels", "static_sources"});
     result.vascular.source_mode = text_value(
         required(vascular, "source_mode", "$.vascular"), "$.vascular.source_mode");
     result.vascular.synthetic_axis = text_value(
@@ -331,11 +399,46 @@ ContinuumModelConfig3D ContinuumModelConfig3D::load(
     result.vascular.synthetic_radius_voxels = number(
         required(vascular, "synthetic_radius_voxels", "$.vascular"),
         "$.vascular.synthetic_radius_voxels");
+    if (const auto sites = vascular["static_sources"]) {
+        if (result.schema_version < 5 || !sites.IsSequence()) {
+            fail("$.vascular.static_sources", "requires continuum schema v5 and a sequence");
+        }
+        for (const auto& site : sites) {
+            const auto values = fixed_sequence<int, 3>(site,
+                "$.vascular.static_sources", integer);
+            result.vascular.static_sources.push_back({values[0], values[1], values[2]});
+        }
+    }
+    if (result.schema_version >= 5) {
+        result.base.static_vasculature = result.shared_vascular_geometry();
+    }
+
+    if (result.schema_version >= 6) {
+        const auto angiogenesis = required(root, "angiogenesis", "$");
+        mapping(angiogenesis, "$.angiogenesis", {"model", "hypoxia_threshold", "taf_production_per_cell_hour", "taf_diffusion_voxels2_per_hour", "taf_decay_per_hour", "tip_diffusion_voxels2_per_hour", "tip_chemotaxis", "tip_branching_per_hour", "tip_anastomosis_per_hour", "seed_tips_per_hour", "tip_speed_voxels_per_hour", "vessel_radius_voxels", "perfusion_exchange_per_hour", "exclusion_fraction", "maximum_tip_density"});
+        result.angiogenesis.model = text_value(required(angiogenesis,"model","$.angiogenesis"),"$.angiogenesis.model");
+        if(angiogenesis["hypoxia_threshold"]) result.angiogenesis.hypoxia_threshold = number(angiogenesis["hypoxia_threshold"],"$.angiogenesis.hypoxia_threshold");
+        if(angiogenesis["taf_production_per_cell_hour"]) result.angiogenesis.taf_production_per_cell_hour = number(angiogenesis["taf_production_per_cell_hour"],"$.angiogenesis.taf_production_per_cell_hour");
+        if(angiogenesis["taf_diffusion_voxels2_per_hour"]) result.angiogenesis.taf_diffusion_voxels2_per_hour = number(angiogenesis["taf_diffusion_voxels2_per_hour"],"$.angiogenesis.taf_diffusion_voxels2_per_hour");
+        if(angiogenesis["taf_decay_per_hour"]) result.angiogenesis.taf_decay_per_hour = number(angiogenesis["taf_decay_per_hour"],"$.angiogenesis.taf_decay_per_hour");
+        if(angiogenesis["tip_diffusion_voxels2_per_hour"]) result.angiogenesis.tip_diffusion_voxels2_per_hour = number(angiogenesis["tip_diffusion_voxels2_per_hour"],"$.angiogenesis.tip_diffusion_voxels2_per_hour");
+        if(angiogenesis["tip_chemotaxis"]) result.angiogenesis.tip_chemotaxis = number(angiogenesis["tip_chemotaxis"],"$.angiogenesis.tip_chemotaxis");
+        if(angiogenesis["tip_branching_per_hour"]) result.angiogenesis.tip_branching_per_hour = number(angiogenesis["tip_branching_per_hour"],"$.angiogenesis.tip_branching_per_hour");
+        if(angiogenesis["tip_anastomosis_per_hour"]) result.angiogenesis.tip_anastomosis_per_hour = number(angiogenesis["tip_anastomosis_per_hour"],"$.angiogenesis.tip_anastomosis_per_hour");
+        if(angiogenesis["seed_tips_per_hour"]) result.angiogenesis.seed_tips_per_hour = number(angiogenesis["seed_tips_per_hour"],"$.angiogenesis.seed_tips_per_hour");
+        if(angiogenesis["tip_speed_voxels_per_hour"]) result.angiogenesis.tip_speed_voxels_per_hour = number(angiogenesis["tip_speed_voxels_per_hour"],"$.angiogenesis.tip_speed_voxels_per_hour");
+        if(angiogenesis["vessel_radius_voxels"]) result.angiogenesis.vessel_radius_voxels = number(angiogenesis["vessel_radius_voxels"],"$.angiogenesis.vessel_radius_voxels");
+        if(angiogenesis["perfusion_exchange_per_hour"]) result.angiogenesis.perfusion_exchange_per_hour = number(angiogenesis["perfusion_exchange_per_hour"],"$.angiogenesis.perfusion_exchange_per_hour");
+        if(angiogenesis["exclusion_fraction"]) result.angiogenesis.exclusion_fraction = number(angiogenesis["exclusion_fraction"],"$.angiogenesis.exclusion_fraction");
+        if(angiogenesis["maximum_tip_density"]) result.angiogenesis.maximum_tip_density = number(angiogenesis["maximum_tip_density"],"$.angiogenesis.maximum_tip_density");
+        result.angiogenesis.validate();
+    } else if(root["angiogenesis"]) fail("$.angiogenesis","requires continuum schema v6");
 
     const YAML::Node output = required(root, "output", "$");
     mapping(output, "$.output",
             {"enabled", "directory", "metrics_every_hours", "field_every_hours",
-             "radial_profile_every_hours", "checkpoint_every_hours"});
+             "field_stride", "radial_profile_every_hours",
+             "checkpoint_every_hours"});
     result.output.enabled = boolean(required(output, "enabled", "$.output"),
                                     "$.output.enabled");
     result.output.directory = text_value(
@@ -347,6 +450,9 @@ ContinuumModelConfig3D ContinuumModelConfig3D::load(
     result.output.field_every_hours = number(
         required(output, "field_every_hours", "$.output"),
         "$.output.field_every_hours");
+    if (const YAML::Node stride = output["field_stride"]) {
+        result.output.field_stride = integer(stride, "$.output.field_stride");
+    }
     result.output.radial_profile_every_hours = number(
         required(output, "radial_profile_every_hours", "$.output"),
         "$.output.radial_profile_every_hours");
@@ -372,9 +478,13 @@ void ContinuumModelConfig3D::validate() const {
     if ((initialization_mode == "abm_checkpoint") != !abm_checkpoint.empty()) {
         throw std::invalid_argument("ABM checkpoint initialization/path are inconsistent");
     }
+    // Keep the total-cell guard as the primary allocation limit. The old
+    // per-axis limit rejected valid large thin-layer domains such as
+    // 10000 x 10000 x 1 even though model indexing is size_t-based.
+    constexpr int kMaximumGridExtent = 32768;
     std::uint64_t cells = 1;
     for (const int extent : grid.shape) {
-        if (extent <= 0 || extent > 4096 ||
+        if (extent <= 0 || extent > kMaximumGridExtent ||
             cells > 500000000ULL / static_cast<std::uint64_t>(extent)) {
             throw std::invalid_argument("continuum grid dimensions are invalid or too large");
         }
@@ -389,14 +499,16 @@ void ContinuumModelConfig3D::validate() const {
         time_step_hours > end_time_hours - start_time_hours) {
         throw std::invalid_argument("continuum grid/time parameters are invalid");
     }
-    if (migration.mapping != "fixed_26_from_base_means_v1" ||
+    if ((migration.mapping != "fixed_26_from_base_means_v1" &&
+         migration.mapping != "shared_fixed_lattice_means_v2") ||
         !(migration.diffusion_scale > 0.0) ||
         !(migration.large_mobility_multiplier > 0.0) ||
         !(migration.activated_r_mobility_multiplier >= 1.0) ||
         migration.crowding_exponent < 0.0) {
         throw std::invalid_argument("continuum migration parameters are invalid");
     }
-    if (reaction.model != "abm_mean_clock_volume_filling_v1" ||
+    if ((reaction.model != "abm_mean_clock_volume_filling_v1" &&
+         reaction.model != "abm_work_clock_neighbor_availability_v2") ||
         reaction.large_daughter_vacancy_exponent < 0.0 ||
         reaction.small_daughter_vacancy_exponent < 0.0 ||
         reaction.failed_r_division_death_fraction < 0.0 ||
@@ -405,26 +517,72 @@ void ContinuumModelConfig3D::validate() const {
         reaction.maximum_occupied_fraction > 1.0) {
         throw std::invalid_argument("continuum reaction parameters are invalid");
     }
-    if (nutrient.model != "effective_resource_surplus_v1" ||
-        nutrient.solver != "deterministic_quasi_steady_jacobi_v1" ||
+    const bool transient_shared = schema_version >= 3 &&
+        nutrient.model == "transient_shared_resource_v2" &&
+        nutrient.solver == "transient_explicit_dirichlet_sources_v2";
+    const bool legacy_resource =
+        nutrient.model == "effective_resource_surplus_v1" &&
+        nutrient.solver == "deterministic_quasi_steady_jacobi_v1";
+    if ((!legacy_resource && !transient_shared) ||
         !(nutrient.diffusion_voxels2_per_hour > 0.0) ||
         nutrient.decay_per_hour < 0.0 ||
         nutrient.vessel_exchange_per_hour < 0.0 ||
         !(nutrient.vessel_value > 0.0) ||
-        nutrient.r_consumption_per_occupied_voxel_hour < 0.0 ||
-        nutrient.K_consumption_per_occupied_voxel_hour < 0.0 ||
+        (nutrient.consumption_model != "per_occupied_voxel_v1" &&
+         nutrient.consumption_model != "per_cell_ratio_v2") ||
+        nutrient.r_consumption_rate_per_hour < 0.0 ||
+        nutrient.K_consumption_rate_per_hour < 0.0 ||
         !(nutrient.r_consumption_half_saturation > 0.0) ||
         !(nutrient.K_consumption_half_saturation > 0.0) ||
         !(nutrient.capacity_half_saturation > 0.0) ||
         !(nutrient.maximum_capacity_multiplier >= 1.0) ||
+        (transient_shared &&
+         ((nutrient.boundary_mode !=
+               "planar_edges_and_vessels_dirichlet_v1" &&
+           nutrient.boundary_mode != "planar_edges_dirichlet_v1" &&
+           nutrient.boundary_mode != "vessels_dirichlet_v1" &&
+           nutrient.boundary_mode !=
+               "moving_tumor_front_dirichlet_v2" &&
+           nutrient.boundary_mode !=
+               "moving_tumor_front_and_vessels_dirichlet_v2") ||
+          !close(nutrient.r_consumption_rate_per_hour,
+                 nutrient.K_consumption_rate_per_hour) ||
+          !close(nutrient.maximum_capacity_multiplier, 1.0) ||
+          nutrient.initial_value < 0.0 ||
+          nutrient.initial_value > nutrient.vessel_value ||
+          !(nutrient.growth_half_saturation > 0.0) ||
+          !(nutrient.common_density_limit > 0.0) ||
+          !(nutrient.common_carrying_capacity > 0.0))) ||
         !(nutrient.refresh_every_hours > 0.0) ||
         nutrient.solver_iterations <= 0 || nutrient.solver_iterations > 100000 ||
         !(nutrient.relaxation > 0.0) || nutrient.relaxation > 1.0) {
         throw std::invalid_argument("continuum nutrient parameters are invalid");
     }
+    if (schema_version == 4 &&
+        (nutrient.boundary_mode != "moving_tumor_front_dirichlet_v2" &&
+         nutrient.boundary_mode !=
+             "moving_tumor_front_and_vessels_dirichlet_v2")) {
+        throw std::invalid_argument(
+            "continuum v4 requires a moving tumour-front nutrient boundary");
+    }
+    if (schema_version >= 4 &&
+        (schema_version == 4 ||
+         nutrient.boundary_mode == "moving_tumor_front_dirichlet_v2" ||
+         nutrient.boundary_mode == "moving_tumor_front_and_vessels_dirichlet_v2") &&
+        (!base.thin_layer ||
+         !(nutrient.tumor_front_density_threshold > 0.0) ||
+         nutrient.tumor_front_density_threshold > 1.0 ||
+         nutrient.tumor_front_smoothing_radius_voxels < 0 ||
+         nutrient.tumor_front_smoothing_radius_voxels > 128 ||
+         nutrient.tumor_front_component_policy !=
+             "largest_connected_fill_holes_v1")) {
+        throw std::invalid_argument(
+            "continuum v4 moving tumour-front parameters are invalid");
+    }
     if (vascular.source_mode != "abm_perfusion" &&
         vascular.source_mode != "synthetic_central_line" &&
-        vascular.source_mode != "abm_plus_synthetic_line") {
+        vascular.source_mode != "abm_plus_synthetic_line" &&
+        !(schema_version >= 5 && vascular.source_mode == "static_voxels")) {
         throw std::invalid_argument("unsupported continuum vascular source mode");
     }
     if (vascular.synthetic_axis != "x" && vascular.synthetic_axis != "y" &&
@@ -433,16 +591,37 @@ void ContinuumModelConfig3D::validate() const {
     }
     if (!(vascular.synthetic_radius_voxels > 0.0) ||
         output.metrics_every_hours < 0.0 || output.field_every_hours < 0.0 ||
+        output.field_stride <= 0 ||
         output.radial_profile_every_hours < 0.0 ||
         output.checkpoint_every_hours < 0.0 ||
         (output.enabled && output.directory.empty())) {
         throw std::invalid_argument("continuum vascular/output parameters are invalid");
     }
+    if (schema_version >= 5) shared_vascular_geometry().validate();
+    angiogenesis.validate();
+    if(schema_version < 6 && angiogenesis.model != "disabled") throw std::invalid_argument("angiogenesis fields require continuum v6");
+}
+
+StaticVascularGeometry3D ContinuumModelConfig3D::shared_vascular_geometry() const {
+    StaticVascularGeometry3D geometry;
+    geometry.model = "shared_static_v3";
+    geometry.shape = grid.shape;
+    geometry.origin = grid.origin;
+    geometry.spacing_voxels = grid.spacing_voxels;
+    geometry.source_mode = vascular.source_mode;
+    geometry.synthetic_axis = vascular.synthetic_axis;
+    geometry.synthetic_center = vascular.synthetic_center;
+    geometry.synthetic_radius_voxels = vascular.synthetic_radius_voxels;
+    geometry.static_sources = vascular.static_sources;
+    geometry.thin_layer = base.thin_layer;
+    return geometry;
 }
 
 std::uint64_t ContinuumModelConfig3D::dynamics_fingerprint() const {
     std::uint64_t state = 0x4154434743504445ULL;
-    hash_text(state, base.dynamics_json());
+    auto biological_base = base;
+    if (schema_version >= 5) biological_base.static_vasculature = shared_vascular_geometry();
+    hash_text(state, biological_base.dynamics_json());
     hash_text(state, initialization_mode);
     for (const int extent : grid.shape) state = mix(state, extent);
     for (const double value : grid.origin) hash_double(state, value);
@@ -459,21 +638,37 @@ std::uint64_t ContinuumModelConfig3D::dynamics_fingerprint() const {
              reaction.maximum_occupied_fraction,
              nutrient.diffusion_voxels2_per_hour, nutrient.decay_per_hour,
              nutrient.vessel_exchange_per_hour, nutrient.vessel_value,
-             nutrient.r_consumption_per_occupied_voxel_hour,
-             nutrient.K_consumption_per_occupied_voxel_hour,
+             nutrient.r_consumption_rate_per_hour,
+             nutrient.K_consumption_rate_per_hour,
              nutrient.r_consumption_half_saturation,
              nutrient.K_consumption_half_saturation,
              nutrient.capacity_half_saturation,
-             nutrient.maximum_capacity_multiplier,
+             nutrient.maximum_capacity_multiplier}) hash_double(state, value);
+    if (schema_version >= 3) {
+        for (const double value : {nutrient.initial_value,
+                 nutrient.growth_half_saturation,
+                 nutrient.common_density_limit,
+                 nutrient.common_carrying_capacity}) hash_double(state, value);
+    }
+    for (const double value : {
              nutrient.refresh_every_hours, nutrient.relaxation,
              vascular.synthetic_radius_voxels}) hash_double(state, value);
     state = mix(state, nutrient.solver_iterations);
     hash_text(state, reaction.model);
     hash_text(state, nutrient.model);
     hash_text(state, nutrient.solver);
+    if (schema_version >= 2) hash_text(state, nutrient.consumption_model);
+    if (schema_version >= 3) hash_text(state, nutrient.boundary_mode);
+    if (schema_version >= 4) {
+        hash_double(state, nutrient.tumor_front_density_threshold);
+        state = mix(state, static_cast<std::uint64_t>(
+            nutrient.tumor_front_smoothing_radius_voxels));
+        hash_text(state, nutrient.tumor_front_component_policy);
+    }
     hash_text(state, vascular.source_mode);
     hash_text(state, vascular.synthetic_axis);
     for (const double value : vascular.synthetic_center) hash_double(state, value);
+    if(schema_version >= 6) state = mix(state,angiogenesis.fingerprint());
     return state;
 }
 
@@ -523,10 +718,12 @@ std::string ContinuumModelConfig3D::to_json() const {
         << ",\"vessel_exchange_per_hour\":"
         << nutrient.vessel_exchange_per_hour
         << ",\"vessel_value\":" << nutrient.vessel_value
-        << ",\"r_consumption_per_occupied_voxel_hour\":"
-        << nutrient.r_consumption_per_occupied_voxel_hour
-        << ",\"K_consumption_per_occupied_voxel_hour\":"
-        << nutrient.K_consumption_per_occupied_voxel_hour
+        << ",\"consumption_model\":\""
+        << escaped(nutrient.consumption_model) << "\""
+        << ",\"r_consumption_rate_per_hour\":"
+        << nutrient.r_consumption_rate_per_hour
+        << ",\"K_consumption_rate_per_hour\":"
+        << nutrient.K_consumption_rate_per_hour
         << ",\"r_consumption_half_saturation\":"
         << nutrient.r_consumption_half_saturation
         << ",\"K_consumption_half_saturation\":"
@@ -535,6 +732,20 @@ std::string ContinuumModelConfig3D::to_json() const {
         << nutrient.capacity_half_saturation
         << ",\"maximum_capacity_multiplier\":"
         << nutrient.maximum_capacity_multiplier
+        << ",\"boundary_mode\":\"" << escaped(nutrient.boundary_mode) << "\""
+        << ",\"initial_value\":" << nutrient.initial_value
+        << ",\"growth_half_saturation\":"
+        << nutrient.growth_half_saturation
+        << ",\"common_density_limit\":"
+        << nutrient.common_density_limit
+        << ",\"common_carrying_capacity\":"
+        << nutrient.common_carrying_capacity
+        << ",\"tumor_front\":{\"density_threshold\":"
+        << nutrient.tumor_front_density_threshold
+        << ",\"smoothing_radius_voxels\":"
+        << nutrient.tumor_front_smoothing_radius_voxels
+        << ",\"component_policy\":\""
+        << escaped(nutrient.tumor_front_component_policy) << "\"}"
         << ",\"refresh_every_hours\":" << nutrient.refresh_every_hours
         << ",\"solver_iterations\":" << nutrient.solver_iterations
         << ",\"relaxation\":" << nutrient.relaxation << "},"
@@ -550,6 +761,7 @@ std::string ContinuumModelConfig3D::to_json() const {
         << escaped(output.directory.generic_string())
         << "\",\"metrics_every_hours\":" << output.metrics_every_hours
         << ",\"field_every_hours\":" << output.field_every_hours
+        << ",\"field_stride\":" << output.field_stride
         << ",\"radial_profile_every_hours\":"
         << output.radial_profile_every_hours
         << ",\"checkpoint_every_hours\":"
@@ -557,7 +769,9 @@ std::string ContinuumModelConfig3D::to_json() const {
         << "\"dynamics_fingerprint\":" << dynamics_fingerprint() << ','
         << "\"base\":" << base.to_json()
         << '}';
-    return out.str();
+    std::string json=out.str();
+    if(schema_version >= 6) json.insert(json.size()-1,",\"angiogenesis\":"+angiogenesis.to_json());
+    return json;
 }
 
 }  // namespace atcg3d::continuum

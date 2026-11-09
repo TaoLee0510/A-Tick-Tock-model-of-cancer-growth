@@ -1,0 +1,21 @@
+schema: {name: atcg3d.structured_pde_config, version: 8}
+profile: shared_activation_r200_v1
+continuum_config: continuum_active_r200_ci_v8.yaml
+structured_migration:
+  model: abm_activation_clock_discrete_velocity_v1
+  activation_density: abm_anchor_box_v1
+  activation_clock: beta_mean_remaining_cycle_v1
+  activation_stop: cohort_clock_refractory_hysteresis_v3
+  direction_transport: nutrient_gradient_feasible_direction_jump_exchange_v5
+  direction_nutrient_window_edge: 70
+  chemotaxis_strength: 8.0
+  zero_gradient_tolerance: 1.0e-9
+  reactivation_cooldown_hours: 24.0
+  reactivation_density_threshold: 0.10
+  crowding_exchange: active_r_K_stage1_conservative_v1
+  vessel_exclusion: true
+  maximum_move_probability_per_substep: 0.15
+  minimum_density: 1.0e-12
+
+output:
+  directory: shared_activation_r200_ci_structured_run

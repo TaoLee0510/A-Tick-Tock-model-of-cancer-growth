@@ -48,6 +48,34 @@ int main() {
     assert(mapped_diagnostics.maximum_nutrient > 0.0);
     assert(mapped_diagnostics.vessel_volume > 0.0);
 
+    // The native 2D profile maps a large-cell footprint onto one continuum
+    // plane, preserves cell number, and accepts strided field output.
+    const auto thin_wrapper = std::filesystem::path(ATCG_SOURCE_DIR) /
+        "ATCG3D_Continuum/config/continuum_legacy_2d_2000_v1.yaml";
+    ContinuumModelConfig3D thin = ContinuumModelConfig3D::load(thin_wrapper);
+    assert(thin.base.thin_layer);
+    assert((thin.grid.shape == std::array<int, 3>{2000, 2000, 1}));
+    assert(close(thin.migration.activated_r_mobility_multiplier, 20.0));
+    assert(thin.output.field_stride == 4);
+    thin.output.enabled = false;
+    thin.grid.shape = {160, 160, 1};
+    thin.grid.origin = {-80.0, -80.0, -0.5};
+    thin.end_time_hours = 1.0;
+    thin.validate();
+    Model3DConfig thin_base = thin.base;
+    thin_base.output_enabled = false;
+    thin_base.control_enabled = false;
+    Simulation3D thin_abm(thin_base);
+    thin_abm.initialize();
+    ContinuumModel3D thin_mapped(thin);
+    thin_mapped.initialize_from_abm(thin_abm);
+    const auto thin_diagnostics = thin_mapped.diagnostics();
+    assert(close(thin_diagnostics.type_mass[0], 4322.0));
+    assert(close(thin_diagnostics.type_mass[1], 4322.0));
+    assert(close(thin_diagnostics.occupied_volume, 11284.0));
+    assert(thin_mapped.step());
+    assert(thin_mapped.diagnostics().maximum_occupied_fraction <= 1.0 + 1.0e-10);
+
 #ifdef ATCG3D_HAS_HDF5_CHECKPOINT
     // The same conservative mapping accepts a materialized ATCG3D HDF5 state,
     // which is the production path for importing evolved vessels and cells.

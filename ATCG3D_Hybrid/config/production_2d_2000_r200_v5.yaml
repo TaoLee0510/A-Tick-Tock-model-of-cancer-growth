@@ -1,0 +1,15 @@
+schema: {name: atcg3d.hybrid_config, version: 5}
+model: hybrid_resource_restart_v5
+structured_config: ../../ATCG3D_SharedRules/config/production_pde_2d_2000_r200_v17.yaml
+hybrid:
+  mode: adaptive
+  exchange_every_hours: 1.0
+  smoothing_radius_voxels: 3
+  core_on: 0.10
+  core_off: 0.06
+  front_band_voxels: 3
+  front_hysteresis_voxels: 2
+  active_guard_voxels: 2
+  nutrient_gradient_on: 0.03
+  nutrient_gradient_off: 0.02
+output: {directory: production_hybrid_2d_2000_r200_run}

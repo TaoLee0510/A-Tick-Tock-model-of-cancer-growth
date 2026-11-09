@@ -1,0 +1,51 @@
+schema: {name: atcg3d.continuum_model_config, version: 6}
+profile: long_r200_2000_720_v14
+base_config: ../../configs/shared_activation_r200_v1.yaml
+run: {mode: new, resume_checkpoint: null}
+initialization: {mode: base_model, abm_checkpoint: null}
+grid: {shape: [4096, 4096, 1], origin: [-2048.0, -2048.0, -0.5], spacing_voxels: 1.0}
+numerics: {start_time_hours: 0.0, end_time_hours: 720.0, time_step_hours: 0.25}
+migration:
+  mapping: shared_fixed_lattice_means_v2
+  diffusion_scale: 1.0
+  large_mobility_multiplier: 1.0
+  activated_r_mobility_multiplier: 200.0
+  crowding_exponent: 0.0
+reaction:
+  model: abm_work_clock_neighbor_availability_v2
+  large_daughter_vacancy_exponent: 4.0
+  small_daughter_vacancy_exponent: 8.0
+  failed_r_division_death_fraction: 1.0
+  maximum_occupied_fraction: 1.0
+nutrient:
+  model: transient_shared_resource_v2
+  solver: transient_explicit_dirichlet_sources_v2
+  boundary_mode: moving_tumor_front_and_vessels_dirichlet_v2
+  initial_value: 1.0
+  diffusion_voxels2_per_hour: 0.1
+  decay_per_hour: 0.006944444444444444
+  vessel_exchange_per_hour: 0.0
+  vessel_value: 1.0
+  consumption: {K_per_cell_hour: 0.01, r_to_K_ratio: 1.0, half_saturation: 0.25}
+  capacity: {half_saturation: 0.25, maximum_multiplier: 1.0}
+  growth_half_saturation: 0.25
+  common_density_limit: 16.75
+  common_carrying_capacity: 33.5
+  tumor_front:
+    density_threshold: 0.05
+    smoothing_radius_voxels: 4
+    component_policy: largest_connected_fill_holes_v1
+  refresh_every_hours: 0.25
+  solver_iterations: 1
+  relaxation: 1.0
+vascular: {source_mode: synthetic_central_line, synthetic_axis: y, synthetic_center: [-40.0, 0.0, 0.0], synthetic_radius_voxels: 3.0}
+output:
+  enabled: true
+  directory: long_r200_2000_720_v14_continuum_run
+  metrics_every_hours: 1.0
+  field_every_hours: 24.0
+  field_stride: 1
+  radial_profile_every_hours: 0.0
+  checkpoint_every_hours: 24.0
+
+angiogenesis: {model: disabled}
